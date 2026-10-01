@@ -1,10 +1,11 @@
 # DockIn
 
-One app for a Bennett student's college day. Sprint 1 and 2 are built: attendance,
-timetable, Today screen, offline use, light and dark theme. Money, tasks and calendar come next.
+One app for a Bennett student's college day: attendance, money, tasks and exams, calendar and
+holidays. It is a PWA, so it installs on iPhone and Android without an app store.
 
-Right now all data is stored in the browser (IndexedDB) on the device you use. Nothing is sent
-to a server. Supabase login and sync are added when we host it.
+Data is stored on the phone first (IndexedDB), so everything works offline. Signed-in Bennett
+students are also backed up and synced through Supabase. See `docs/supabase-setup.md` for the one-time
+cloud setup. Without the cloud keys the app simply runs local-only.
 
 ## Run it on your laptop
 
@@ -42,3 +43,7 @@ load a sample timetable.
 - Use "Before DockIn" on a subject to enter how many classes you already attended this semester.
 - Clearing browser data removes everything. Use Settings, then Download backup.
 - Next.js 16: see `AGENTS.md` before changing framework code.
+
+## Cloud (Supabase)
+
+Copy `.env.example` to `.env.local` and fill in your project values. Never commit `.env.local`.

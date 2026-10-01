@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { applyTheme, getProfile } from "@/lib/repo";
 import { ToastProvider, cx } from "./ui";
+import { Logo } from "./Logo";
+import { useAuth } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase";
+import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 
 const TABS = [
   { href: "/", label: "Today", icon: Sun },
@@ -32,12 +36,31 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (profile) applyTheme(profile.theme);
   }, [profile]);
 
+  // Cloud sync runs in the background for signed-in students.
+  const { session, loading: authLoading } = useAuth();
+  const userId = session?.user.id ?? null;
+  const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
+  const [gaveUp, setGaveUp] = useState(false);
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb || !userId) return;
+    return startSync(sb, userId);
+  }, [userId]);
+  useEffect(() => {
+    // Never keep someone waiting on a slow network: open the app after a few seconds.
+    if (!userId) return;
+    const t = setTimeout(() => setGaveUp(true), 6000);
+    return () => clearTimeout(t);
+  }, [userId]);
+  const restoring = authLoading || (!!userId && !sync.ready && !gaveUp);
+
   useEffect(() => {
     if (profile === undefined) return;
+    if (profile === null && (authLoading || (userId && !sync.ready && !gaveUp))) return;
     const onboarded = !!profile?.onboarded;
     if (!onboarded && pathname !== "/onboarding") router.replace("/onboarding");
     if (onboarded && pathname === "/onboarding") router.replace("/");
-  }, [profile, pathname, router]);
+  }, [profile, pathname, router, authLoading, userId, sync.ready, gaveUp]);
 
   useEffect(() => {
     if (
@@ -57,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   const onboarding = pathname === "/onboarding";
-  const ready = profile !== undefined && (onboarding || !!profile?.onboarded);
+  const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
 
   return (
     <ToastProvider>
@@ -68,7 +91,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         ) : (
           <div className="grid min-h-dvh place-items-center">
-            <div className="size-8 animate-pulse rounded-lg bg-surface-2" />
+            <div className="flex flex-col items-center gap-3">
+              <div className="animate-pulse">
+                <Logo size={44} />
+              </div>
+              {restoring && userId && <p className="text-sm text-muted">Getting your data…</p>}
+            </div>
           </div>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}

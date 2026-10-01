@@ -6,13 +6,22 @@ import { ArrowRight } from "lucide-react";
 import { saveProfile, seedSampleTimetable } from "@/lib/repo";
 import { Button, Chip, Field, cx, inputCls } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import { SignIn } from "@/components/SignIn";
+import { useAuth } from "@/lib/auth";
 
 type Start = "sample" | "empty";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState("");
+  const { session } = useAuth();
+  const [stepRaw, setStep] = useState<number | null>(null);
+  // Someone who is already signed in (e.g. just back from Google) skips the welcome and sign-in steps.
+  const step = stepRaw ?? (session ? 2 : 0);
+  const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "")
+    .trim()
+    .split(" ")[0];
+  const [nameRaw, setName] = useState<string | null>(null);
+  const name = nameRaw ?? metaName;
   const [target, setTarget] = useState(75);
   const [start, setStart] = useState<Start>("sample");
   const [busy, setBusy] = useState(false);
@@ -28,8 +37,8 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-dvh flex-col px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 3`}>
-        {[1, 2, 3].map((i) => (
+      <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 4`}>
+        {[1, 2, 3, 4].map((i) => (
           <span
             key={i}
             className={cx(
@@ -42,6 +51,28 @@ export default function OnboardingPage() {
 
       <div className="flex-1 pt-10">
         {step === 1 && (
+          <>
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+              Sign in with your college email
+            </h1>
+            <p className="mt-3 text-muted">
+              Your classes, expenses and tasks are backed up and follow you to any phone. Only
+              Bennett students can join.
+            </p>
+            <div className="mt-8">
+              {session ? (
+                <div className="rounded-2xl bg-safe-soft px-4 py-3.5">
+                  <p className="text-[13px] text-muted">Signed in as</p>
+                  <p className="font-semibold text-safe">{session.user.email}</p>
+                </div>
+              ) : (
+                <SignIn />
+              )}
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
           <>
             <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
               What should we call you?
@@ -62,7 +93,7 @@ export default function OnboardingPage() {
           </>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <>
             <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
               Required attendance
@@ -81,7 +112,7 @@ export default function OnboardingPage() {
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <>
             <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
               Set up your timetable
@@ -109,9 +140,13 @@ export default function OnboardingPage() {
         <Button variant="secondary" onClick={() => setStep(step - 1)} disabled={busy}>
           Back
         </Button>
-        {step < 3 ? (
-          <Button className="flex-1" onClick={() => setStep(step + 1)}>
-            Continue
+        {step < 4 ? (
+          <Button
+            className="flex-1"
+            variant={step === 1 && !session ? "secondary" : "primary"}
+            onClick={() => setStep(step + 1)}
+          >
+            {step === 1 && !session ? "Skip for now" : "Continue"}
           </Button>
         ) : (
           <Button className="flex-1" onClick={finish} disabled={busy}>

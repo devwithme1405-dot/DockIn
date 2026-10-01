@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "dexie": "^4.4.6",
     "dexie-react-hooks": "^4.4.0",
     "geist": "^1.7.2",
