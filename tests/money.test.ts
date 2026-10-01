@@ -1,0 +1,75 @@
+import "fake-indexeddb/auto";
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { addExpense, deleteExpense, resetAll, restoreExpense, updateExpense } from "@/lib/repo";
+import {
+  budgetStatus,
+  byCategory,
+  dailyTotals,
+  fmtMoney,
+  groupByDay,
+  inMonth,
+  shiftMonth,
+  sum,
+  weekStart,
+} from "@/lib/money";
+
+beforeEach(async () => {
+  await resetAll();
+});
+
+describe("expenses", () => {
+  it("adds, edits, soft-deletes and restores", async () => {
+    const e = await addExpense({ amount: 120.456, category: "food", note: "  Lunch ", date: "2026-10-01" });
+    expect(e.amount).toBe(120.46);
+    expect(e.note).toBe("Lunch");
+    await updateExpense(e.id, { amount: 150, category: "snacks" });
+    expect((await db.expenses.get(e.id))?.category).toBe("snacks");
+    await deleteExpense(e.id);
+    expect((await db.expenses.get(e.id))?.deletedAt).toBeTruthy();
+    await restoreExpense(e.id);
+    expect((await db.expenses.get(e.id))?.deletedAt).toBeNull();
+  });
+});
+
+describe("money maths", () => {
+  const mk = (amount: number, category: "food" | "travel", date: string) =>
+    ({ id: date + amount, amount, category, note: "", date, createdAt: 0, updatedAt: 0 }) as const;
+  const list = [mk(100, "food", "2026-10-01"), mk(50, "travel", "2026-10-01"), mk(200, "food", "2026-10-03"), mk(999, "food", "2026-09-30")];
+
+  it("filters a month and sums", () => {
+    expect(sum(inMonth([...list], "2026-10"))).toBe(350);
+  });
+  it("splits by category, biggest first", () => {
+    const c = byCategory(inMonth([...list], "2026-10"));
+    expect(c[0].meta.id).toBe("food");
+    expect(Math.round(c[0].pct)).toBe(86);
+  });
+  it("totals per day and groups newest first", () => {
+    const d = dailyTotals([...list], "2026-10");
+    expect(d).toHaveLength(31);
+    expect(d[0]).toBe(150);
+    expect(d[2]).toBe(200);
+    expect(groupByDay(inMonth([...list], "2026-10"))[0].date).toBe("2026-10-03");
+  });
+  it("handles months and weeks", () => {
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+    expect(weekStart("2026-10-04")).toBe("2026-09-28"); // Sunday -> previous Monday
+    expect(weekStart("2026-10-05")).toBe("2026-10-05");
+  });
+  it("formats rupees", () => {
+    expect(fmtMoney(1250)).toBe("₹1,250");
+    expect(fmtMoney(1250.5)).toBe("₹1,250.50");
+    expect(fmtMoney(123456)).toBe("₹1,23,456");
+  });
+  it("computes the daily budget left", () => {
+    const b = budgetStatus(3100, 1000, "2026-10", "2026-10-11");
+    expect(b.left).toBe(2100);
+    expect(b.daysLeft).toBe(21);
+    expect(b.perDay).toBe(100);
+    expect(b.state).toBe("safe");
+    expect(budgetStatus(1000, 1200, "2026-10", "2026-10-11").state).toBe("danger");
+    expect(budgetStatus(1000, 1200, "2026-10", "2026-10-11").perDay).toBe(0);
+  });
+});

@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-2: #efede8;
+  --text: #15171b;
+  --muted: #6a6f78;
+  --line: #e4e1da;
+  --accent: #1f5fd6;
+  --accent-soft: #e6eefc;
+  --on-accent: #ffffff;
+  --safe: #1b7f53;
+  --safe-soft: #e3f3ea;
+  --warn: #b26a00;
+  --warn-soft: #fbefd9;
+  --danger: #c43530;
+  --danger-soft: #fbe6e4;
+  --hero: #16181d;
+  --hero-fg: #f4f5f7;
+  --hero-muted: #9aa1ad;
+  --violet: #5b3fc4;
+  --violet-soft: #ece8fb;
+  --rose: #c2305e;
+  --rose-soft: #fbe5ec;
+}
+
+[data-theme="dark"] {
+  --bg: #0e0f11;
+  --surface: #17191c;
+  --surface-2: #1f2226;
+  --text: #f0f1f3;
+  --muted: #9096a0;
+  --line: #2a2d32;
+  --accent: #5b92ff;
+  --accent-soft: #1b2740;
+  --on-accent: #0b1020;
+  --safe: #3fbb85;
+  --safe-soft: #12291f;
+  --warn: #eba234;
+  --warn-soft: #33260f;
+  --danger: #ff726a;
+  --danger-soft: #371816;
+  --hero: #1d2431;
+  --hero-fg: #f4f5f7;
+  --hero-muted: #98a2b3;
+  --violet: #a590f0;
+  --violet-soft: #231d3f;
+  --rose: #ff7fa3;
+  --rose-soft: #3a1823;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-safe: var(--safe);
+  --color-safe-soft: var(--safe-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-hero: var(--hero);
+  --color-hero-fg: var(--hero-fg);
+  --color-hero-muted: var(--hero-muted);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  background: var(--bg);
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px; /* stops iOS zooming into fields */
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.anim-sheet {
+  animation: sheet-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.anim-fade {
+  animation: fade-in 160ms ease-out;
+}
+.anim-toast {
+  animation: toast-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-sheet,
+  .anim-fade,
+  .anim-toast {
+    animation: none;
+  }
+}
