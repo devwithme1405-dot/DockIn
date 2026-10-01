@@ -1,6 +1,6 @@
 // DockIn service worker: keeps the app opening instantly and offline.
 // Data itself lives in IndexedDB, so only the app shell is cached here.
-const CACHE = "dockin-v2";
+const CACHE = "dockin-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 

@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { skyAt, skyIcon } from "@/lib/sky";
 import { SkyScene } from "@/components/SkyScene";
+import { StickyBar } from "@/components/PageHeader";
+import { Logo } from "@/components/Logo";
 import { ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
 import { useAttendanceStats, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
@@ -44,6 +46,7 @@ import { computeStreak, describe, fmtPct } from "@/lib/attendance";
 import type { Session, SessionStatus, Slot, Subject } from "@/lib/types";
 import {
   EmptyState,
+  Avatar,
   Ring,
   STATE_TEXT,
   SubjectTile,
@@ -151,6 +154,20 @@ export default function TodayPage() {
 
   return (
     <>
+      <StickyBar className="px-4 pb-2">
+        <div className="flex h-11 items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Logo size={30} />
+            <div className="leading-tight">
+              <p className="text-[15px] font-semibold tracking-tight">DockIn</p>
+              <p className="text-[12px] text-muted">{fmtDayLong(today)}</p>
+            </div>
+          </div>
+          <Link href="/settings" aria-label="Profile and settings" className="rounded-full transition active:scale-95">
+            <Avatar name={name} size={40} />
+          </Link>
+        </div>
+      </StickyBar>
       <DayHero
         today={today}
         hm={hm}
@@ -464,7 +481,7 @@ function DayHero({
 
   return (
     <section
-      className="relative isolate mx-4 mt-[max(0.75rem,env(safe-area-inset-top))] min-h-[15.5rem] overflow-hidden rounded-[28px] text-white"
+      className="relative isolate mx-4 mt-3 min-h-[15.5rem] overflow-hidden rounded-[28px] text-white"
       aria-label="Today at a glance"
     >
       <SkyScene sky={sky} />
@@ -481,13 +498,6 @@ function DayHero({
             </h1>
             <p className="mt-0.5 text-[13px] text-white/85 drop-shadow">{sky.line}</p>
           </div>
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className="grid size-11 shrink-0 place-items-center rounded-full bg-white/20 text-[17px] font-semibold backdrop-blur-md ring-1 ring-white/30"
-          >
-            {name[0]?.toUpperCase()}
-          </Link>
         </div>
 
         <div className="mt-8">

@@ -6,6 +6,10 @@ import {
   addSubject,
   deleteSubject,
   ensureSessionsForDate,
+  exportAll,
+  getProfile,
+  importAll,
+  saveProfile,
   resetAll,
   seedSampleTimetable,
   setSessionStatus,
@@ -102,5 +106,32 @@ describe("concurrent session generation", () => {
     await addSlot({ subjectId: sub.id, weekday: 1, start: "09:25", end: "10:25", kind: "lecture" });
     await Promise.all([ensureSessionsForDate("2026-10-05"), ensureSessionsForDate("2026-10-05"), ensureSessionsForDate("2026-10-05")]);
     expect(await db.sessions.where("date").equals("2026-10-05").count()).toBe(1);
+  });
+});
+
+describe("backup restore", () => {
+  it("restores a backup exactly and rejects other files", async () => {
+    await saveProfile({ name: "Sachin", target: 80, budget: 6000, onboarded: true });
+    const sub = await addSubject({ name: "Data Structures", code: "DSA" });
+    await addSlot({ subjectId: sub.id, weekday: 1, start: "09:25", end: "10:25", kind: "lecture" });
+    await ensureSessionsForDate("2026-10-05");
+    const backup = await exportAll();
+
+    await resetAll();
+    expect(await db.subjects.count()).toBe(0);
+
+    const summary = await importAll(backup);
+    expect(summary).toMatchObject({ subjects: 1, slots: 1, sessions: 1 });
+    const p = await getProfile();
+    expect(p).toMatchObject({ name: "Sachin", target: 80, budget: 6000, onboarded: true });
+    expect(await db.subjects.count()).toBe(1);
+
+    // restored rows count as freshly edited so they upload on the next sync
+    const [row] = await db.subjects.toArray();
+    expect(row.updatedAt).toBeGreaterThan(Date.now() - 5000);
+
+    await expect(importAll("not json")).rejects.toThrow(/valid backup/);
+    await expect(importAll(JSON.stringify({ app: "other" }))).rejects.toThrow(/DockIn backup/);
+    expect(await db.subjects.count()).toBe(1); // a bad file changes nothing
   });
 });

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Plus, Trash2 } from "lucide-react";
+import { BackHeader } from "@/components/PageHeader";
+import { Plus, Trash2 } from "lucide-react";
 import {
   SUBJECT_COLORS,
   addSlot,
@@ -37,16 +37,7 @@ export default function TimetablePage() {
 
   return (
     <>
-      <header className="px-3 pt-[max(1rem,env(safe-area-inset-top))]">
-        <Link
-          href="/attendance"
-          className="inline-flex h-10 items-center gap-1 rounded-full px-2 text-accent"
-        >
-          <ChevronLeft size={20} />
-          Attendance
-        </Link>
-      </header>
-      <h1 className="px-5 pt-1 pb-3 text-[26px] font-semibold tracking-tight">Timetable</h1>
+      <BackHeader href="/attendance" backLabel="Attendance" title="Timetable" />
 
       {subjects.length === 0 && (
         <div className="mb-6">

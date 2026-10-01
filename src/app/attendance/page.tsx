@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
+import { PageHeader } from "@/components/PageHeader";
 import { CalendarClock, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useAttendanceStats } from "@/lib/hooks";
@@ -72,19 +73,20 @@ export default function AttendancePage() {
 
   return (
     <>
-      <header className="flex items-start justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight">Attendance</h1>
-          <p className="text-[13px] text-muted">Track your classes and stay above target</p>
-        </div>
-        <Link
-          href="/attendance/timetable"
-          aria-label="Timetable"
-          className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
-        >
-          <CalendarClock size={20} />
-        </Link>
-      </header>
+      <PageHeader
+        title="Attendance"
+        subtitle="Track your classes and stay above target"
+        right={
+          <Link
+            href="/attendance/timetable"
+            aria-label="Timetable"
+            className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
+          >
+            <CalendarClock size={20} />
+          </Link>
+        }
+      />
+      <div className="h-4" />
 
       <section className="mx-5 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]" aria-label="Overall attendance">
         <div className="flex items-center gap-4">

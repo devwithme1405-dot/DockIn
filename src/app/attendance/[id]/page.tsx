@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { BackHeader } from "@/components/PageHeader";
 import { useParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, ChevronLeft, ChevronRight, Minus, X } from "lucide-react";
+import { Check, ChevronRight, Minus, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { getProfile, setSessionStatus, setSubjectBase } from "@/lib/repo";
 import {
@@ -117,15 +118,7 @@ export default function SubjectPage() {
 
   return (
     <>
-      <header className="px-3 pt-[max(1rem,env(safe-area-inset-top))]">
-        <Link
-          href="/attendance"
-          className="inline-flex h-10 items-center gap-1 rounded-full px-2 text-accent"
-        >
-          <ChevronLeft size={20} />
-          Attendance
-        </Link>
-      </header>
+      <BackHeader href="/attendance" backLabel="Attendance" title={subject.name} hideLargeTitle />
 
       <div className="flex items-center gap-3 px-5 pt-1 pb-4">
         <SubjectTile name={subject.name} code={subject.code} color={subject.color} size={52} />

@@ -69,13 +69,21 @@ export async function saveProfile(
   await db.profile.put(next);
 }
 
+const THEME_COLOR = { light: "#f6f5f1", dark: "#0e0f11" } as const;
+
 export function applyTheme(pref: ThemePref): void {
   if (typeof document === "undefined") return;
   const dark =
     pref === "dark" ||
     (pref === "system" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const root = document.documentElement;
+  root.dataset.theme = dark ? "dark" : "light";
+  // Browser/status-bar colour follows the app's choice, not just the phone's.
+  const colour = dark ? THEME_COLOR.dark : THEME_COLOR.light;
+  document
+    .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
+    .forEach((m) => (m.content = colour));
   try {
     localStorage.setItem("dockin-theme", pref);
   } catch {
@@ -504,6 +512,90 @@ export async function exportAll(): Promise<string> {
     null,
     2,
   );
+}
+
+/** Result of reading a backup file. */
+export interface ImportSummary {
+  subjects: number;
+  slots: number;
+  sessions: number;
+  expenses: number;
+  tasks: number;
+  events: number;
+}
+
+const asRows = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v)
+    ? v.filter(
+        (r): r is Record<string, unknown> =>
+          !!r && typeof r === "object" && typeof (r as { id?: unknown }).id === "string",
+      )
+    : [];
+
+/**
+ * Replaces everything on this phone with the contents of a DockIn backup file.
+ * Rows are stamped as just-edited so they also upload on the next sync.
+ * Throws an Error with a readable message when the file is not a DockIn backup.
+ */
+export async function importAll(text: string): Promise<ImportSummary> {
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("That file is not a valid backup.");
+  }
+  if (!data || typeof data !== "object" || data.app !== "dockin") {
+    throw new Error("That file is not a DockIn backup.");
+  }
+  const t = now();
+  const stamp = (rows: Record<string, unknown>[]) => rows.map((r) => ({ ...r, updatedAt: t }));
+  const subjects = stamp(asRows(data.subjects));
+  const slots = stamp(asRows(data.slots));
+  const sessions = stamp(asRows(data.sessions));
+  const expenses = stamp(asRows(data.expenses));
+  const tasks = stamp(asRows(data.tasks));
+  const events = stamp(asRows(data.events));
+  const oldProfile = Array.isArray(data.profile) ? (data.profile[0] as Partial<Profile> | undefined) : undefined;
+  const profile: Profile = {
+    id: "me",
+    name: typeof oldProfile?.name === "string" ? oldProfile.name : "",
+    target: typeof oldProfile?.target === "number" ? oldProfile.target : 75,
+    theme: oldProfile?.theme === "light" || oldProfile?.theme === "dark" ? oldProfile.theme : "system",
+    onboarded: true,
+    budget: typeof oldProfile?.budget === "number" ? oldProfile.budget : undefined,
+    createdAt: typeof oldProfile?.createdAt === "number" ? oldProfile.createdAt : t,
+    updatedAt: t,
+  };
+  await db.transaction(
+    "rw",
+    [db.profile, db.subjects, db.slots, db.sessions, db.expenses, db.tasks, db.events],
+    async () => {
+      await Promise.all([
+        db.profile.clear(),
+        db.subjects.clear(),
+        db.slots.clear(),
+        db.sessions.clear(),
+        db.expenses.clear(),
+        db.tasks.clear(),
+        db.events.clear(),
+      ]);
+      await db.profile.put(profile);
+      await db.subjects.bulkPut(subjects as never[]);
+      await db.slots.bulkPut(slots as never[]);
+      await db.sessions.bulkPut(sessions as never[]);
+      await db.expenses.bulkPut(expenses as never[]);
+      await db.tasks.bulkPut(tasks as never[]);
+      await db.events.bulkPut(events as never[]);
+    },
+  );
+  return {
+    subjects: subjects.length,
+    slots: slots.length,
+    sessions: sessions.length,
+    expenses: expenses.length,
+    tasks: tasks.length,
+    events: events.length,
+  };
 }
 
 export async function resetAll(): Promise<void> {

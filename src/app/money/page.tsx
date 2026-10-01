@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { PageHeader } from "@/components/PageHeader";
 import { ChevronLeft, ChevronRight, Pencil, Plus } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useExpenses } from "@/lib/hooks";
@@ -59,12 +60,11 @@ export default function MoneyPage() {
 
   return (
     <>
-      <header className="flex items-start justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight">Money</h1>
-          <p className="text-[13px] text-muted">Track every rupee</p>
-        </div>
-        <div className="flex items-center gap-1">
+      <PageHeader
+        title="Money"
+        subtitle="Track every rupee"
+        right={
+          <>
           <button
             aria-label="Previous month"
             onClick={() => setMonth(shiftMonth(month, -1))}
@@ -83,8 +83,10 @@ export default function MoneyPage() {
           >
             <ChevronRight size={18} />
           </button>
-        </div>
-      </header>
+                  </>
+        }
+      />
+      <div className="h-4" />
 
       <section className="mx-5 rounded-3xl bg-hero p-5 text-hero-fg" aria-label="Month summary">
         <p className="text-[13px] font-medium text-hero-muted">

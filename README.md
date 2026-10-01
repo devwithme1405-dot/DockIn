@@ -33,7 +33,7 @@ load a sample timetable.
 
 - `src/lib/attendance.ts` attendance maths: percentage, classes you can still miss, classes you must attend
 - `src/lib/db.ts`, `src/lib/repo.ts` local database. Screens only use `repo.ts`, so swapping to Supabase later touches one place
-- `src/app` screens: Today, Attendance, subject detail, timetable, onboarding, settings
+- `src/app` screens: Today, Attendance, subject detail, timetable, onboarding, profile (theme, backup and restore, log out)
 - `public/sw.js` service worker, `src/app/manifest.ts` install manifest and Android shortcuts
 - `tests` unit tests
 
@@ -41,7 +41,7 @@ load a sample timetable.
 
 - The sample timetable assumes lectures last 60 minutes. Edit times in Attendance, then Timetable.
 - Use "Before DockIn" on a subject to enter how many classes you already attended this semester.
-- Clearing browser data removes everything. Use Settings, then Download backup.
+- Clearing browser data removes everything. Use Profile, then Download backup.
 - Next.js 16: see `AGENTS.md` before changing framework code.
 
 ## Cloud (Supabase)

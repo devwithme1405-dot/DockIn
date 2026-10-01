@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus } from "lucide-react";
 import { useSubjects, useTasks } from "@/lib/hooks";
 import { addTask } from "@/lib/repo";
@@ -80,14 +81,15 @@ export default function TasksPage() {
 
   return (
     <>
-      <header className="px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-4">
-        <h1 className="text-[26px] font-semibold tracking-tight">Tasks</h1>
-        <p className="text-[13px] text-muted">
-          {stats.pending === 0
+      <PageHeader
+        title="Tasks"
+        subtitle={
+          stats.pending === 0
             ? "Nothing pending. Enjoy it."
-            : `${stats.pending} pending${stats.overdue ? `, ${stats.overdue} overdue` : ""}`}
-        </p>
-      </header>
+            : `${stats.pending} pending${stats.overdue ? `, ${stats.overdue} overdue` : ""}`
+        }
+      />
+      <div className="h-4" />
 
       <section className="grid grid-cols-3 gap-2.5 px-5" aria-label="Summary">
         <Stat label="Overdue" value={stats.overdue} tint={stats.overdue ? "bg-danger-soft" : "bg-surface-2"} ink={stats.overdue ? "text-danger" : "text-muted"} />

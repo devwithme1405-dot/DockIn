@@ -33,7 +33,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const profile = useLiveQuery(() => getProfile(), []);
 
   useEffect(() => {
-    if (profile) applyTheme(profile.theme);
+    if (!profile) return;
+    applyTheme(profile.theme);
+    if (profile.theme !== "system") return;
+    // "System" follows the phone live, e.g. when it switches to dark at sunset.
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyTheme("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, [profile]);
 
   // Cloud sync runs in the background for signed-in students.

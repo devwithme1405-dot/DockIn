@@ -109,6 +109,49 @@ export function Sheet({
   );
 }
 
+/** A bottom sheet that asks "are you sure?" with a clear primary action. */
+export function ConfirmSheet({
+  open,
+  title,
+  children,
+  confirmLabel,
+  onConfirm,
+  onClose,
+  tone = "danger",
+  busy = false,
+  extra,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onClose: () => void;
+  tone?: "danger" | "primary";
+  busy?: boolean;
+  extra?: ReactNode;
+}) {
+  return (
+    <Sheet open={open} onClose={busy ? () => {} : onClose} title={title}>
+      <div className="space-y-3 text-[15px] text-muted">{children}</div>
+      <div className="mt-5 space-y-2.5">
+        {extra}
+        <Button
+          variant={tone === "danger" ? "danger" : "primary"}
+          className="w-full"
+          onClick={onConfirm}
+          disabled={busy}
+        >
+          {confirmLabel}
+        </Button>
+        <Button variant="secondary" className="w-full" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+      </div>
+    </Sheet>
+  );
+}
+
 // ---------- toast with undo ----------
 
 interface ToastApi {
@@ -229,23 +272,24 @@ export function Field({
 export const inputCls =
   "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-text outline-none placeholder:text-muted/70 focus:border-accent";
 
-export function PageHeader({
-  title,
-  subtitle,
-  right,
-}: {
-  title: string;
-  subtitle?: string;
-  right?: ReactNode;
-}) {
+/** Round initials badge. The colour is stable per name so it feels like "yours". */
+export function Avatar({ name, size = 44, className }: { name: string; size?: number; className?: string }) {
+  const initial = (name.trim()[0] ?? "?").toUpperCase();
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
   return (
-    <header className="flex items-end justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3">
-      <div>
-        {subtitle && <p className="text-[13px] text-muted">{subtitle}</p>}
-        <h1 className="text-[26px] font-semibold tracking-tight">{title}</h1>
-      </div>
-      {right}
-    </header>
+    <span
+      aria-hidden
+      className={cx("grid shrink-0 place-items-center rounded-full font-semibold text-white", className)}
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.4,
+        background: `linear-gradient(135deg, hsl(${h} 70% 52%), hsl(${(h + 40) % 360} 70% 40%))`,
+      }}
+    >
+      {initial}
+    </span>
   );
 }
 

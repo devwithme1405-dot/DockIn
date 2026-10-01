@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PageHeader } from "@/components/PageHeader";
 import { CalendarPlus, ChevronLeft, ChevronRight, Plane, Star } from "lucide-react";
 import { useAllSessions, useEvents, useSlots, useSubjects, useTasks } from "@/lib/hooks";
 import { buildDayMap, emptyDay, monthGrid, slotsOn } from "@/lib/calendar";
@@ -82,19 +83,20 @@ export default function CalendarPage() {
 
   return (
     <>
-      <header className="flex items-start justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight">Calendar</h1>
-          <p className="text-[13px] text-muted">Classes, deadlines, exams and holidays</p>
-        </div>
-        <button
-          onClick={() => setSheet("event")}
-          aria-label="Add holiday or event"
-          className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
-        >
-          <CalendarPlus size={20} />
-        </button>
-      </header>
+      <PageHeader
+        title="Calendar"
+        subtitle="Classes, deadlines, exams and holidays"
+        right={
+          <button
+            onClick={() => setSheet("event")}
+            aria-label="Add holiday or event"
+            className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
+          >
+            <CalendarPlus size={20} />
+          </button>
+        }
+      />
+      <div className="h-3" />
 
       <section className="mx-5 rounded-3xl bg-surface p-3 shadow-[0_0_0_1px_var(--line)]" aria-label="Month">
         <div className="mb-2 flex items-center justify-between px-1">
