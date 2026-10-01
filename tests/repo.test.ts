@@ -95,3 +95,12 @@ describe("helpers", () => {
     expect(fmtTime("00:05")).toBe("12:05 am");
   });
 });
+
+describe("concurrent session generation", () => {
+  it("does not throw when two callers generate the same day at once", async () => {
+    const sub = await addSubject({ name: "Data Structures", code: "DSA" });
+    await addSlot({ subjectId: sub.id, weekday: 1, start: "09:25", end: "10:25", kind: "lecture" });
+    await Promise.all([ensureSessionsForDate("2026-10-05"), ensureSessionsForDate("2026-10-05"), ensureSessionsForDate("2026-10-05")]);
+    expect(await db.sessions.where("date").equals("2026-10-05").count()).toBe(1);
+  });
+});

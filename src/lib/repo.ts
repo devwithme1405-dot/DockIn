@@ -201,7 +201,16 @@ export async function ensureSessionsForDate(date: string): Promise<void> {
       deletedAt: null,
     });
   });
-  if (missing.length) await db.sessions.bulkAdd(missing);
+  if (missing.length) {
+    try {
+      await db.sessions.bulkAdd(missing);
+    } catch (e) {
+      // Two screens can generate the same day at once. The id is deterministic,
+      // so "already exists" just means someone else got there first.
+      const errs = (e as { failures?: { name?: string }[] }).failures;
+      if (!errs || errs.some((f) => f.name !== "ConstraintError")) throw e;
+    }
+  }
 }
 
 /** Create unmarked sessions for every day from `from` up to and including `to`. */
