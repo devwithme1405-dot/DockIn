@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { applyTheme, getProfile } from "@/lib/repo";
 import { ToastProvider, cx } from "./ui";
-import { Logo } from "./Logo";
+import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
@@ -86,28 +86,27 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // The launch screen stays up for a moment even on fast phones so it never just flickers.
+  const [minShown, setMinShown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinShown(true), Math.max(0, 900 - performance.now()));
+    return () => clearTimeout(t);
+  }, []);
+
   const onboarding = pathname === "/onboarding";
   const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
 
   return (
     <ToastProvider>
       <div className="mx-auto min-h-dvh w-full max-w-md bg-bg">
-        {ready ? (
+        {ready && (
           <main className={cx(!onboarding && "pb-[calc(5.5rem+env(safe-area-inset-bottom))]")}>
             {children}
           </main>
-        ) : (
-          <div className="grid min-h-dvh place-items-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="animate-pulse">
-                <Logo size={44} />
-              </div>
-              {restoring && userId && <p className="text-sm text-muted">Getting your data…</p>}
-            </div>
-          </div>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
       </div>
+      <BootSplash show={!ready || !minShown} message={restoring && userId ? "Getting your data…" : undefined} />
     </ToastProvider>
   );
 }

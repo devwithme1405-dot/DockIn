@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BackHeader } from "@/components/PageHeader";
+import { ListSkeleton } from "@/components/Skeleton";
 import { useParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Check, ChevronRight, Minus, X } from "lucide-react";
@@ -82,7 +83,13 @@ export default function SubjectPage() {
     [sessions, subject],
   );
 
-  if (!profile || subject === undefined || sessions === undefined || slots === undefined) return null;
+  if (!profile || subject === undefined || sessions === undefined || slots === undefined)
+    return (
+      <>
+        <BackHeader href="/attendance" backLabel="Attendance" title="Subject" hideLargeTitle />
+        <ListSkeleton />
+      </>
+    );
   if (!subject || subject.deletedAt) {
     return (
       <div className="p-5">

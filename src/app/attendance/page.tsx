@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
+import { AttendanceSkeleton } from "@/components/Skeleton";
 import { CalendarClock, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useAttendanceStats } from "@/lib/hooks";
@@ -63,7 +64,14 @@ export default function AttendancePage() {
       );
   }, [data, query, filter]);
 
-  if (!profile || !data) return null;
+  if (!profile || !data)
+    return (
+      <>
+        <PageHeader title="Attendance" subtitle="Track your classes and stay above target" />
+        <div className="h-4" />
+        <AttendanceSkeleton />
+      </>
+    );
   const { stats, overall, overallCounts } = data;
 
   const bunkOrNeed =

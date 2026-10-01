@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BackHeader } from "@/components/PageHeader";
+import { ListSkeleton } from "@/components/Skeleton";
 import { Plus, Trash2 } from "lucide-react";
 import {
   SUBJECT_COLORS,
@@ -32,7 +33,13 @@ export default function TimetablePage() {
   const [subjectSheet, setSubjectSheet] = useState(false);
   const [slotSheet, setSlotSheet] = useState(false);
 
-  if (!subjects || !slots) return null;
+  if (!subjects || !slots)
+    return (
+      <>
+        <BackHeader href="/attendance" backLabel="Attendance" title="Timetable" />
+        <ListSkeleton n={5} />
+      </>
+    );
   const byId = new Map(subjects.map((s) => [s.id, s]));
 
   return (

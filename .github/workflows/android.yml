@@ -1,0 +1,70 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-35 build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DOCKIN_KEYSTORE_B64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "DOCKIN_KEYSTORE_B64 secret is missing"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/dockin.jks"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          DOCKIN_KEYSTORE: ${{ runner.temp }}/dockin.jks
+          DOCKIN_KEYSTORE_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_ALIAS: dockin
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Check the signature
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" DockIn.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs DockIn.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging DockIn.apk | head -5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DockIn-apk
+          path: DockIn.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --cleanup-tag -y || true
+          gh release create apk-latest DockIn.apk \
+            --title "DockIn for Android" \
+            --notes "Signed Android app. Install DockIn.apk on your phone. The app loads dock-in.vercel.app, so website updates reach it without a new APK." \
+            --latest

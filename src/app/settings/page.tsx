@@ -35,6 +35,7 @@ import {
   useToast,
 } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
+import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
@@ -81,7 +82,13 @@ export default function ProfilePage() {
   }, [expenses]);
   const tasksDone = tasks ? tasks.filter((t) => t.done).length : null;
 
-  if (!profile) return null;
+  if (!profile)
+    return (
+      <>
+        <BackHeader href="/" backLabel="Today" title="Profile" hideLargeTitle />
+        <ProfileSkeleton />
+      </>
+    );
 
   const close = () => {
     if (busy) return;

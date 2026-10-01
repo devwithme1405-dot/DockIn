@@ -40,4 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-/_transfer/
+
+# android
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.jks
+*.keystore
+/android-signing/

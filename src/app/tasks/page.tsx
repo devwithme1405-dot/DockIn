@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { TasksSkeleton } from "@/components/Skeleton";
 import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus } from "lucide-react";
 import { useSubjects, useTasks } from "@/lib/hooks";
 import { addTask } from "@/lib/repo";
@@ -75,7 +76,14 @@ export default function TasksPage() {
     });
   }
 
-  if (!tasks || !subjects) return null;
+  if (!tasks || !subjects)
+    return (
+      <>
+        <PageHeader title="Tasks" />
+        <div className="h-4" />
+        <TasksSkeleton />
+      </>
+    );
 
   const open = (t: Task) => setEditing(t);
 

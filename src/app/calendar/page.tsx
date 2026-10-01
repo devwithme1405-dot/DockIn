@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { CalendarSkeleton } from "@/components/Skeleton";
 import { CalendarPlus, ChevronLeft, ChevronRight, Plane, Star } from "lucide-react";
 import { useAllSessions, useEvents, useSlots, useSubjects, useTasks } from "@/lib/hooks";
 import { buildDayMap, emptyDay, monthGrid, slotsOn } from "@/lib/calendar";
@@ -59,7 +60,14 @@ export default function CalendarPage() {
     return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8);
   }, [tasks, events, today]);
 
-  if (!tasks || !events || !sessions || !slots || !subjects) return null;
+  if (!tasks || !events || !sessions || !slots || !subjects)
+    return (
+      <>
+        <PageHeader title="Calendar" subtitle="Classes, deadlines, exams and holidays" />
+        <div className="h-3" />
+        <CalendarSkeleton />
+      </>
+    );
 
   const info = dayMap.get(selected) ?? emptyDay();
   const daySessions = sessions.filter((s) => s.date === selected && subjectById.has(s.subjectId)).sort((a, b) => a.start.localeCompare(b.start));

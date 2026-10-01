@@ -26,6 +26,7 @@ import { skyAt, skyIcon } from "@/lib/sky";
 import { SkyScene } from "@/components/SkyScene";
 import { StickyBar } from "@/components/PageHeader";
 import { Logo } from "@/components/Logo";
+import { TodaySkeleton } from "@/components/Skeleton";
 import { ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
 import { useAttendanceStats, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
@@ -147,7 +148,7 @@ export default function TodayPage() {
     return { count: list.length, latest };
   }, [data, today]);
 
-  if (!profile || !data) return null;
+  if (!profile || !data) return <TodaySkeleton />;
 
   const overall = data.overall;
   const name = profile.name || "there";

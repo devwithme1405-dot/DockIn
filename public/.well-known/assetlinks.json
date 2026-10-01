@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.dockin.app",
+      "sha256_cert_fingerprints": [
+        "58:BD:B1:9A:79:4E:6E:F0:FA:31:B2:E9:C0:05:14:7E:60:CE:08:07:8B:EC:FB:30:BA:84:20:12:02:22:3A:7E"
+      ]
+    }
+  }
+]

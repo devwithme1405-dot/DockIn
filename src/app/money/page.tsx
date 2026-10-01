@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
+import { MoneySkeleton } from "@/components/Skeleton";
 import { ChevronLeft, ChevronRight, Pencil, Plus } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useExpenses } from "@/lib/hooks";
@@ -53,7 +54,14 @@ export default function MoneyPage() {
   const shown = catFilter === "all" ? list : list.filter((e) => e.category === catFilter);
   const groups = groupByDay(shown);
 
-  if (!profile || !all) return null;
+  if (!profile || !all)
+    return (
+      <>
+        <PageHeader title="Money" subtitle="Track every rupee" />
+        <div className="h-4" />
+        <MoneySkeleton />
+      </>
+    );
 
   const barTone =
     status?.state === "danger" ? "bg-danger" : status?.state === "warn" ? "bg-warn" : "bg-safe";
