@@ -49,3 +49,6 @@ next-env.d.ts
 *.jks
 *.keystore
 /android-signing/
+
+# files handed over from the build machine
+/_transfer/
