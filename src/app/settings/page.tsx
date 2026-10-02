@@ -470,7 +470,7 @@ export default function ProfilePage() {
         )}
 
         {/* friends */}
-        {configured && signedIn && (
+        {configured && (
           <Card title="Friends and groups">
             <Link
               href="/circle"
@@ -483,12 +483,13 @@ export default function ProfilePage() {
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-medium">Your friends and groups</span>
                 <span className="block truncate text-[12.5px] text-muted">
-                  Share assignments with your class
+                  {signedIn ? "Share assignments with your class" : "Sign in to share assignments with your class"}
                 </span>
               </span>
               <ChevronRight size={18} className="shrink-0 text-muted" />
             </Link>
 
+            {signedIn && (
             <label className="mt-1 flex items-center gap-3 border-t border-line px-1 pt-3.5 pb-1">
               <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
                 <Share2 size={18} />
@@ -506,6 +507,7 @@ export default function ProfilePage() {
                 onChange={(e) => void toggleAttendanceSharing(e.target.checked)}
               />
             </label>
+            )}
           </Card>
         )}
 
