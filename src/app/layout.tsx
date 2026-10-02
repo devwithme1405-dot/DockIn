@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so the page never flashes the wrong theme.
-const themeScript = `(function(){try{var p=localStorage.getItem('dockin-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){}})();`;
+const themeScript = `(function(){try{var p=localStorage.getItem('dockin-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';var z=parseFloat(localStorage.getItem('dockin-text-scale'));if(z>0.5&&z<2&&z!==1)document.documentElement.style.zoom=z;}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

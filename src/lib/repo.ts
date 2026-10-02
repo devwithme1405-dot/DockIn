@@ -51,7 +51,22 @@ export async function getProfile(): Promise<Profile | null> {
 }
 
 export async function saveProfile(
-  patch: Partial<Pick<Profile, "name" | "target" | "theme" | "onboarded" | "budget">>,
+  patch: Partial<
+    Pick<
+      Profile,
+      | "name"
+      | "target"
+      | "theme"
+      | "onboarded"
+      | "budget"
+      | "avatar"
+      | "textScale"
+      | "branch"
+      | "year"
+      | "section"
+      | "bio"
+    >
+  >,
 ): Promise<void> {
   const existing = await db.profile.get("me");
   const t = now();
@@ -70,6 +85,21 @@ export async function saveProfile(
 }
 
 const THEME_COLOR = { light: "#f6f5f1", dark: "#0e0f11" } as const;
+
+export const TEXT_SCALES = [0.9, 1, 1.1, 1.25] as const;
+export const TEXT_SCALE_LABELS = ["Small", "Default", "Large", "Larger"] as const;
+
+/** Scales the whole interface, the way the phone's own text-size setting does. */
+export function applyTextScale(scale: number | undefined): void {
+  if (typeof document === "undefined") return;
+  const s = TEXT_SCALES.includes(scale as (typeof TEXT_SCALES)[number]) ? (scale as number) : 1;
+  document.documentElement.style.zoom = s === 1 ? "" : String(s);
+  try {
+    localStorage.setItem("dockin-text-scale", String(s));
+  } catch {
+    /* private mode: ignore */
+  }
+}
 
 export function applyTheme(pref: ThemePref): void {
   if (typeof document === "undefined") return;

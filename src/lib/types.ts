@@ -18,6 +18,18 @@ export interface Profile {
   onboarded: boolean;
   /** Monthly spending budget in rupees (0 or missing = not set). */
   budget?: number;
+  /** Profile picture, see lib/avatars.ts ("i:3" or "e:🦊:3"). */
+  avatar?: string;
+  /** Text size for the whole app: 0.9 to 1.25. */
+  textScale?: number;
+  /** Course or branch, e.g. "BTech CSE". */
+  branch?: string;
+  /** Year of study, 1 to 5. */
+  year?: number;
+  /** Section or batch, e.g. "E1". */
+  section?: string;
+  /** One line a friend sees on your profile. */
+  bio?: string;
   createdAt: number;
   updatedAt: number;
 }

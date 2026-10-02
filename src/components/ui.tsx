@@ -12,6 +12,7 @@ import {
 } from "react";
 import { X } from "lucide-react";
 import type { AttendanceState } from "@/lib/types";
+import { gradientOf, parseAvatar } from "@/lib/avatars";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -272,11 +273,20 @@ export function Field({
 export const inputCls =
   "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-text outline-none placeholder:text-muted/70 focus:border-accent";
 
-/** Round initials badge. The colour is stable per name so it feels like "yours". */
-export function Avatar({ name, size = 44, className }: { name: string; size?: number; className?: string }) {
+/** Profile picture: a gradient tile with the first letter or a chosen emoji. */
+export function Avatar({
+  name,
+  avatar,
+  size = 44,
+  className,
+}: {
+  name: string;
+  avatar?: string;
+  size?: number;
+  className?: string;
+}) {
+  const look = parseAvatar(avatar, name);
   const initial = (name.trim()[0] ?? "?").toUpperCase();
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 360;
   return (
     <span
       aria-hidden
@@ -284,11 +294,12 @@ export function Avatar({ name, size = 44, className }: { name: string; size?: nu
       style={{
         width: size,
         height: size,
-        fontSize: size * 0.4,
-        background: `linear-gradient(135deg, hsl(${h} 70% 52%), hsl(${(h + 40) % 360} 70% 40%))`,
+        fontSize: size * (look.kind === "emoji" ? 0.5 : 0.4),
+        lineHeight: 1,
+        background: gradientOf(look.palette),
       }}
     >
-      {initial}
+      {look.kind === "emoji" ? look.emoji : initial}
     </span>
   );
 }

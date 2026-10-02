@@ -165,7 +165,7 @@ export default function TodayPage() {
             </div>
           </div>
           <Link href="/settings" aria-label="Profile and settings" className="rounded-full transition active:scale-95">
-            <Avatar name={name} size={40} />
+            <Avatar name={name} avatar={profile.avatar} size={40} />
           </Link>
         </div>
       </StickyBar>

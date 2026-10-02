@@ -11,7 +11,7 @@ import {
   Sun,
   Wallet,
 } from "lucide-react";
-import { applyTheme, getProfile } from "@/lib/repo";
+import { applyTextScale, applyTheme, getProfile } from "@/lib/repo";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!profile) return;
     applyTheme(profile.theme);
+    applyTextScale(profile.textScale);
     if (profile.theme !== "system") return;
     // "System" follows the phone live, e.g. when it switches to dark at sunset.
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

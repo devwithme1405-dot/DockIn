@@ -53,6 +53,8 @@ jobs:
           cp "$APK" DockIn.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs DockIn.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging DockIn.apk | head -5
+          echo "--- launch configuration"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree --file AndroidManifest.xml DockIn.apk | grep -A2 -iE "trusted|activity|provider" | head -60
 
       - uses: actions/upload-artifact@v4
         with:

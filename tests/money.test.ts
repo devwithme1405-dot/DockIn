@@ -73,3 +73,23 @@ describe("money maths", () => {
     expect(budgetStatus(1000, 1200, "2026-10", "2026-10-11").perDay).toBe(0);
   });
 });
+
+describe("avatars", () => {
+  it("round-trips a choice and stays stable without one", async () => {
+    const { formatAvatar, parseAvatar, PALETTES } = await import("@/lib/avatars");
+    expect(formatAvatar({ kind: "emoji", emoji: "🦊", palette: 3 })).toBe("e:🦊:3");
+    expect(parseAvatar("e:🦊:3", "Sachin")).toEqual({ kind: "emoji", emoji: "🦊", palette: 3 });
+    expect(parseAvatar("i:2", "Sachin")).toEqual({ kind: "initial", emoji: null, palette: 2 });
+
+    // no choice yet: same name always gets the same colour, and it is a real one
+    const a = parseAvatar(undefined, "Sachin");
+    expect(parseAvatar(undefined, "Sachin")).toEqual(a);
+    expect(a.palette).toBeGreaterThanOrEqual(0);
+    expect(a.palette).toBeLessThan(PALETTES.length);
+
+    // junk never crashes the screen
+    expect(parseAvatar("e:", "Sachin").kind).toBe("initial");
+    expect(parseAvatar("e:🦊:999", "Sachin").palette).toBeLessThan(PALETTES.length);
+    expect(parseAvatar("nonsense", "Sachin").kind).toBe("initial");
+  });
+});
