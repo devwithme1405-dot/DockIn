@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ALLOWED_DOMAIN, getSupabase, isCloudConfigured } from "./supabase";
+import { ALLOWED_DOMAIN, SUPABASE_URL, getSupabase, isCloudConfigured } from "./supabase";
 
 export interface AuthState {
   session: Session | null;
@@ -47,8 +47,8 @@ export interface Providers {
 }
 
 export async function fetchProviders(): Promise<Providers> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return { google: false, azure: false };
   try {
     const r = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });

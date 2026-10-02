@@ -45,3 +45,23 @@ describe("what you did with a shared item", () => {
     expect(await db.shareState.get("share-2")).toMatchObject({ done: false, hidden: true });
   });
 });
+
+describe("the project address from the environment", () => {
+  it("keeps only the origin, whatever was pasted in", async () => {
+    const { projectOrigin } = await import("@/lib/supabase");
+    const want = "https://abc123.supabase.co";
+
+    expect(projectOrigin(want)).toBe(want);
+    expect(projectOrigin(want + "/")).toBe(want);
+    // the three the dashboard shows next to it, any of which is easy to copy
+    expect(projectOrigin(want + "/rest/v1/")).toBe(want);
+    expect(projectOrigin(want + "/auth/v1")).toBe(want);
+    expect(projectOrigin(want + "/graphql/v1")).toBe(want);
+    expect(projectOrigin("  " + want + "  ")).toBe(want);
+
+    // nothing usable means "no cloud project", not a crash
+    expect(projectOrigin(undefined)).toBeUndefined();
+    expect(projectOrigin("")).toBeUndefined();
+    expect(projectOrigin("not a url")).toBeUndefined();
+  });
+});
