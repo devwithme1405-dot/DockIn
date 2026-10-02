@@ -36,6 +36,39 @@ export function useAuth(): AuthState {
   return { ...state, configured: isCloudConfigured };
 }
 
+/**
+ * Which of Supabase's sign-in buttons are actually switched on for this project.
+ * Asking the server means the screen never offers a button that errors out, and
+ * a provider turned on later appears without a new release.
+ */
+export interface Providers {
+  google: boolean;
+  azure: boolean;
+}
+
+export async function fetchProviders(): Promise<Providers> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return { google: false, azure: false };
+  try {
+    const r = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key } });
+    const j = (await r.json()) as { external?: Record<string, boolean> };
+    return { google: !!j.external?.google, azure: !!j.external?.azure };
+  } catch {
+    return { google: false, azure: false };
+  }
+}
+
+export async function signInWithAzure(): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: "azure",
+    options: { redirectTo: `${window.location.origin}/`, scopes: "email openid profile" },
+  });
+  return error ? error.message : null;
+}
+
 export async function signInWithGoogle(): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return "Cloud sync is not set up.";
@@ -58,7 +91,11 @@ export async function sendEmailCode(email: string): Promise<string | null> {
   });
   if (!error) return null;
   if (!isBennettEmail(email)) return `Use your Bennett email (@${ALLOWED_DOMAIN}).`;
-  if (/rate limit/i.test(error.message)) return "Too many emails sent. Wait a few minutes, or use Google sign-in.";
+  if (/rate limit|too many/i.test(error.message))
+    return "Too many codes requested. Wait a few minutes and try again.";
+  if (/database error|P0001/i.test(error.message))
+    return `Only Bennett accounts (@${ALLOWED_DOMAIN}) can use DockIn.`;
+  if (/Failed to fetch|NetworkError/i.test(error.message)) return "No internet right now.";
   return error.message;
 }
 

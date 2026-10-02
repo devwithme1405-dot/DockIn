@@ -83,3 +83,32 @@ migrations landed properly.
 
 After it, an anonymous request to any DockIn table should come back `401`, not an
 empty list.
+
+
+## 6. Email that actually reaches students
+
+Sign-in sends a six-digit code to the address the student types, so a Bennett
+Outlook inbox works like any other. The thing that decides whether this holds up
+is who sends that email.
+
+**Supabase's built-in email is for testing only.** It is rate limited to a
+handful of messages an hour, and it is not meant to carry real sign-ins. With a
+class of a few hundred students it will start refusing almost immediately.
+
+Before letting anyone else in, put a real sender behind it:
+Authentication, then Emails, then SMTP Settings, and switch on "Enable Custom
+SMTP". Any of the usual services works; Brevo and Resend both have a free tier
+large enough for a campus (a student signs in once, not daily).
+
+Two things matter for the code to land in an Outlook inbox rather than Junk:
+
+1. **Send from a domain you own**, not from a gmail.com address. Gmail's own
+   policy tells receiving servers to reject mail that claims to be from gmail.com
+   but was sent by someone else, and Microsoft honours that. A cheap domain plus
+   the SPF and DKIM records the SMTP provider hands you is the difference between
+   "code arrived" and "code never came".
+2. **Raise the rate limit** afterwards in Authentication, then Rate Limits, or the
+   project's own cap will still be the ceiling.
+
+While testing on your own, the built-in sender is usually enough for your own
+address.

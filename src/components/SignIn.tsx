@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Mail } from "lucide-react";
 import { ALLOWED_DOMAIN } from "@/lib/supabase";
-import { readAuthRedirectError, sendEmailCode, signInWithGoogle, verifyEmailCode } from "@/lib/auth";
+import {
+  fetchProviders,
+  readAuthRedirectError,
+  sendEmailCode,
+  signInWithAzure,
+  signInWithGoogle,
+  verifyEmailCode,
+  type Providers,
+} from "@/lib/auth";
 import { Button, cx } from "./ui";
 
 function GoogleG() {
@@ -17,7 +25,25 @@ function GoogleG() {
   );
 }
 
-/** Google or emailed-code sign-in for Bennett students. */
+function MicrosoftSquares() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden>
+      <path fill="#F25022" d="M0 0h11v11H0z" />
+      <path fill="#7FBA00" d="M12 0h11v11H12z" />
+      <path fill="#00A4EF" d="M0 12h11v11H0z" />
+      <path fill="#FFB900" d="M12 12h11v11H12z" />
+    </svg>
+  );
+}
+
+/**
+ * Signing in with your college email.
+ *
+ * The code goes to whatever address you type, so a Bennett Outlook inbox works
+ * exactly like any other. One-tap buttons are drawn only for the providers this
+ * Supabase project actually has switched on, so the screen never offers a button
+ * that is going to fail.
+ */
 export function SignIn({ dark = false }: { dark?: boolean }) {
   const [redirectError] = useState(readAuthRedirectError);
   const [error, setError] = useState<string | null>(redirectError);
@@ -25,11 +51,19 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
-  const [showEmail, setShowEmail] = useState(false);
+  const [providers, setProviders] = useState<Providers | null>(null);
 
-  async function google() {
+  useEffect(() => {
+    let alive = true;
+    void fetchProviders().then((p) => alive && setProviders(p));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function oauth(go: () => Promise<string | null>) {
     setBusy(true);
-    setError(await signInWithGoogle());
+    setError(await go());
     setBusy(false);
   }
   async function send() {
@@ -49,72 +83,100 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
 
   const field =
     "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
+  const muted = dark ? "text-white/70" : "text-muted";
+  const oneTap = providers?.google || providers?.azure;
 
   return (
     <div>
-      <button
-        onClick={google}
-        disabled={busy}
-        className="flex h-13 w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[16px] font-semibold text-[#1f1f1f] shadow-[0_0_0_1px_rgba(0,0,0,0.12)] transition active:scale-[0.98] disabled:opacity-60"
-      >
-        <GoogleG />
-        Continue with Google
-      </button>
-      <p className={cx("mt-2 text-center text-[12.5px]", dark ? "text-white/70" : "text-muted")}>
-        Use your @{ALLOWED_DOMAIN} account
-      </p>
-
-      {!showEmail ? (
-        <button
-          onClick={() => setShowEmail(true)}
-          className="mx-auto mt-4 flex items-center gap-1.5 text-[14px] font-medium text-accent"
-        >
-          <Mail size={15} /> Use an email code instead
-        </button>
-      ) : (
-        <div className="mt-5 space-y-3">
+      {!sent ? (
+        <>
+          <label className={cx("mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-email">
+            Your college email
+          </label>
           <input
+            id="dockin-email"
             className={field}
             type="email"
             inputMode="email"
             autoComplete="email"
             placeholder={`name@${ALLOWED_DOMAIN}`}
             value={email}
-            disabled={sent}
             onChange={(e) => setEmail(e.target.value)}
-            aria-label="College email"
+            onKeyDown={(e) => e.key === "Enter" && email.includes("@") && void send()}
           />
-          {!sent ? (
-            <Button className="w-full" onClick={send} disabled={busy || !email.includes("@")}>
-              Send code <ArrowRight size={17} />
-            </Button>
-          ) : (
-            <>
-              <input
-                className={cx(field, "text-center text-[22px] tracking-[0.35em] tabular-nums")}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="000000"
-                maxLength={8}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                aria-label="Code from your email"
-              />
-              <Button className="w-full" onClick={verify} disabled={busy || code.length < 6}>
-                Verify and sign in
-              </Button>
-              <button
-                onClick={() => {
-                  setSent(false);
-                  setCode("");
-                }}
-                className="mx-auto block text-[13px] text-muted"
-              >
-                Use a different email
-              </button>
-            </>
+          <p className={cx("mt-2 text-[12.5px]", muted)}>
+            We send a six-digit code to your inbox. Works with Outlook, no app needed.
+          </p>
+          <Button className="mt-4 w-full" onClick={send} disabled={busy || !email.includes("@")}>
+            <Mail size={17} /> Send me a code <ArrowRight size={17} />
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className={cx("mb-3 text-[14px]", muted)}>
+            Code sent to <span className={dark ? "text-white" : "text-text"}>{email}</span>. Check your
+            inbox, and the junk folder too.
+          </p>
+          <input
+            className={cx(field, "text-center text-[22px] tracking-[0.35em] tabular-nums")}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="000000"
+            maxLength={8}
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            onKeyDown={(e) => e.key === "Enter" && code.length >= 6 && void verify()}
+            aria-label="Code from your email"
+            autoFocus
+          />
+          <Button className="mt-3 w-full" onClick={verify} disabled={busy || code.length < 6}>
+            Verify and sign in
+          </Button>
+          <button
+            onClick={() => {
+              setSent(false);
+              setCode("");
+              setError(null);
+            }}
+            className={cx("mx-auto mt-3 block text-[13px]", muted)}
+          >
+            Use a different email
+          </button>
+        </>
+      )}
+
+      {!sent && oneTap && (
+        <>
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-line" />
+            <span className={cx("text-[12px]", muted)}>or</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
+
+          {providers?.azure && (
+            <button
+              onClick={() => oauth(signInWithAzure)}
+              disabled={busy}
+              className="flex h-13 w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[16px] font-semibold text-[#1f1f1f] shadow-[0_0_0_1px_rgba(0,0,0,0.12)] transition active:scale-[0.98] disabled:opacity-60"
+            >
+              <MicrosoftSquares />
+              Continue with Outlook
+            </button>
           )}
-        </div>
+          {providers?.google && (
+            <button
+              onClick={() => oauth(signInWithGoogle)}
+              disabled={busy}
+              className={cx(
+                "flex h-13 w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[16px] font-semibold text-[#1f1f1f] shadow-[0_0_0_1px_rgba(0,0,0,0.12)] transition active:scale-[0.98] disabled:opacity-60",
+                providers?.azure && "mt-2.5",
+              )}
+            >
+              <GoogleG />
+              Continue with Google
+            </button>
+          )}
+        </>
       )}
 
       {error && (
