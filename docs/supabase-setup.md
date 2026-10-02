@@ -68,3 +68,18 @@ To check it on your own project, paste `supabase/tests/social_test.sql` into the
 SQL Editor. It makes three test students, walks through every rule above and
 raises on the first one that does not hold. Delete the rows it creates afterwards
 if you run it against a project you care about.
+
+
+## 5. Lock anonymous callers out (run after 0002)
+
+Run `supabase/migrations/0003_lock_anon_out.sql`.
+
+Supabase hands the `anon` role read access to every new table in `public` by
+default. Row level security already stops an anonymous caller from seeing a
+single row, but this takes the grant away as well, so there are two locks rather
+than one. The same script checks that RLS is switched on for every DockIn table
+and raises if it is not — so a clean run is also the proof that the first two
+migrations landed properly.
+
+After it, an anonymous request to any DockIn table should come back `401`, not an
+empty list.
