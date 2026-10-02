@@ -52,3 +52,7 @@ next-env.d.ts
 
 # files handed over from the build machine
 /_transfer/
+
+# files Claude delivered into this folder
+/Claude outputs/
+*.apk
