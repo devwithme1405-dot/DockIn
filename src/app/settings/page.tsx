@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -13,9 +13,11 @@ import {
   Monitor,
   Moon,
   Pencil,
+  Share2,
   Smartphone,
   Sun,
   Trash2,
+  Users,
   Upload,
 } from "lucide-react";
 import {
@@ -47,12 +49,14 @@ import {
   inputCls,
   useToast,
 } from "@/components/ui";
+import Link from "next/link";
 import { BackHeader } from "@/components/PageHeader";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
+import { SocialError, clearSocial, ensureProfile, publishProfile, setShareAttendance } from "@/lib/social";
 
 type SheetName = "details" | "avatar" | "signin" | "logout" | "delete" | "restore" | "install" | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
@@ -93,6 +97,21 @@ export default function ProfilePage() {
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState<{ text: string; counts: string } | null>(null);
   const [installed] = useState(isInstalled);
+  const [shareAttendance, setShareAttendanceLocal] = useState<boolean | null>(null);
+
+  const signedInNow = !!session;
+  useEffect(() => {
+    if (!configured || !signedInNow) return;
+    // Make sure the directory row exists and find out what it currently shares.
+    void Promise.resolve().then(async () => {
+      try {
+        const mine = await ensureProfile();
+        setShareAttendanceLocal(mine.shareAttendance);
+      } catch {
+        /* offline: the switch stays off until we can ask */
+      }
+    });
+  }, [configured, signedInNow]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const monthSpent = useMemo(() => {
@@ -147,6 +166,10 @@ export default function ProfilePage() {
     });
     setSheet(null);
     setDetails(null);
+    if (session) {
+      const fresh = await getProfile();
+      if (fresh) void publishProfile(fresh, shareAttendance ?? false).catch(() => {});
+    }
   }
 
   function pickAvatar(next: { emoji: string | null; palette: number }) {
@@ -167,6 +190,17 @@ export default function ProfilePage() {
     if (!Number.isFinite(n) || n < 0 || n > 10_000_000) return;
     await saveProfile({ budget: n });
     toast.show(n > 0 ? "Monthly budget saved" : "Budget cleared");
+  }
+
+  async function toggleAttendanceSharing(on: boolean) {
+    setShareAttendanceLocal(on);
+    try {
+      await setShareAttendance(on, profile!.target);
+      toast.show(on ? "Friends can see your status" : "Attendance is private again");
+    } catch (e) {
+      setShareAttendanceLocal(!on);
+      toast.show(e instanceof SocialError ? e.message : "Could not change that.");
+    }
   }
 
   async function syncNow() {
@@ -237,6 +271,7 @@ export default function ProfilePage() {
     setBusy(true);
     if (session) await signOutCloud();
     await resetAll();
+    await clearSocial();
     clearSyncState();
     resetSyncStatus();
     try {
@@ -431,6 +466,46 @@ export default function ProfilePage() {
                 </Button>
               </>
             )}
+          </Card>
+        )}
+
+        {/* friends */}
+        {configured && signedIn && (
+          <Card title="Friends and groups">
+            <Link
+              href="/circle"
+              className="flex min-h-14 items-center gap-3 px-1 py-2.5 text-left"
+              onClick={() => void ensureProfile().catch(() => {})}
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
+                <Users size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-medium">Your friends and groups</span>
+                <span className="block truncate text-[12.5px] text-muted">
+                  Share assignments with your class
+                </span>
+              </span>
+              <ChevronRight size={18} className="shrink-0 text-muted" />
+            </Link>
+
+            <label className="mt-1 flex items-center gap-3 border-t border-line px-1 pt-3.5 pb-1">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
+                <Share2 size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-medium">Show friends my attendance</span>
+                <span className="block text-[12.5px] text-muted">
+                  Only the word Safe, Cutting it close or Below target. Never the number.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                className="size-6 shrink-0 accent-accent"
+                checked={shareAttendance ?? false}
+                onChange={(e) => void toggleAttendanceSharing(e.target.checked)}
+              />
+            </label>
           </Card>
         )}
 

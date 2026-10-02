@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * in. When two devices edit the same record, the later `updatedAt` wins.
  */
 
-export const SYNC_KINDS = ["profile", "subjects", "slots", "sessions", "expenses", "tasks", "events"] as const;
+export const SYNC_KINDS = ["profile", "subjects", "slots", "sessions", "expenses", "tasks", "events", "shareState"] as const;
 export type SyncKind = (typeof SYNC_KINDS)[number];
 
 export interface RemoteRow {

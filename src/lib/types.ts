@@ -145,3 +145,72 @@ export interface CalEvent extends Base {
   endDate: string;
   note: string;
 }
+
+// ---------------------------------------------------------------------------
+// Friends, groups and shared assignments.
+//
+// These three are a local mirror of what the server lets you see, so the
+// screens still render on the train with no signal. They are refreshed rather
+// than synced: the server is always right about who your friends are.
+// ---------------------------------------------------------------------------
+
+export interface Friend {
+  /** Their user id. */
+  id: string;
+  name: string;
+  avatar?: string;
+  branch?: string;
+  year?: number;
+  section?: string;
+  bio?: string;
+  /** Null unless they chose to share it. Never a percentage. */
+  attendanceState: AttendanceState | null;
+  status: "pending" | "accepted";
+  /** True when they asked you, so the button says Accept rather than Pending. */
+  theyAsked: boolean;
+  updatedAt: number;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  emoji: string | null;
+  /** Six characters; anyone with it can join. */
+  code: string;
+  owner: string;
+  members: number;
+  updatedAt: number;
+}
+
+/** An assignment someone posted to a group or sent to you directly. */
+export interface Share {
+  id: string;
+  author: string;
+  authorName: string;
+  authorAvatar?: string;
+  groupId: string | null;
+  groupName: string | null;
+  title: string;
+  notes: string;
+  kind: TaskKind;
+  subjectName: string | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  room: string;
+  priority: Priority;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** What you did with a shared item. Yours alone, and it syncs with your data. */
+export interface ShareState extends Base {
+  done: boolean;
+  doneAt: number | null;
+  hidden: boolean;
+}
+
+/** Your own row in the campus directory. */
+export interface MyProfile {
+  code: string;
+  shareAttendance: boolean;
+}

@@ -33,7 +33,7 @@ load a sample timetable.
 
 - `src/lib/attendance.ts` attendance maths: percentage, classes you can still miss, classes you must attend
 - `src/lib/db.ts`, `src/lib/repo.ts` local database. Screens only use `repo.ts`, so swapping to Supabase later touches one place
-- `src/app` screens: Today, Attendance, subject detail, timetable, onboarding, profile (theme, backup and restore, log out)
+- `src/app` screens: Today, Attendance, subject detail, timetable, Money, Tasks, Calendar, Friends and groups, group detail, onboarding, profile (avatar, text size, theme, backup and restore, log out)
 - `public/sw.js` service worker, `src/app/manifest.ts` install manifest and Android shortcuts
 - `tests` unit tests
 

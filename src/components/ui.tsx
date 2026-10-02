@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { X } from "lucide-react";
+import { X, type LucideIcon } from "lucide-react";
 import type { AttendanceState } from "@/lib/types";
 import { gradientOf, parseAvatar } from "@/lib/avatars";
 
@@ -308,13 +308,28 @@ export function EmptyState({
   title,
   body,
   action,
+  icon: Icon,
+  flush,
 }: {
   title: string;
   body?: string;
   action?: ReactNode;
+  icon?: LucideIcon;
+  /** Set when the surrounding element already has the page's side padding. */
+  flush?: boolean;
 }) {
   return (
-    <div className="mx-5 rounded-2xl border border-dashed border-line px-6 py-10 text-center">
+    <div
+      className={cx(
+        "rounded-2xl border border-dashed border-line px-6 py-10 text-center",
+        flush ? "" : "mx-5",
+      )}
+    >
+      {Icon && (
+        <div className="mb-3 flex justify-center text-muted">
+          <Icon size={26} strokeWidth={1.75} />
+        </div>
+      )}
       <p className="font-medium">{title}</p>
       {body && <p className="mt-1 text-sm text-muted">{body}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}

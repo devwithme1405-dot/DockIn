@@ -1,5 +1,17 @@
 import Dexie, { type Table } from "dexie";
-import type { CalEvent, Expense, Profile, Session, Slot, Subject, Task } from "./types";
+import type {
+  CalEvent,
+  Expense,
+  Friend,
+  Group,
+  Profile,
+  Session,
+  Share,
+  ShareState,
+  Slot,
+  Subject,
+  Task,
+} from "./types";
 
 /**
  * Local-first database (IndexedDB). In the hosted version this same data is
@@ -14,6 +26,12 @@ export class DockinDB extends Dexie {
   expenses!: Table<Expense, string>;
   tasks!: Table<Task, string>;
   events!: Table<CalEvent, string>;
+  // Friends, groups and shares are a mirror of the server, kept so the screens
+  // work offline; shareState is yours and syncs with the rest of your data.
+  friends!: Table<Friend, string>;
+  groups!: Table<Group, string>;
+  shares!: Table<Share, string>;
+  shareState!: Table<ShareState, string>;
 
   constructor() {
     super("dockin");
@@ -29,6 +47,12 @@ export class DockinDB extends Dexie {
     this.version(3).stores({
       tasks: "id, dueDate, done, kind",
       events: "id, date, endDate",
+    });
+    this.version(4).stores({
+      friends: "id, status",
+      groups: "id",
+      shares: "id, groupId, dueDate",
+      shareState: "id, done",
     });
   }
 }

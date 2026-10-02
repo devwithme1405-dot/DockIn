@@ -40,3 +40,31 @@ Note: if Bennett manages student Google accounts, the university admin may need 
 - If two phones edit the same thing, the later edit wins.
 - Signing out removes the data from that phone only. It stays in the account.
 - Every student can only read and write their own rows (row level security).
+
+
+## 4. Friends, groups and shared assignments
+
+Run `supabase/migrations/0002_social.sql` in the SQL Editor, the same way as
+`0001_init.sql`. It is safe to run more than once.
+
+It adds five tables (`profiles`, `friends`, `groups`, `group_members`, `shares`
+plus `share_targets`) and the handful of functions the app calls. The rules it
+installs are worth knowing, because they are what keeps a thousand students'
+data apart:
+
+* **You are only findable by your code.** Every student gets an eight-character
+  code the first time they open Friends. There is no search by name or email, so
+  nobody can be found by guessing.
+* **A profile opens up only to friends and group mates.** Until a request is
+  accepted, neither side can read the other's row.
+* **Attendance is a word, never a number.** Even with sharing turned on, friends
+  see `Safe`, `Cutting it close` or `Below target`. The percentage never leaves
+  the phone.
+* **A post reaches the group it was made in, and nobody else.** Only the person
+  who posted it can edit or withdraw it, and you can only send something
+  directly to someone you are already friends with.
+
+To check it on your own project, paste `supabase/tests/social_test.sql` into the
+SQL Editor. It makes three test students, walks through every rule above and
+raises on the first one that does not hold. Delete the rows it creates afterwards
+if you run it against a project you care about.

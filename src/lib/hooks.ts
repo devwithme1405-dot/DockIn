@@ -4,7 +4,19 @@ import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import { countCancelled, summarize, withBase } from "./attendance";
-import type { AttendanceSummary, CalEvent, Expense, Session, Slot, Subject, Task } from "./types";
+import type {
+  AttendanceSummary,
+  CalEvent,
+  Expense,
+  Friend,
+  Group,
+  Session,
+  Share,
+  ShareState,
+  Slot,
+  Subject,
+  Task,
+} from "./types";
 
 export function useSubjects(): Subject[] | undefined {
   return useLiveQuery(
@@ -112,6 +124,31 @@ export function useTasks(): Task[] | undefined {
 export function useEvents(): CalEvent[] | undefined {
   return useLiveQuery(
     () => db.events.filter((e) => !e.deletedAt).toArray(),
+    [],
+  );
+}
+
+export function useFriends(): Friend[] | undefined {
+  return useLiveQuery(
+    async () => (await db.friends.toArray()).sort((a, b) => a.name.localeCompare(b.name)),
+    [],
+  );
+}
+
+export function useGroups(): Group[] | undefined {
+  return useLiveQuery(
+    async () => (await db.groups.toArray()).sort((a, b) => a.name.localeCompare(b.name)),
+    [],
+  );
+}
+
+export function useShares(): Share[] | undefined {
+  return useLiveQuery(() => db.shares.toArray(), []);
+}
+
+export function useShareState(): Map<string, ShareState> | undefined {
+  return useLiveQuery(
+    async () => new Map((await db.shareState.toArray()).map((s) => [s.id, s])),
     [],
   );
 }

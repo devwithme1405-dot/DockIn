@@ -12,11 +12,36 @@ import {
   Wallet,
 } from "lucide-react";
 import { applyTextScale, applyTheme, getProfile } from "@/lib/repo";
+import { db } from "@/lib/db";
+import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
+
+/**
+ * How many things want attention right now: your own tasks that are overdue or
+ * due today, plus anything shared with you that you have not ticked off. It
+ * rides on the Tasks tab so the nudge is there without a notification.
+ */
+function useNeedsAttention(): number {
+  return (
+    useLiveQuery(async () => {
+      const today = toDateStr();
+      const mine = await db.tasks
+        .filter((t) => !t.deletedAt && !t.done && !!t.dueDate && t.dueDate <= today)
+        .count();
+      const states = new Map((await db.shareState.toArray()).map((s) => [s.id, s]));
+      const shared = (await db.shares.toArray()).filter((s) => {
+        const st = states.get(s.id);
+        if (st?.done || st?.hidden) return false;
+        return !s.dueDate || s.dueDate <= today;
+      }).length;
+      return mine + shared;
+    }, []) ?? 0
+  );
+}
 
 const TABS = [
   { href: "/", label: "Today", icon: Sun },
@@ -113,6 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function TabBar({ pathname }: { pathname: string }) {
+  const attention = useNeedsAttention();
   return (
     <nav
       aria-label="Main"
@@ -132,7 +158,17 @@ function TabBar({ pathname }: { pathname: string }) {
                   active ? "text-accent" : "text-muted",
                 )}
               >
-                <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
+                <span className="relative">
+                  <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
+                  {href === "/tasks" && attention > 0 && (
+                    <span
+                      className="absolute -top-1 -right-2 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums"
+                      aria-label={`${attention} need attention`}
+                    >
+                      {attention > 9 ? "9+" : attention}
+                    </span>
+                  )}
+                </span>
                 {label}
               </Link>
             </li>
