@@ -14,6 +14,7 @@
 import { db } from "./db";
 import { getSupabase } from "./supabase";
 import { summarize, withBase } from "./attendance";
+import { DOCX_MIME, renameFile, replaceInDocx, type Swap } from "./docx";
 import type {
   AttendanceState,
   Friend,
@@ -23,6 +24,7 @@ import type {
   Profile,
   Session,
   Share,
+  ShareFile,
   TaskKind,
 } from "./types";
 
@@ -294,6 +296,126 @@ export interface ShareDraft {
   dueTime: string | null;
   room: string;
   priority: Priority;
+  file?: ShareFile | null;
+}
+
+// ---------------------------------------------------------------------------
+// The file on an assignment
+// ---------------------------------------------------------------------------
+
+const BUCKET = "assignments";
+/** Ten megabytes, matching the bucket. Beyond that it is a drive link, not an upload. */
+export const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+/** Keeps a filename to characters that survive every phone, cloud and OS in between. */
+function safeName(name: string): string {
+  const cleaned = name
+    .normalize("NFKD")
+    .replace(/[^\w.\- ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.slice(-80) || "assignment";
+}
+
+export function fileKind(name: string, type?: string): "docx" | "pdf" | null {
+  if (/\.docx$/i.test(name) || type === DOCX_MIME) return "docx";
+  if (/\.pdf$/i.test(name) || type === "application/pdf") return "pdf";
+  return null;
+}
+
+/**
+ * Puts the author's file in the private bucket.
+ *
+ * The object goes under the author's own user id, so it can be uploaded before
+ * the post exists: an upload that is then abandoned is a stray file in their own
+ * folder rather than a post nobody can open.
+ */
+export async function uploadAssignment(
+  file: File,
+  who: { name?: string; roll?: string } = {},
+): Promise<ShareFile> {
+  const sb = client();
+  const { data: auth } = await sb.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new SocialError("You are not signed in.");
+
+  const type = fileKind(file.name, file.type);
+  if (!type) throw new SocialError("Attach a Word file (.docx) or a PDF.");
+  if (file.size > MAX_FILE_BYTES) throw new SocialError("That file is over 10 MB.");
+
+  const name = safeName(file.name);
+  const path = `${me}/${crypto.randomUUID()}/${name}`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, file, {
+    contentType: type === "docx" ? DOCX_MIME : "application/pdf",
+    upsert: false,
+  });
+  if (error) throw new SocialError(readableStorage(error.message));
+
+  return {
+    name,
+    path,
+    size: file.size,
+    type,
+    authorName: who.name?.trim() || undefined,
+    authorRoll: who.roll?.trim() || undefined,
+  };
+}
+
+/** Removes a file nobody is going to post after all. */
+export async function dropAssignment(path: string): Promise<void> {
+  try {
+    await client().storage.from(BUCKET).remove([path]);
+  } catch {
+    /* a stray file in your own folder is not worth interrupting anyone over */
+  }
+}
+
+/**
+ * Downloads a shared file and, when it is a Word document and the reader has
+ * said who they are, puts their name and roll in place of the author's — inside
+ * the document and in the filename.
+ *
+ * The swap happens here, on the reader's phone: the author's file in the bucket
+ * is never touched, so the same post can serve a whole class and the author can
+ * always see exactly what they sent.
+ */
+export async function copyAssignment(
+  file: ShareFile,
+  me: { name?: string; roll?: string } = {},
+): Promise<{ blob: Blob; name: string; personalised: boolean }> {
+  const { data, error } = await client().storage.from(BUCKET).download(file.path);
+  if (error || !data) throw new SocialError(readableStorage(error?.message ?? "download failed"));
+
+  const swaps: Swap[] = [];
+  if (file.authorName && me.name?.trim()) {
+    swaps.push({ find: file.authorName, replace: me.name.trim() });
+  }
+  if (file.authorRoll && me.roll?.trim()) {
+    swaps.push({ find: file.authorRoll, replace: me.roll.trim() });
+  }
+
+  const name = renameFile(file.name, swaps);
+  if (file.type !== "docx" || swaps.length === 0) {
+    return { blob: data, name, personalised: false };
+  }
+
+  try {
+    return { blob: await replaceInDocx(data, swaps), name, personalised: true };
+  } catch {
+    // A document we cannot rewrite is still a document they need; hand over the
+    // author's file under their own name and let the screen say so.
+    return { blob: data, name, personalised: false };
+  }
+}
+
+function readableStorage(message: string): string {
+  if (/exceeded the maximum allowed size|Payload too large/i.test(message)) {
+    return "That file is over 10 MB.";
+  }
+  if (/mime type .* is not supported/i.test(message)) return "Attach a Word file (.docx) or a PDF.";
+  if (/Bucket not found/i.test(message)) return "File sharing is not set up on the server yet.";
+  if (/Object not found/i.test(message)) return "That file is no longer there.";
+  return readable(message);
 }
 
 /** Posts an assignment to a group, or sends it to the friends you picked. */
@@ -319,7 +441,12 @@ export async function shareTask(
     })
     .select("id")
     .single();
-  if (error) throw new SocialError(readable(error.message));
+  if (error) {
+    // The file was uploaded before the post; with no post it can never be read,
+    // so it goes rather than sitting there forever.
+    if (draft.file) await dropAssignment(draft.file.path);
+    throw new SocialError(readable(error.message));
+  }
 
   if ("friendIds" in to && to.friendIds.length > 0) {
     const { error: tErr } = await sb
@@ -327,8 +454,10 @@ export async function shareTask(
       .insert(to.friendIds.map((user_id) => ({ share_id: data.id, user_id })));
     if (tErr) {
       // Nobody can see a share with no audience, so take it back rather than
-      // leaving a post that reached no one.
+      // leaving a post that reached no one. Deleting the row takes its file with
+      // it, through the trigger in migration 7.
       await sb.from("shares").delete().eq("id", data.id);
+      if (draft.file) await dropAssignment(draft.file.path);
       throw new SocialError(readable(tErr.message));
     }
   }
@@ -337,8 +466,12 @@ export async function shareTask(
 
 /** Withdraws something you posted, for everyone. */
 export async function unshare(shareId: string): Promise<void> {
+  const local = await db.shares.get(shareId);
   const { error } = await client().from("shares").delete().eq("id", shareId);
   if (error) throw new SocialError(readable(error.message));
+  // The trigger on `shares` clears the object as well; this is the belt to its
+  // braces, and the only path that runs when the trigger is not installed yet.
+  if (local?.file) await dropAssignment(local.file.path);
   await db.shares.delete(shareId);
 }
 
@@ -505,6 +638,7 @@ async function doPull(): Promise<void> {
       dueTime: r.data?.dueTime ?? null,
       room: String(r.data?.room ?? ""),
       priority: (r.data?.priority ?? "normal") as Priority,
+      file: r.data?.file ?? null,
       createdAt: r.created_at ?? now(),
       updatedAt: r.updated_at ?? now(),
     };

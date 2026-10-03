@@ -68,6 +68,7 @@ export async function saveProfile(
       | "year"
       | "section"
       | "bio"
+      | "roll"
     >
   >,
 ): Promise<void> {

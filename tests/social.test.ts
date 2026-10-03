@@ -2,7 +2,8 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { resetAll } from "@/lib/repo";
-import { cleanCode, hideShare, setShareDone } from "@/lib/social";
+import { MAX_FILE_BYTES, cleanCode, fileKind, hideShare, setShareDone } from "@/lib/social";
+import { DOCX_MIME } from "@/lib/docx";
 import { SYNC_KINDS } from "@/lib/sync";
 
 beforeEach(async () => {
@@ -63,5 +64,24 @@ describe("the project address from the environment", () => {
     expect(projectOrigin(undefined)).toBeUndefined();
     expect(projectOrigin("")).toBeUndefined();
     expect(projectOrigin("not a url")).toBeUndefined();
+  });
+});
+
+describe("the file on a shared assignment", () => {
+  it("accepts a Word file or a PDF and nothing else", () => {
+    expect(fileKind("a.docx")).toBe("docx");
+    expect(fileKind("A.DOCX")).toBe("docx");
+    expect(fileKind("report.pdf")).toBe("pdf");
+    // some phones hand over a blank name but a correct type
+    expect(fileKind("upload", DOCX_MIME)).toBe("docx");
+    expect(fileKind("upload", "application/pdf")).toBe("pdf");
+    // the old binary format cannot be rewritten, so it is not offered
+    expect(fileKind("old.doc")).toBeNull();
+    expect(fileKind("notes.txt")).toBeNull();
+    expect(fileKind("sneaky.docx.exe")).toBeNull();
+  });
+
+  it("holds the bucket's own size limit, so the app refuses before uploading", () => {
+    expect(MAX_FILE_BYTES).toBe(10 * 1024 * 1024);
   });
 });

@@ -89,6 +89,7 @@ export default function ProfilePage() {
     branch: string;
     year: string;
     section: string;
+    roll: string;
     bio: string;
   } | null>(null);
   const [budgetText, setBudgetText] = useState<string | null>(null);
@@ -147,6 +148,7 @@ export default function ProfilePage() {
       branch: profile!.branch ?? "",
       year: profile!.year ? String(profile!.year) : "",
       section: profile!.section ?? "",
+      roll: profile!.roll ?? "",
       bio: profile!.bio ?? "",
     });
     setSheet("details");
@@ -162,6 +164,7 @@ export default function ProfilePage() {
       branch: details.branch.trim().slice(0, 40),
       year: year >= 1 && year <= 5 ? year : undefined,
       section: details.section.trim().slice(0, 12),
+      roll: details.roll.trim().slice(0, 30) || undefined,
       bio: details.bio.trim().slice(0, 120),
     });
     setSheet(null);
@@ -590,6 +593,18 @@ export default function ProfilePage() {
                 />
               </Field>
             </div>
+            <Field label="Enrolment number">
+              <input
+                className={inputCls}
+                value={details.roll}
+                onChange={(e) => setDetails({ ...details, roll: e.target.value })}
+                placeholder="E23CSEU0155"
+                maxLength={30}
+              />
+              <span className="mt-1.5 block text-[12.5px] text-muted">
+                Only used to put your own name and roll on a copy of a friend&rsquo;s assignment.
+              </span>
+            </Field>
             <Field label="About you">
               <input
                 className={inputCls}

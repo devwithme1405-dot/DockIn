@@ -30,6 +30,12 @@ export interface Profile {
   section?: string;
   /** One line a friend sees on your profile. */
   bio?: string;
+  /**
+   * Enrolment number. Only used to put your own name and roll on a copy of
+   * someone else's assignment, so it is asked for the first time that happens
+   * rather than during sign-up.
+   */
+  roll?: string;
   /** The shape of a college day; see lib/periods.ts. */
   grid?: { start: string; length: number; gap: number; count: number };
   createdAt: number;
@@ -195,6 +201,26 @@ export interface Group {
   updatedAt: number;
 }
 
+/**
+ * The file attached to a shared assignment.
+ *
+ * `authorName` and `authorRoll` are the exact strings the author confirmed are
+ * theirs inside the document, so a reader's copy can have their own put in
+ * instead. They are not a guess made by the app, and the author sees them
+ * before the post goes out.
+ */
+export interface ShareFile {
+  /** What the author called it. */
+  name: string;
+  /** Where it sits in the private bucket. */
+  path: string;
+  size: number;
+  /** "docx" can be personalised; "pdf" can only be renamed. */
+  type: "docx" | "pdf";
+  authorName?: string;
+  authorRoll?: string;
+}
+
 /** An assignment someone posted to a group or sent to you directly. */
 export interface Share {
   id: string;
@@ -211,6 +237,7 @@ export interface Share {
   dueTime: string | null;
   room: string;
   priority: Priority;
+  file?: ShareFile | null;
   createdAt: number;
   updatedAt: number;
 }

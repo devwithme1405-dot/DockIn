@@ -258,12 +258,15 @@ export function Chip({
 export function Field({
   label,
   children,
+  /** Tighter spacing, for fields that sit inside a card rather than a form. */
+  compact,
 }: {
   label: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <label className="mb-4 block">
+    <label className={cx("block", compact ? "mb-2" : "mb-4")}>
       <span className="mb-1.5 block text-[13px] font-medium text-muted">{label}</span>
       {children}
     </label>

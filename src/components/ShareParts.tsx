@@ -5,9 +5,18 @@ import { Check, Clock, MapPin, Send, Undo2, Users } from "lucide-react";
 import type { Group, Priority, Share, ShareState, Subject, TaskKind } from "@/lib/types";
 import { KINDS, dueLabel } from "@/lib/tasks";
 import { toDateStr } from "@/lib/dates";
-import { SocialError, hideShare, setShareDone, shareTask, unshare } from "@/lib/social";
+import {
+  SocialError,
+  dropAssignment,
+  hideShare,
+  setShareDone,
+  shareTask,
+  unshare,
+  uploadAssignment,
+} from "@/lib/social";
 import { Avatar, Button, Chip, Field, cx, inputCls, useToast } from "./ui";
 import { KIND_ICON } from "./TaskParts";
+import { AttachPicker, SharedFileRow, type Attachment } from "./AssignmentFile";
 
 /** One shared assignment, with who posted it and where. */
 export function ShareRow({
@@ -93,6 +102,8 @@ export function ShareRow({
         </p>
         {share.notes && <p className="mt-1 text-[13px] text-muted">{share.notes}</p>}
 
+        {share.file && <SharedFileRow file={share.file} mine={mine} />}
+
         <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted">
           <Avatar name={share.authorName} avatar={share.authorAvatar} size={16} />
           <span className="truncate">
@@ -141,7 +152,9 @@ export function ShareForm({
   const [mode, setMode] = useState<"group" | "friends">(
     defaultGroupId || groups.length > 0 ? "group" : "friends",
   );
+  const [attach, setAttach] = useState<Attachment | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   const isExam = kind === "exam" || kind === "quiz";
@@ -151,7 +164,15 @@ export function ShareForm({
   async function send() {
     setBusy(true);
     setProblem(null);
+    // The file goes up first and only then the post, so nobody ever sees an
+    // assignment whose attachment is still uploading.
+    let file = null;
     try {
+      if (attach) {
+        setStage("Uploading the file…");
+        file = await uploadAssignment(attach.file, { name: attach.name, roll: attach.roll });
+      }
+      setStage("Sharing…");
       await shareTask(
         {
           title: title.trim(),
@@ -162,14 +183,18 @@ export function ShareForm({
           dueTime: dueTime || null,
           room: room.trim(),
           priority,
+          file,
         },
         mode === "group" ? { groupId } : { friendIds: picked },
       );
       toast.show("Shared");
       onDone();
     } catch (e) {
+      // shareTask cleans up after itself; this covers the step in between.
+      if (file) await dropAssignment(file.path);
       setProblem(e instanceof SocialError ? e.message : "Could not share that.");
     }
+    setStage(null);
     setBusy(false);
   }
 
@@ -232,6 +257,8 @@ export function ShareForm({
           placeholder="Handwritten, submit in class"
         />
       </Field>
+
+      <AttachPicker value={attach} onChange={setAttach} />
 
       <p className="mb-1.5 text-[13px] font-medium text-muted">Priority</p>
       <div className="mb-5 flex gap-2">
@@ -304,7 +331,7 @@ export function ShareForm({
       {problem && <p className="mb-3 text-[13.5px] text-danger">{problem}</p>}
 
       <Button className="w-full" onClick={send} disabled={!canSend}>
-        <Send size={17} /> Share
+        <Send size={17} /> {stage ?? "Share"}
       </Button>
     </div>
   );
