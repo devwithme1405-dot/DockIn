@@ -42,7 +42,14 @@ const themeScript = `(function(){try{var p=localStorage.getItem('dockin-theme')|
 const healScript = `(function(){
 var CHUNK=/ChunkLoadError|Loading chunk|Loading CSS chunk|dynamically imported module|Importing a module script failed|error loading dynamically imported/i;
 function heal(){
-  try{ if(sessionStorage.getItem('dockin-healed'))return; sessionStorage.setItem('dockin-healed','1'); }catch(e){}
+  // Once per ten minutes, and never twice in a row. A page whose scripts are
+  // genuinely gone would otherwise reload itself forever, which is far worse
+  // than the dead screen this is here to prevent.
+  try{
+    var last=Number(localStorage.getItem('dockin-healed')||0);
+    if(Date.now()-last<600000)return;
+    localStorage.setItem('dockin-healed',String(Date.now()));
+  }catch(e){ return; }
   var done=function(){ location.reload(); };
   try{
     if('serviceWorker'in navigator){
@@ -66,7 +73,7 @@ window.addEventListener('unhandledrejection',function(e){
   var m=(r.name||'')+' '+(r.message||r);
   if(CHUNK.test(m)) heal();
 });
-window.addEventListener('load',function(){ setTimeout(function(){ try{ sessionStorage.removeItem('dockin-healed') }catch(e){} },8000); });
+
 })();`.replace(/\s*\n\s*/g, " ");
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

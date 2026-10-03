@@ -14,6 +14,7 @@ import {
   ListChecks,
   Minus,
   Moon,
+  PartyPopper,
   Plus,
   Receipt,
   Sun,
@@ -28,7 +29,8 @@ import { StickyBar } from "@/components/PageHeader";
 import { Logo } from "@/components/Logo";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { appliesOn, ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
-import { useAttendanceStats, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { useAttendanceStats, useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { eventsOn, holidayLength } from "@/lib/calendar";
 import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
 import { fmtMoney, monthKey, sum } from "@/lib/money";
 import {
@@ -48,7 +50,6 @@ import type { Session, SessionStatus, Slot, Subject } from "@/lib/types";
 import {
   EmptyState,
   Avatar,
-  Ring,
   STATE_TEXT,
   SubjectTile,
   cx,
@@ -108,6 +109,10 @@ export default function TodayPage() {
   );
   const sessions = useSessionsOn(date);
   const todaySessions = useSessionsOn(today);
+  const events = useEvents();
+  // A day off is a fact about the day, not the absence of one. Without this a
+  // holiday looked exactly like a day somebody had forgotten to mark.
+  const dayOff = useMemo(() => eventsOn(events ?? [], date).holidays, [events, date]);
 
   // Create the classes of every day since the user joined (max 30 days back),
   // so missed days show up as "not marked" and can be caught up on.
@@ -194,41 +199,64 @@ export default function TodayPage() {
         </div>
       )}
 
-      <section className="mt-5 grid grid-cols-2 gap-3 px-5" aria-label="Overview">
-        <Link
+      {/* One card, three facts.
+          This was four pastel tiles in a two-by-two grid, each a different
+          colour, each a different height. Four colours with no meaning behind
+          them is noise, and the eye had nowhere to land. One surface with three
+          columns reads in a glance and leaves the colour to say something: the
+          attendance figure, and only that, is tinted by how it is going. */}
+      <section
+        className="mx-5 mt-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        aria-label="At a glance"
+      >
+        <Glance
           href="/attendance"
-          className="rounded-3xl bg-accent-soft p-4 transition active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-muted">Attendance</span>
-            <CalendarCheck size={17} className="text-accent" />
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="hidden min-[360px]:block"><Ring pct={overall.pct} state={overall.state} size={52} stroke={6} /></span>
-            <div className="min-w-0">
-              <p
-                className={cx(
-                  "text-[24px] font-semibold leading-none tabular-nums",
-                  STATE_TEXT[overall.state],
-                )}
-              >
-                {fmtPct(overall.pct)}
-              </p>
-              <p className="mt-1 truncate text-xs text-muted">
-                {overall.state === "none"
-                  ? "Mark a class"
-                  : attention.length > 0
-                    ? `${attention.length} to watch`
-                    : "All subjects safe"}
-              </p>
-            </div>
-          </div>
-        </Link>
-
-        <SoonTile href="/money" label="Spent this month" icon={Wallet} value={fmtMoney(spentMonth)} hint={spentMonth > 0 ? "This month" : "Add your first expense"} tint="bg-warn-soft" ink="text-warn" live />
-        <SoonTile href="/tasks" label="Due this week" icon={ListChecks} value={`${dueSoon.week} ${dueSoon.week === 1 ? "task" : "tasks"}`} hint={dueSoon.overdue ? `${dueSoon.overdue} overdue` : dueSoon.week ? "On track" : "Nothing due"} tint="bg-violet-soft" ink="text-violet" live />
-        <SoonTile href="/tasks" label="Next exam" icon={GraduationCap} value={dueSoon.exam?.dueDate ? countdownText(daysBetween(today, dueSoon.exam.dueDate)) : "None"} hint={dueSoon.exam ? dueSoon.exam.title : "Add one in Tasks"} tint="bg-rose-soft" ink="text-rose" live />
+          icon={CalendarCheck}
+          label="Attendance"
+          value={fmtPct(overall.pct)}
+          ink={STATE_TEXT[overall.state]}
+          hint={
+            overall.state === "none"
+              ? "Mark a class"
+              : attention.length > 0
+                ? `${attention.length} to watch`
+                : "All safe"
+          }
+        />
+        <Glance
+          href="/money"
+          icon={Wallet}
+          label="Spent"
+          value={fmtMoney(spentMonth)}
+          hint="This month"
+        />
+        <Glance
+          href="/tasks"
+          icon={ListChecks}
+          label="Due"
+          value={String(dueSoon.week)}
+          hint={dueSoon.overdue > 0 ? `${dueSoon.overdue} overdue` : "This week"}
+          ink={dueSoon.overdue > 0 ? "text-danger" : undefined}
+        />
       </section>
+
+      {dueSoon.exam?.dueDate && (
+        <Link
+          href="/tasks"
+          className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_var(--line)] transition active:scale-[0.99]"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-rose-soft text-rose">
+            <GraduationCap size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14.5px] font-medium">{dueSoon.exam.title}</span>
+            <span className="block text-[12.5px] text-muted">Next exam</span>
+          </span>
+          <span className="shrink-0 text-[13px] font-medium text-rose">
+            {countdownText(daysBetween(today, dueSoon.exam.dueDate))}
+          </span>
+        </Link>
+      )}
 
       {unmarkedPast.count > 0 && (
         <button
@@ -277,6 +305,21 @@ export default function TodayPage() {
           </button>
         </div>
       </div>
+
+      {dayOff.length > 0 && (
+        <div className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-violet-soft px-4 py-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface/70 text-violet">
+            <PartyPopper size={18} />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[14.5px] font-medium text-violet">{dayOff[0].title}</p>
+            <p className="text-[12.5px] text-muted">
+              Holiday{holidayLength(dayOff[0]) > 1 ? ` · ${holidayLength(dayOff[0])} days` : ""} · classes
+              do not count against your attendance
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 px-5">
         {sessions === undefined ? null : sessions.length === 0 ? (
@@ -527,36 +570,29 @@ function DayHero({
 
 // ---------- tiles and rows ----------
 
-function SoonTile({
+function Glance({
   href,
-  label,
   icon: Icon,
+  label,
   value,
   hint,
-  tint,
   ink,
-  live,
 }: {
-  live?: boolean;
-  tint: string;
-  ink: string;
   href: string;
-  label: string;
   icon: typeof Wallet;
+  label: string;
   value: string;
   hint: string;
+  ink?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={cx("rounded-3xl p-4 transition active:scale-[0.98]", tint)}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-muted">{label}</span>
-        <Icon size={17} className={ink} />
-      </div>
-      <p className={cx("mt-3 text-[24px] font-semibold leading-none tabular-nums", !live && "text-muted/60")}>{value}</p>
-      <p className="mt-1 text-xs text-muted">{hint}</p>
+    <Link href={href} className="min-w-0 px-3 py-3.5 text-center transition active:scale-[0.97]">
+      <Icon size={16} className="mx-auto text-muted" />
+      <p className={cx("mt-2 truncate text-[20px] font-semibold leading-none tabular-nums", ink)}>
+        {value}
+      </p>
+      <p className="mt-1.5 truncate text-[12px] font-medium">{label}</p>
+      <p className="truncate text-[11px] text-muted">{hint}</p>
     </Link>
   );
 }

@@ -90,3 +90,32 @@ export function nationalHolidays(year: number): { title: string; date: string }[
     { title: "Christmas", date: `${year}-12-25` },
   ];
 }
+
+/**
+ * What the academic calendar says about one day.
+ *
+ * Attendance already stops counting on a holiday — the sessions are marked as
+ * such when the holiday is saved. What was missing is anybody being told: a day
+ * with no classes looked exactly like a day someone had forgotten to mark.
+ */
+export function eventsOn(events: CalEvent[], date: string) {
+  const live = events.filter((e) => !e.deletedAt && e.date <= date && date <= e.endDate);
+  return {
+    holidays: live.filter((e) => e.kind === "holiday"),
+    others: live.filter((e) => e.kind !== "holiday"),
+  };
+}
+
+/** The next holiday starting after `date`, for a one-line "coming up". */
+export function nextHoliday(events: CalEvent[], date: string): CalEvent | null {
+  return (
+    events
+      .filter((e) => !e.deletedAt && e.kind === "holiday" && e.date > date)
+      .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null
+  );
+}
+
+/** How many days a holiday covers, counted inclusively. */
+export function holidayLength(e: CalEvent): number {
+  return Math.max(1, Math.round((fromDateStr(e.endDate).getTime() - fromDateStr(e.date).getTime()) / 86_400_000) + 1);
+}

@@ -108,13 +108,25 @@ export function AppShell({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     if (!userId) return;
-    const dev = new URLSearchParams(window.location.search).get("dev");
+    const q = new URLSearchParams(window.location.search);
+    const dev = q.get("dev");
+    // The app also tells us its version. Remembering it is what lets a screen
+    // say "you are on an older app" instead of a button that does nothing.
+    const appVersion = q.get("app");
+    if (appVersion) {
+      try {
+        localStorage.setItem("dockin-app", appVersion);
+      } catch {
+        /* private browsing */
+      }
+    }
     if (!dev) return;
     void claimDevice(dev)
       .catch(() => {})
       .finally(() => {
         const url = new URL(window.location.href);
         url.searchParams.delete("dev");
+        url.searchParams.delete("app");
         window.history.replaceState(null, "", url.toString());
       });
   }, [userId]);

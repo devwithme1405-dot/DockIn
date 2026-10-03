@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { eventsOn, holidayLength, nextHoliday } from "@/lib/calendar";
+import type { EventKind } from "@/lib/types";
 import {
   computeStreak,
   countCancelled,
@@ -214,5 +216,43 @@ describe("the recent form strip", () => {
     const { recentForm } = await import("@/lib/attendance");
     expect(recentForm([])).toEqual([]);
     expect(recentForm([mk("2026-10-01", "09:25", "unmarked")])).toEqual([]);
+  });
+});
+
+describe("what the academic calendar says about a day", () => {
+  const ev = (id: string, kind: EventKind, date: string, endDate = date) => ({
+    id,
+    title: id,
+    kind,
+    date,
+    endDate,
+    note: "",
+    createdAt: 0,
+    updatedAt: 0,
+    deletedAt: null,
+  });
+
+  it("finds a holiday that spans several days", () => {
+    const list = [ev("Diwali", "holiday", "2026-11-08", "2026-11-12")];
+    expect(eventsOn(list, "2026-11-10").holidays).toHaveLength(1);
+    expect(eventsOn(list, "2026-11-08").holidays).toHaveLength(1);
+    expect(eventsOn(list, "2026-11-12").holidays).toHaveLength(1);
+    expect(eventsOn(list, "2026-11-13").holidays).toHaveLength(0);
+    expect(holidayLength(list[0])).toBe(5);
+  });
+
+  it("keeps other kinds of event out of the holiday list", () => {
+    const list = [ev("Mid-sem", "event", "2026-11-10")];
+    expect(eventsOn(list, "2026-11-10").holidays).toHaveLength(0);
+    expect(eventsOn(list, "2026-11-10").others).toHaveLength(1);
+  });
+
+  it("looks ahead to the next one, never behind", () => {
+    const list = [
+      ev("Holi", "holiday", "2026-03-04"),
+      ev("Diwali", "holiday", "2026-11-08", "2026-11-12"),
+    ];
+    expect(nextHoliday(list, "2026-10-03")?.title).toBe("Diwali");
+    expect(nextHoliday(list, "2026-11-20")).toBeNull();
   });
 });

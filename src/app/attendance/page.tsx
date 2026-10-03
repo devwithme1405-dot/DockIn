@@ -5,9 +5,20 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { AttendanceSkeleton } from "@/components/Skeleton";
-import { CalendarClock, CalendarDays, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  ChevronRight,
+  PartyPopper,
+  Search,
+  Target,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
-import { useAttendanceStats } from "@/lib/hooks";
+import { useAttendanceStats, useEvents } from "@/lib/hooks";
+import { eventsOn, holidayLength, nextHoliday } from "@/lib/calendar";
+import { toDateStr, fmtDay } from "@/lib/dates";
 import { describe, fmtPct, recentForm } from "@/lib/attendance";
 import type { AttendanceState, SessionStatus } from "@/lib/types";
 import {
@@ -51,6 +62,11 @@ export default function AttendancePage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [targetOpen, setTargetOpen] = useState(false);
+  const events = useEvents();
+  const today = toDateStr();
+  // Attendance already ignores holidays; this is the screen finally saying so.
+  const onHoliday = useMemo(() => eventsOn(events ?? [], today).holidays[0] ?? null, [events, today]);
+  const coming = useMemo(() => nextHoliday(events ?? [], today), [events, today]);
 
   const counts = useMemo(() => {
     const c = { all: 0, danger: 0, warn: 0, safe: 0 };
@@ -169,6 +185,28 @@ export default function AttendancePage() {
           <Count label="Cancelled" value={overallCounts.cancelled} tone="text-muted" />
         </dl>
       </section>
+
+      {(onHoliday || coming) && (
+        <Link
+          href="/calendar"
+          className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-violet-soft px-4 py-3 transition active:scale-[0.99]"
+        >
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface/70 text-violet">
+            <PartyPopper size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[14.5px] font-medium text-violet">
+              {onHoliday ? onHoliday.title : coming!.title}
+            </span>
+            <span className="block text-[12.5px] text-muted">
+              {onHoliday
+                ? `Holiday today${holidayLength(onHoliday) > 1 ? ` · ${holidayLength(onHoliday)} days` : ""} · nothing counts against you`
+                : `Next holiday · ${fmtDay(coming!.date)}${holidayLength(coming!) > 1 ? ` · ${holidayLength(coming!)} days` : ""}`}
+            </span>
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-violet" />
+        </Link>
+      )}
 
       <section className="mt-3 grid grid-cols-2 gap-3 px-5">
         <button

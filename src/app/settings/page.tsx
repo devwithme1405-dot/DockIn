@@ -1,24 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Camera,
   Check,
-  ChevronRight,
   Cloud,
   Download,
   LogOut,
   Monitor,
   Moon,
   Pencil,
-  Share2,
-  Smartphone,
   Sun,
-  Trash2,
-  Users,
-  Upload,
 } from "lucide-react";
 import {
   TEXT_SCALES,
@@ -27,7 +21,6 @@ import {
   applyTheme,
   exportAll,
   getProfile,
-  importAll,
   resetAll,
   saveProfile,
 } from "@/lib/repo";
@@ -40,16 +33,13 @@ import type { ThemePref } from "@/lib/types";
 import {
   Avatar,
   Button,
-  Chip,
   ConfirmSheet,
   Field,
   STATE_TEXT,
   Sheet,
   cx,
   inputCls,
-  useToast,
 } from "@/components/ui";
-import Link from "next/link";
 import { BackHeader } from "@/components/PageHeader";
 import { PayLinkCard } from "@/components/PayLinkCard";
 import { ProfileSkeleton } from "@/components/Skeleton";
@@ -57,9 +47,9 @@ import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
-import { SocialError, clearSocial, ensureProfile, publishProfile, setShareAttendance } from "@/lib/social";
+import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
 
-type SheetName = "details" | "avatar" | "signin" | "logout" | "delete" | "restore" | "install" | null;
+type SheetName = "details" | "avatar" | "signin" | "logout" | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
 
 const THEMES: { id: ThemePref; label: string; icon: typeof Sun }[] = [
@@ -68,15 +58,8 @@ const THEMES: { id: ThemePref; label: string; icon: typeof Sun }[] = [
   { id: "dark", label: "Dark", icon: Moon },
 ];
 
-function isInstalled(): boolean {
-  if (typeof window === "undefined") return true;
-  const nav = navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
-}
-
 export default function ProfilePage() {
   const router = useRouter();
-  const toast = useToast();
   const profile = useLiveQuery(() => getProfile(), []);
   const { session, configured } = useAuth();
   const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
@@ -93,12 +76,8 @@ export default function ProfilePage() {
     roll: string;
     bio: string;
   } | null>(null);
-  const [budgetText, setBudgetText] = useState<string | null>(null);
   const [backup, setBackup] = useState<BackupCheck>("idle");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [pending, setPending] = useState<{ text: string; counts: string } | null>(null);
-  const [installed] = useState(isInstalled);
   const [shareAttendance, setShareAttendanceLocal] = useState<boolean | null>(null);
 
   const signedInNow = !!session;
@@ -114,7 +93,6 @@ export default function ProfilePage() {
       }
     });
   }, [configured, signedInNow]);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const monthSpent = useMemo(() => {
     if (!expenses) return null;
@@ -133,7 +111,6 @@ export default function ProfilePage() {
   const close = () => {
     if (busy) return;
     setSheet(null);
-    setProblem(null);
   };
 
   // ---------- actions ----------
@@ -187,31 +164,6 @@ export default function ProfilePage() {
     void saveProfile({ textScale: scale });
   }
 
-  async function saveBudget() {
-    if (budgetText === null) return;
-    const n = Math.round(Number(budgetText.replace(/[^\d.]/g, "")));
-    setBudgetText(null);
-    if (!Number.isFinite(n) || n < 0 || n > 10_000_000) return;
-    await saveProfile({ budget: n });
-    toast.show(n > 0 ? "Monthly budget saved" : "Budget cleared");
-  }
-
-  async function toggleAttendanceSharing(on: boolean) {
-    setShareAttendanceLocal(on);
-    try {
-      await setShareAttendance(on, profile!.target);
-      toast.show(on ? "Friends can see your status" : "Attendance is private again");
-    } catch (e) {
-      setShareAttendanceLocal(!on);
-      toast.show(e instanceof SocialError ? e.message : "Could not change that.");
-    }
-  }
-
-  async function syncNow() {
-    const sb = getSupabase();
-    if (sb && session) await flushNow(sb, session.user.id);
-  }
-
   async function download() {
     const blob = new Blob([await exportAll()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -222,45 +174,7 @@ export default function ProfilePage() {
     URL.revokeObjectURL(url);
   }
 
-  async function onPickFile(file: File | undefined) {
-    if (fileRef.current) fileRef.current.value = "";
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      toast.show("That file is too big to be a DockIn backup");
-      return;
-    }
-    const text = await file.text();
-    try {
-      const j = JSON.parse(text);
-      if (j?.app !== "dockin") throw new Error();
-      const n = (k: string) => (Array.isArray(j[k]) ? j[k].filter((r: { deletedAt?: number }) => !r?.deletedAt).length : 0);
-      setPending({
-        text,
-        counts: `${n("subjects")} subjects, ${n("tasks")} tasks, ${n("expenses")} expenses and ${n("events")} calendar events`,
-      });
-      setProblem(null);
-      setSheet("restore");
-    } catch {
-      toast.show("That file is not a DockIn backup");
-    }
-  }
-
-  async function restore() {
-    if (!pending) return;
-    setBusy(true);
-    try {
-      await importAll(pending.text);
-      setPending(null);
-      setSheet(null);
-      toast.show("Backup restored");
-    } catch (e) {
-      setProblem(e instanceof Error ? e.message : "Could not restore that file.");
-    }
-    setBusy(false);
-  }
-
   function openLogout() {
-    setProblem(null);
     setSheet("logout");
     const sb = getSupabase();
     if (sb && session) {
@@ -278,27 +192,6 @@ export default function ProfilePage() {
     await clearSocial();
     clearSyncState();
     resetSyncStatus();
-    try {
-      localStorage.removeItem("dockin-theme");
-    } catch {}
-    applyTheme("system");
-    router.replace("/onboarding");
-  }
-
-  async function wipe() {
-    setBusy(true);
-    setProblem(null);
-    if (session) {
-      const sb = getSupabase();
-      const { error } = sb ? await sb.from("sync_records").delete().eq("user_id", session.user.id) : { error: null };
-      if (error) {
-        setProblem("Could not delete your cloud copy. Check your internet and try again.");
-        setBusy(false);
-        return;
-      }
-      clearSyncState();
-    }
-    await resetAll();
     try {
       localStorage.removeItem("dockin-theme");
     } catch {}
@@ -413,141 +306,39 @@ export default function ProfilePage() {
           <p className="mt-2 text-[12.5px] text-muted">Changes every screen in DockIn, not your other apps.</p>
         </Card>
 
-        {/* preferences */}
-        <Card title="Preferences">
-          <p className="mb-1.5 text-[13px] font-medium text-muted">Required attendance</p>
-          <div className="flex flex-wrap gap-2">
-            {[65, 70, 75, 80, 85].map((t) => (
-              <Chip key={t} active={profile.target === t} onClick={() => void saveProfile({ target: t })}>
-                {t}%
-              </Chip>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[12.5px] text-muted">Bunk budget and warnings use this number.</p>
-
-          <div className="mt-5">
-            <Field label="Monthly budget (rupees)">
-              <div className="relative">
-                <span className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted">₹</span>
-                <input
-                  className={cx(inputCls, "pl-8")}
-                  inputMode="numeric"
-                  placeholder="Not set"
-                  value={budgetText ?? (profile.budget ? String(profile.budget) : "")}
-                  onChange={(e) => setBudgetText(e.target.value)}
-                  onBlur={saveBudget}
-                  onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-                />
-              </div>
-            </Field>
-            <p className="-mt-2 text-[12.5px] text-muted">Shown on the Money screen with a daily pace.</p>
-          </div>
-        </Card>
-
-        {/* account */}
+        {/* account, as one line rather than a card: there is nothing to decide
+            here, only something to know */}
         {configured && (
-          <Card title="Account and backup">
+          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
             {signedIn ? (
-              <>
-                <p className="flex items-center gap-2 text-[14px]" aria-live="polite">
-                  <Cloud size={16} className={sync.state === "error" ? "text-danger" : "text-safe"} />
-                  <span className={sync.state === "error" ? "text-danger" : "text-muted"}>{syncLine}</span>
-                </p>
-                <p className="mt-1.5 text-[12.5px] text-muted">
-                  Your data syncs to your account, so a new phone gets everything back when you sign in.
-                </p>
-                <Button className="mt-3" variant="secondary" size="sm" onClick={syncNow} disabled={sync.state === "syncing"}>
-                  Sync now
-                </Button>
-              </>
+              <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
+                <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{session.user.email}</span>
+                  <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
+                    {syncLine}
+                  </span>
+                </span>
+              </p>
             ) : (
               <>
-                <p className="text-sm text-muted">
-                  Sign in to back up your data and use DockIn on more than one phone.
+                <p className="text-[14px] text-muted">
+                  Sign in to back your data up and use DockIn on more than one phone.
                 </p>
                 <Button className="mt-3" size="sm" onClick={() => setSheet("signin")}>
                   Sign in
                 </Button>
               </>
             )}
-          </Card>
-        )}
-
-        {/* friends */}
-        {configured && (
-          <Card title="Friends and groups">
-            <Link
-              href="/circle"
-              className="flex min-h-14 items-center gap-3 px-1 py-2.5 text-left"
-              onClick={() => void ensureProfile().catch(() => {})}
-            >
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
-                <Users size={18} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-medium">Your friends and groups</span>
-                <span className="block truncate text-[12.5px] text-muted">
-                  {signedIn ? "Share assignments with your class" : "Sign in to share assignments with your class"}
-                </span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-muted" />
-            </Link>
-
-            {signedIn && (
-            <label className="mt-1 flex items-center gap-3 border-t border-line px-1 pt-3.5 pb-1">
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
-                <Share2 size={18} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px] font-medium">Show friends my attendance</span>
-                <span className="block text-[12.5px] text-muted">
-                  Only the word Safe, Cutting it close or Below target. Never the number.
-                </span>
-              </span>
-              <input
-                type="checkbox"
-                className="size-6 shrink-0 accent-accent"
-                checked={shareAttendance ?? false}
-                onChange={(e) => void toggleAttendanceSharing(e.target.checked)}
-              />
-            </label>
-            )}
-          </Card>
+          </section>
         )}
 
         {/* payments */}
         {configured && signedIn && <PayLinkCard />}
 
-        {/* data */}
-        <Card title="Your data" flush>
-          <Row icon={Download} title="Download backup" hint="A file with everything in DockIn" onClick={download} />
-          <Row icon={Upload} title="Restore from backup" hint="Replace this phone's data with a backup file" onClick={() => fileRef.current?.click()} />
-          {!installed && (
-            <Row icon={Smartphone} title="Add to home screen" hint="Opens like a real app, even offline" onClick={() => setSheet("install")} />
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => void onPickFile(e.target.files?.[0])}
-          />
-        </Card>
-
-        <div className="space-y-2.5 pt-1">
-          <Button variant="secondary" className="w-full" onClick={openLogout}>
-            <LogOut size={18} /> Log out
-          </Button>
-          <button
-            onClick={() => {
-              setProblem(null);
-              setSheet("delete");
-            }}
-            className="mx-auto flex h-10 items-center gap-1.5 text-[14px] font-medium text-danger"
-          >
-            <Trash2 size={15} /> Delete all my data
-          </button>
-        </div>
+        <Button variant="secondary" className="w-full" onClick={openLogout}>
+          <LogOut size={18} /> Log out
+        </Button>
 
         <p className="pb-2 text-center text-[12px] text-muted">DockIn · made for students</p>
       </div>
@@ -633,31 +424,6 @@ export default function ProfilePage() {
         <SignIn />
       </Sheet>
 
-      <Sheet open={sheet === "install"} onClose={close} title="Add to home screen">
-        <ol className="list-decimal space-y-2 pl-5 text-[15px] text-muted">
-          <li>
-            <span className="text-text">iPhone:</span> open DockIn in Safari, tap Share, then Add to Home Screen.
-          </li>
-          <li>
-            <span className="text-text">Android:</span> open in Chrome, tap the menu, then Install app.
-          </li>
-        </ol>
-      </Sheet>
-
-      <ConfirmSheet
-        open={sheet === "restore"}
-        title="Restore this backup?"
-        confirmLabel="Replace my data"
-        onConfirm={restore}
-        onClose={close}
-        busy={busy}
-      >
-        <p>
-          This backup has {pending?.counts}. Restoring replaces everything currently on this phone.
-        </p>
-        {problem && <p className="text-danger">{problem}</p>}
-      </ConfirmSheet>
-
       <ConfirmSheet
         open={sheet === "logout"}
         title="Log out of DockIn?"
@@ -699,21 +465,6 @@ export default function ProfilePage() {
         )}
       </ConfirmSheet>
 
-      <ConfirmSheet
-        open={sheet === "delete"}
-        title="Delete all your data?"
-        confirmLabel="Delete everything"
-        onConfirm={wipe}
-        onClose={close}
-        busy={busy}
-      >
-        <p>
-          {signedIn
-            ? "This erases your attendance, money, tasks and calendar from this phone and from your account. It cannot be undone."
-            : "This erases your attendance, money, tasks and calendar from this phone. It cannot be undone."}
-        </p>
-        {problem && <p className="text-danger">{problem}</p>}
-      </ConfirmSheet>
     </>
   );
 }
@@ -733,31 +484,6 @@ function Stat({ label, value, ink }: { label: string; value: string; ink: string
       <p className={cx("truncate text-[20px] font-semibold leading-tight tabular-nums", ink)}>{value}</p>
       <p className="mt-0.5 text-[12px] leading-tight text-muted">{label}</p>
     </div>
-  );
-}
-
-function Row({
-  icon: Icon,
-  title,
-  hint,
-  onClick,
-}: {
-  icon: typeof Download;
-  title: string;
-  hint: string;
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="flex min-h-14 w-full items-center gap-3 px-1 py-2.5 text-left">
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-text">
-        <Icon size={18} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-medium">{title}</span>
-        <span className="block truncate text-[12.5px] text-muted">{hint}</span>
-      </span>
-      <ChevronRight size={18} className="shrink-0 text-muted" />
-    </button>
   );
 }
 
