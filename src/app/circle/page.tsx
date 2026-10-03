@@ -11,6 +11,7 @@ import {
   Inbox,
   Plus,
   QrCode as QrIcon,
+  Search,
   Share2,
   UserPlus,
   Users,
@@ -42,6 +43,7 @@ import type { Friend, Reaction, Share, ShareState } from "@/lib/types";
 import {
   Avatar,
   Button,
+  Chip,
   ConfirmSheet,
   EmptyState,
   Field,
@@ -115,6 +117,9 @@ function Circle() {
   const [groupName, setGroupName] = useState("");
   const [groupEmoji, setGroupEmoji] = useState(GROUP_EMOJIS[0]);
   const [removing, setRemoving] = useState<Friend | null>(null);
+  const [showing, setShowing] = useState<Friend | null>(null);
+  const [find, setFind] = useState("");
+  const [workFilter, setWorkFilter] = useState<"all" | "groups" | "direct" | "mine">("all");
   const [copied, setCopied] = useState(false);
   const [sharesAttendance, setSharesAttendance] = useState(false);
 
@@ -173,6 +178,18 @@ function Circle() {
   }, [shares, states]);
 
   const toHandIn = work.filter((s) => !states?.get(s.id)?.submitted).length;
+  const shownFriends = find.trim()
+    ? accepted.filter((f) => f.name.toLowerCase().includes(find.trim().toLowerCase()))
+    : accepted;
+  const shownWork = work.filter((s) =>
+    workFilter === "groups"
+      ? !!s.groupId
+      : workFilter === "direct"
+        ? !s.groupId && s.author !== me
+        : workFilter === "mine"
+          ? s.author === me
+          : true,
+  );
 
   if (!isCloudConfigured) {
     return (
@@ -455,6 +472,18 @@ function Circle() {
 
           <section>
             <SectionTitle>Friends</SectionTitle>
+            {accepted.length > 6 && (
+              <label className="mb-2 flex h-11 items-center gap-2.5 rounded-2xl bg-surface px-3.5 shadow-[0_0_0_1px_var(--line)] focus-within:shadow-[0_0_0_2px_var(--accent)]">
+                <Search size={17} className="shrink-0 text-muted" />
+                <input
+                  className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
+                  placeholder="Find a friend"
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                  aria-label="Find a friend"
+                />
+              </label>
+            )}
             {accepted.length === 0 ? (
               <EmptyState
                 flush
@@ -469,16 +498,21 @@ function Circle() {
               />
             ) : (
               <ul className="overflow-hidden lift rounded-3xl bg-surface">
-                {accepted.map((f, i) => (
+                {shownFriends.map((f, i) => (
                   <li
                     key={f.id}
                     className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}
                   >
-                    <Avatar name={f.name} avatar={f.avatar} size={44} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{f.name}</p>
-                      <p className="truncate text-[12.5px] text-muted">{describe(f)}</p>
-                    </div>
+                    <button
+                      onClick={() => setShowing(f)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <Avatar name={f.name} avatar={f.avatar} size={44} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{f.name}</span>
+                        <span className="block truncate text-[12.5px] text-muted">{describe(f)}</span>
+                      </span>
+                    </button>
                     {f.attendanceState && f.attendanceState !== "none" && (
                       <span
                         className={cx(
@@ -621,7 +655,23 @@ function Circle() {
 
       {tab === "work" && (
         <div className="space-y-4 px-5 pt-4">
-          {work.length === 0 ? (
+          {work.length > 3 && (
+            <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
+              {(
+                [
+                  ["all", "Everything"],
+                  ["groups", "From groups"],
+                  ["direct", "Sent to me"],
+                  ["mine", "Mine"],
+                ] as const
+              ).map(([id, label]) => (
+                <Chip key={id} active={workFilter === id} onClick={() => setWorkFilter(id)}>
+                  {label}
+                </Chip>
+              ))}
+            </div>
+          )}
+          {shownWork.length === 0 ? (
             <EmptyState
               flush
               icon={Inbox}
@@ -635,7 +685,7 @@ function Circle() {
             />
           ) : (
             <ul className="space-y-3">
-              {work.map((s) => (
+              {shownWork.map((s) => (
                 <SubmissionCard
                   key={s.id}
                   share={s}
@@ -810,6 +860,60 @@ function Circle() {
         </Button>
       </Sheet>
 
+      <Sheet open={!!showing} onClose={() => setShowing(null)} title={showing?.name ?? "Friend"}>
+        {showing && (
+          <>
+            <div className="flex items-center gap-4">
+              <Avatar name={showing.name} avatar={showing.avatar} size={64} />
+              <div className="min-w-0">
+                <p className="truncate text-[18px] font-semibold">{showing.name}</p>
+                <p className="truncate text-[13px] text-muted">{describe(showing)}</p>
+                {showing.attendanceState && showing.attendanceState !== "none" && (
+                  <p className={cx("mt-1 text-[13px] font-medium", STATE_TEXT[showing.attendanceState])}>
+                    {ATTENDANCE_WORD[showing.attendanceState]}
+                  </p>
+                )}
+              </div>
+            </div>
+            {showing.bio && <p className="mt-4 text-[14px] text-muted">{showing.bio}</p>}
+
+            <dl className="mt-5 grid grid-cols-2 gap-2.5">
+              <Fact
+                label="Shared with you"
+                value={String((shares ?? []).filter((s) => s.author === showing.id).length)}
+              />
+              <Fact
+                label="Groups together"
+                value={String(
+                  (groups ?? []).filter((g) => (g.faces ?? []).some((p) => p.id === showing.id))
+                    .length,
+                )}
+              />
+            </dl>
+
+            <Button
+              variant="secondary"
+              className="mt-5 w-full"
+              onClick={() => {
+                setShowing(null);
+                setTab("work");
+              }}
+            >
+              See what they shared
+            </Button>
+            <button
+              onClick={() => {
+                setRemoving(showing);
+                setShowing(null);
+              }}
+              className="mx-auto mt-3 flex h-10 items-center gap-1.5 text-[14px] font-medium text-danger"
+            >
+              <X size={15} /> Remove friend
+            </button>
+          </>
+        )}
+      </Sheet>
+
       <ConfirmSheet
         open={!!removing}
         title={removing?.status === "pending" ? "Ignore this request?" : "Remove this friend?"}
@@ -824,6 +928,15 @@ function Circle() {
             : `${removing?.name} will no longer see anything you share, and you will not see theirs.`}
         </p>
       </ConfirmSheet>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-surface-2 px-3.5 py-3">
+      <dd className="text-[20px] font-semibold leading-none tabular-nums">{value}</dd>
+      <dt className="mt-1 text-[12px] text-muted">{label}</dt>
     </div>
   );
 }
