@@ -137,6 +137,7 @@ export function TaskRow({
               <span className="font-medium text-safe">Completed</span>
             ) : (
               <>
+                <span className="font-medium">{kind.label}</span>
                 {subject && (
                   <span className="font-medium" style={{ color: subject.color }}>
                     {subject.code || subject.name}

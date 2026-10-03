@@ -2,14 +2,17 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { addExpense, deleteExpense, resetAll, restoreExpense, updateExpense } from "@/lib/repo";
+import type { Expense } from "@/lib/types";
 import {
+  SEED_CATEGORIES,
   budgetStatus,
   byCategory,
-  SEED_CATEGORIES,
   dailyTotals,
   fmtMoney,
+  frequentSpends,
   groupByDay,
   inMonth,
+  pace,
   shiftMonth,
   sum,
   weekStart,
@@ -104,5 +107,80 @@ describe("avatars", () => {
     expect(parseAvatar("e:", "Sachin").kind).toBe("initial");
     expect(parseAvatar("e:🦊:999", "Sachin").palette).toBeLessThan(PALETTES.length);
     expect(parseAvatar("nonsense", "Sachin").kind).toBe("initial");
+  });
+});
+
+describe("what you buy over and over", () => {
+  const sp = (id: string, amount: number, category: string, date = "2026-10-01") =>
+    ({
+      id,
+      amount,
+      category,
+      note: "",
+      date,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    }) as Expense;
+
+  it("offers the pairs seen more than once, commonest first", () => {
+    const list = [
+      sp("1", 60, "kathi-247"),
+      sp("2", 60, "kathi-247"),
+      sp("3", 60, "kathi-247"),
+      sp("4", 20, "tuck-shop"),
+      sp("5", 20, "tuck-shop"),
+      sp("6", 500, "dominos"),
+    ];
+    const out = frequentSpends(list);
+    expect(out.map((r) => `${r.category}:${r.amount}`)).toEqual(["kathi-247:60", "tuck-shop:20"]);
+    expect(out[0].times).toBe(3);
+  });
+
+  it("keeps a one-off out of it", () => {
+    expect(frequentSpends([sp("1", 999, "cab")])).toEqual([]);
+  });
+
+  it("treats the same place at a different price as a different habit", () => {
+    const list = [sp("1", 60, "hoc"), sp("2", 60, "hoc"), sp("3", 90, "hoc"), sp("4", 90, "hoc")];
+    expect(frequentSpends(list)).toHaveLength(2);
+  });
+
+  it("ignores deleted expenses", () => {
+    const gone = { ...sp("1", 60, "hoc"), deletedAt: 1 };
+    expect(frequentSpends([gone, { ...gone, id: "2" }])).toEqual([]);
+  });
+});
+
+describe("this month against the last one", () => {
+  const sp = (id: string, amount: number, date: string) =>
+    ({
+      id,
+      amount,
+      category: "other",
+      note: "",
+      date,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    }) as Expense;
+
+  it("compares like with like, only up to today's date", () => {
+    const list = [
+      sp("a", 100, "2026-09-02"),
+      sp("b", 100, "2026-09-20"), // after the 10th: not counted
+      sp("c", 60, "2026-10-01"),
+    ];
+    const out = pace(list, "2026-10", "2026-10-10");
+    expect(out).toEqual({ diff: -40, lastMonth: 100, upTo: 10 });
+  });
+
+  it("says nothing when there is nothing to compare with", () => {
+    expect(pace([sp("c", 60, "2026-10-01")], "2026-10", "2026-10-10")).toBeNull();
+  });
+
+  it("uses the whole of a month that is already over", () => {
+    const list = [sp("a", 100, "2026-08-30"), sp("b", 50, "2026-09-02")];
+    expect(pace(list, "2026-09", "2026-10-03")?.lastMonth).toBe(100);
   });
 });

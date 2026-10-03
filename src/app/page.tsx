@@ -384,14 +384,15 @@ export default function TodayPage() {
       )}
 
       <section className="mt-7 px-5" aria-label="Quick actions">
-        <h2 className="mb-3 text-[17px] font-semibold">Quick actions</h2>
-        <div className="grid grid-cols-4 gap-2.5">
-          {QUICK.map(({ href, label, icon: Icon, tint, ink }) => (
-            <Link key={label} href={href} className="flex flex-col items-center gap-2 text-center">
-              <span className={cx("grid size-14 place-items-center rounded-2xl transition active:scale-95", tint, ink)}>
-                <Icon size={22} />
-              </span>
-              <span className="text-[12px] leading-tight text-muted">{label}</span>
+        <div className="grid grid-cols-4 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+          {QUICK.map(({ href, label, icon: Icon }) => (
+            <Link
+              key={label}
+              href={href}
+              className="flex flex-col items-center gap-1.5 py-3.5 text-center transition active:scale-[0.97]"
+            >
+              <Icon size={20} className="text-muted" />
+              <span className="text-[12px] leading-tight">{label}</span>
             </Link>
           ))}
         </div>
@@ -437,11 +438,15 @@ export default function TodayPage() {
   );
 }
 
+/**
+ * Four ways in. They are four equal shortcuts, so they look like four equal
+ * shortcuts: one surface, one weight, no colour pretending to mean something.
+ */
 const QUICK = [
-  { href: "/attendance", label: "Mark attendance", icon: CalendarCheck, tint: "bg-accent-soft", ink: "text-accent" },
-  { href: "/add", label: "Add expense", icon: Receipt, tint: "bg-warn-soft", ink: "text-warn" },
-  { href: "/tasks?new=1", label: "Add task", icon: Plus, tint: "bg-violet-soft", ink: "text-violet" },
-  { href: "/attendance/timetable", label: "Timetable", icon: GraduationCap, tint: "bg-rose-soft", ink: "text-rose" },
+  { href: "/attendance", label: "Mark", icon: CalendarCheck },
+  { href: "/add", label: "Expense", icon: Receipt },
+  { href: "/tasks?new=1", label: "Task", icon: Plus },
+  { href: "/attendance/timetable", label: "Timetable", icon: GraduationCap },
 ];
 
 const SKY_ICON = { sunrise: Sunrise, sun: Sun, sunset: Sunset, moon: Moon };
@@ -634,20 +639,23 @@ function ClassRow({
   }
 
   return (
-    <li className={cx("flex items-center gap-3 px-3.5 py-3", live && "bg-accent-soft")}>
+    // Wrapping rather than a breakpoint: on a narrow phone, or with the text
+    // turned up, the three buttons drop to their own line instead of squeezing
+    // the subject name into "Data Structu…".
+    <li className={cx("flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3", live && "bg-accent-soft")}>
       <div className="w-[2.6rem] shrink-0 text-center leading-tight tabular-nums">
         <p className="text-[15px] font-semibold">{fmtTime(session.start).replace(/ (am|pm)/, "")}</p>
         <p className="text-[11px] uppercase text-muted">{fmtTime(session.start).slice(-2)}</p>
       </div>
       <span className="h-9 w-1 shrink-0 self-center rounded-full" style={{ background: subject?.color ?? "#888" }} aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] font-medium leading-snug">{name}</p>
+      <div className="min-w-[6.5rem] flex-1">
+        <p className="line-clamp-2 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{name}</p>
         <p className="truncate text-[13px] text-muted">
           {session.kind === "practical" ? "Lab" : "Lecture"} · until {fmtTime(session.end)}
           {live && <span className="ml-1.5 font-semibold text-accent">· Now</span>}
         </p>
       </div>
-      <div className="flex shrink-0 gap-1" role="group" aria-label={`Mark ${name}`}>
+      <div className="ml-auto flex shrink-0 gap-1" role="group" aria-label={`Mark ${name}`}>
         {ACTIONS.map(({ status, label, icon: Icon, on }) => {
           const selected = session.status === status;
           return (

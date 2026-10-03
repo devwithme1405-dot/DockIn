@@ -5,11 +5,13 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { MoneySkeleton } from "@/components/Skeleton";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { getProfile, saveProfile } from "@/lib/repo";
+import { addExpense, deleteExpense, getProfile, saveProfile } from "@/lib/repo";
 import { useCategories, useExpenses } from "@/lib/hooks";
 import {
   metaFor,
   budgetStatus,
+  frequentSpends,
+  pace,
   byCategory,
   dailyTotals,
   daysInMonth,
@@ -24,7 +26,7 @@ import {
 } from "@/lib/money";
 import { relativeDayLabel, fmtDay, toDateStr } from "@/lib/dates";
 import type { Expense } from "@/lib/types";
-import { Button, Chip, EmptyState, Sheet, cx } from "@/components/ui";
+import { Button, Chip, EmptyState, Sheet, cx, useToast } from "@/components/ui";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { MoneyHero } from "@/components/MoneyHero";
 import { DetectedTray } from "@/components/DetectedTray";
@@ -32,6 +34,7 @@ import { useAuth } from "@/lib/auth";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
+  const toast = useToast();
   const { session } = useAuth();
   const all = useExpenses();
   const today = toDateStr();
@@ -53,6 +56,15 @@ export default function MoneyPage() {
   const isCurrent = month === monthKey(today);
   const budget = profile?.budget ?? 0;
   const status = budget > 0 ? budgetStatus(budget, spent, month, today) : null;
+
+  // Habits worth one tap, and whether this month is running hot.
+  const repeats = useMemo(() => frequentSpends(all ?? []), [all]);
+  const paceNow = useMemo(() => pace(all ?? [], month, today), [all, month, today]);
+
+  async function repeat(category: string, amount: number, label: string) {
+    const e = await addExpense({ amount, category, date: today });
+    toast.show(`${fmtMoney(amount)} at ${label}`, () => void deleteExpense(e.id));
+  }
 
   const todaySpent = sum((all ?? []).filter((e) => e.date === today));
   const weekSpent = sum((all ?? []).filter((e) => e.date >= weekStart(today) && e.date <= today));
@@ -117,11 +129,57 @@ export default function MoneyPage() {
 
       <DetectedTray signedIn={!!session} />
 
-      <section className="mt-3 grid grid-cols-3 gap-2.5 px-5" aria-label="Quick numbers">
-        <Stat label="Today" value={fmtMoney(todaySpent)} tint="bg-accent-soft" />
-        <Stat label="This week" value={fmtMoney(weekSpent)} tint="bg-warn-soft" />
-        <Stat label="Avg / day" value={fmtMoney(Math.round(avg))} tint="bg-violet-soft" />
+      {/* One surface, three numbers. Three different pastel panels made these
+          look like three unrelated things; they are three views of the same
+          spending, and the hero above is already carrying the colour. */}
+      <section
+        className="mx-5 mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        aria-label="Quick numbers"
+      >
+        <Stat label="Today" value={fmtMoney(todaySpent)} />
+        <Stat label="This week" value={fmtMoney(weekSpent)} />
+        <Stat label="Avg / day" value={fmtMoney(Math.round(avg))} />
       </section>
+
+      {paceNow && (
+        <p className="mx-5 mt-3 rounded-2xl bg-surface px-4 py-3 text-[13.5px] shadow-[0_0_0_1px_var(--line)]">
+          {paceNow.diff === 0 ? (
+            <>Exactly level with last month at this point.</>
+          ) : (
+            <>
+              <b className={cx("tabular-nums", paceNow.diff > 0 ? "text-warn" : "text-safe")}>
+                {fmtMoney(Math.abs(paceNow.diff))} {paceNow.diff > 0 ? "more" : "less"}
+              </b>{" "}
+              than last month by the {paceNow.upTo}
+              {ordinal(paceNow.upTo)}, when you had spent {fmtMoney(paceNow.lastMonth)}.
+            </>
+          )}
+        </p>
+      )}
+
+      {repeats.length > 0 && isCurrent && (
+        <section className="mt-4" aria-label="Add again">
+          <h2 className="mb-2 px-5 text-[13px] font-semibold tracking-wide text-muted uppercase">
+            Add again
+          </h2>
+          <div className="flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
+            {repeats.map((r) => {
+              const meta = metaFor(r.category, catList ?? []);
+              return (
+                <button
+                  key={`${r.category}-${r.amount}`}
+                  onClick={() => void repeat(r.category, r.amount, meta.label)}
+                  className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-surface px-3.5 text-[14px] font-medium shadow-[0_0_0_1px_var(--line)] transition active:scale-95"
+                >
+                  <span className="text-[17px] leading-none">{meta.emoji}</span>
+                  <span className="whitespace-nowrap">{meta.label}</span>
+                  <span className="tabular-nums text-muted">{fmtMoney(r.amount)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {list.length > 0 && (
         <>
@@ -284,11 +342,16 @@ export default function MoneyPage() {
   );
 }
 
-function Stat({ label, value, tint }: { label: string; value: string; tint: string }) {
+function ordinal(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return "th";
+  return ["th", "st", "nd", "rd"][n % 10] ?? "th";
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className={cx("min-w-0 rounded-2xl px-3 py-3", tint)}>
-      <p className="text-[12px] text-muted">{label}</p>
-      <p className="mt-0.5 truncate text-[17px] font-semibold tabular-nums">{value}</p>
+    <div className="min-w-0 px-3 py-3 text-center">
+      <p className="truncate text-[17px] font-semibold tabular-nums">{value}</p>
+      <p className="mt-0.5 text-[12px] text-muted">{label}</p>
     </div>
   );
 }

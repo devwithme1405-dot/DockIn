@@ -202,9 +202,28 @@ function Circle() {
       <>
         <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <div className="px-5">
-          <p className="mb-5 text-[15px] text-muted">
-            Sign in to share assignments with your class and keep up with friends.
-          </p>
+          {/* Signing in is a cost, so the screen says what it buys before it
+              asks. Three lines, each one a thing you cannot do without it. */}
+          <ul className="mb-5 space-y-3">
+            {[
+              [Share2, "Share an assignment once", "Everyone in your group gets it, with the file."],
+              [Inbox, "Get your own copy", "Your name and roll swapped in, ready for the LMS."],
+              [Users, "See how your friends are doing", "Only the word Safe or Below target, never the number."],
+            ].map(([Icon, title, body]) => {
+              const I = Icon as typeof Users;
+              return (
+                <li key={title as string} className="flex gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface text-accent shadow-[0_0_0_1px_var(--line)]">
+                    <I size={17} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[14.5px] font-medium">{title as string}</span>
+                    <span className="block text-[12.5px] text-muted">{body as string}</span>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
           <SignIn />
         </div>
       </>

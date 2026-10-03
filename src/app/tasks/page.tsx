@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { TasksSkeleton } from "@/components/Skeleton";
-import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2, UserRound } from "lucide-react";
+import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2 } from "lucide-react";
 import { useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
 import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
@@ -123,10 +123,16 @@ export default function TasksPage() {
       />
       <div className="h-4" />
 
-      <section className="grid grid-cols-3 gap-2.5 px-5" aria-label="Summary">
-        <Stat label="Overdue" value={stats.overdue} tint={stats.overdue ? "bg-danger-soft" : "bg-surface-2"} ink={stats.overdue ? "text-danger" : "text-muted"} />
-        <Stat label="Due today" value={stats.today} tint="bg-accent-soft" ink="text-accent" />
-        <Stat label="Done (7 days)" value={stats.doneWeek} tint="bg-safe-soft" ink="text-safe" />
+      {/* One surface. Three coloured panels made these look like three separate
+          things; they are three readings of the same list, and the numbers
+          themselves carry the colour that means something. */}
+      <section
+        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        aria-label="Summary"
+      >
+        <Stat label="Overdue" value={stats.overdue} ink={stats.overdue ? "text-danger" : undefined} />
+        <Stat label="Due today" value={stats.today} />
+        <Stat label="Done this week" value={stats.doneWeek} ink={stats.doneWeek ? "text-safe" : undefined} />
       </section>
 
       {nextExam && nextExam.dueDate && (
@@ -255,7 +261,6 @@ export default function TasksPage() {
                         task={t}
                         today={today}
                         subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
-                        origin={{ label: "Yours", icon: UserRound }}
                         onOpen={() => open(t)}
                         onDone={(id) => setJustDone((cur) => new Set(cur).add(id))}
                       />
@@ -300,7 +305,6 @@ export default function TasksPage() {
                     task={t}
                     today={today}
                     subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
-                    origin={{ label: "Yours", icon: UserRound }}
                     onOpen={() => open(t)}
                   />
                 ))}
@@ -327,11 +331,11 @@ export default function TasksPage() {
   );
 }
 
-function Stat({ label, value, tint, ink }: { label: string; value: number; tint: string; ink: string }) {
+function Stat({ label, value, ink }: { label: string; value: number; ink?: string }) {
   return (
-    <div className={cx("rounded-2xl px-3 py-3", tint)}>
-      <p className={cx("text-[24px] font-semibold leading-none tabular-nums", ink)}>{value}</p>
-      <p className="mt-1.5 text-[12px] leading-tight text-muted">{label}</p>
+    <div className="min-w-0 px-3 py-3.5 text-center">
+      <p className={cx("text-[22px] font-semibold leading-none tabular-nums", ink)}>{value}</p>
+      <p className="mt-1.5 truncate text-[12px] text-muted">{label}</p>
     </div>
   );
 }

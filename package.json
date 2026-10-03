@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
@@ -32,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "fake-indexeddb": "^6.2.5",
+    "playwright": "^1.56.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.3"

@@ -164,3 +164,53 @@ export function budgetStatus(budget: number, spent: number, key: string, today: 
 }
 
 export { toDateStr, fromDateStr };
+
+/**
+ * The same thing you buy all the time, ready to add again in one tap.
+ *
+ * Campus spending is the same handful of places and the same handful of
+ * amounts: sixty rupees at the kathi roll place, twenty at the tuck shop. Typing
+ * that in is the whole reason people give up on expense trackers, so the app
+ * offers back what it has already seen — commonest first, and only pairs seen
+ * more than once, because a one-off is not a habit.
+ */
+export function frequentSpends(
+  expenses: Expense[],
+  limit = 4,
+): { category: ExpenseCategory; amount: number; times: number }[] {
+  const tally = new Map<string, { category: ExpenseCategory; amount: number; times: number }>();
+  for (const e of expenses) {
+    if (e.deletedAt) continue;
+    const key = `${e.category}|${e.amount}`;
+    const row = tally.get(key);
+    if (row) row.times += 1;
+    else tally.set(key, { category: e.category, amount: e.amount, times: 1 });
+  }
+  return [...tally.values()]
+    .filter((r) => r.times > 1)
+    .sort((a, b) => b.times - a.times || b.amount - a.amount)
+    .slice(0, limit);
+}
+
+/**
+ * This month against the same point in the last one.
+ *
+ * Comparing a half-finished month with a whole one says nothing, so this counts
+ * the previous month only up to the same day. Null when there is nothing to
+ * compare against, because an invented baseline is worse than no comparison.
+ */
+export function pace(
+  expenses: Expense[],
+  month: string,
+  today: string,
+): { diff: number; lastMonth: number; upTo: number } | null {
+  const day = month === monthKey(today) ? Number(today.slice(8, 10)) : daysInMonth(month);
+  const prev = shiftMonth(month, -1);
+  const prevList = expenses.filter(
+    (e) => !e.deletedAt && monthKey(e.date) === prev && Number(e.date.slice(8, 10)) <= day,
+  );
+  if (prevList.length === 0) return null;
+  const mine = sum(expenses.filter((e) => !e.deletedAt && monthKey(e.date) === month));
+  const theirs = sum(prevList);
+  return { diff: mine - theirs, lastMonth: theirs, upTo: day };
+}

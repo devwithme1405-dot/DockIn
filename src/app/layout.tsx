@@ -65,7 +65,9 @@ function heal(){
 }
 window.addEventListener('error',function(e){
   var t=e.target;
-  if(t&&t.tagName==='SCRIPT'&&t.src){ heal(); return; }
+  // Only this app's own code. A third-party script that fails, or an image,
+  // is not a reason to throw away the cache and reload the page.
+  if(t&&t.tagName==='SCRIPT'&&t.src&&t.src.indexOf('/_next/')>-1){ heal(); return; }
   if(e.message&&CHUNK.test(e.message)) heal();
 },true);
 window.addEventListener('unhandledrejection',function(e){
@@ -74,7 +76,7 @@ window.addEventListener('unhandledrejection',function(e){
   if(CHUNK.test(m)) heal();
 });
 
-})();`.replace(/\s*\n\s*/g, " ");
+})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
