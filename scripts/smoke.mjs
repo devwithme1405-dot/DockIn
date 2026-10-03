@@ -188,6 +188,8 @@ const SCREENS = [
   { path: "/circle", name: "friends", expect: "Friends" },
   { path: "/settings", name: "profile", expect: "Text size" },
   { path: "/calendar", name: "calendar", expect: "" },
+  { path: "/add", name: "quick-add", expect: "" },
+  { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
 ];
 
 const problems = [];
@@ -347,6 +349,28 @@ await step("marking a class updates attendance", async () => {
   await page.waitForTimeout(900);
   const text = await page.evaluate(() => document.body.innerText);
   if (/Mark a few classes to begin/.test(text)) throw new Error("attendance still reads as empty");
+});
+
+await step("adding a task from the button works", async () => {
+  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(900);
+  await page.getByRole("button", { name: "Add task", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor({ state: "visible" });
+  await dialog.getByLabel("Title").fill("Smoke test task");
+  const submit = dialog.getByRole("button", { name: /^Add (assignment|exam|quiz|project|personal)/i });
+  await submit.scrollIntoViewIfNeeded();
+  await submit.click();
+  await page.waitForTimeout(900);
+  const text = await page.evaluate(() => document.body.innerText);
+  if (!text.includes("Smoke test task")) throw new Error("the task did not appear in the list");
+});
+
+await step("the timetable wizard opens and takes a subject", async () => {
+  await page.goto(`${BASE}/attendance/timetable`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1000);
+  const text = await page.evaluate(() => document.body.innerText);
+  if (!/subject|period|day/i.test(text)) throw new Error("the wizard drew nothing recognisable");
 });
 
 await step("the tab bar moves between screens", async () => {

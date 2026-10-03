@@ -169,7 +169,7 @@ export default function TasksPage() {
           />
           <button
             type="submit"
-            aria-label="Add task"
+            aria-label="Add the task you typed"
             disabled={!preview?.title}
             className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent text-on-accent transition disabled:opacity-35"
           >

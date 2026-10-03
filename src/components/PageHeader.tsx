@@ -64,11 +64,13 @@ export function PageHeader({
   right?: ReactNode;
 }) {
   return (
+    // The row wraps rather than truncating: on a narrow phone the controls drop
+    // to a line of their own instead of cutting the subtitle off mid-word.
     <StickyBar className="px-5 pb-3">
-      <div className="flex min-h-11 items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="min-w-[8rem] flex-1">
           <h1 className="truncate text-[26px] font-semibold leading-tight tracking-tight">{title}</h1>
-          {subtitle != null && <p className="truncate text-[13px] text-muted">{subtitle}</p>}
+          {subtitle != null && <p className="text-[13px] leading-snug text-muted">{subtitle}</p>}
         </div>
         {right && <div className="flex shrink-0 items-center gap-1">{right}</div>}
       </div>
