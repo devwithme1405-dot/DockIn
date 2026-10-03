@@ -140,6 +140,23 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
+
+  /**
+   * If the router does not get there, the browser will.
+   *
+   * Moving between tabs fetches that screen's script, and a script that will
+   * not load leaves the tap doing nothing at all — the app looks frozen while
+   * everything already on screen keeps working, which is the most baffling way
+   * for it to fail. So a tap that has not changed the page after a moment is
+   * finished the old-fashioned way, with a full page load. Slower, and it
+   * always works.
+   */
+  function insist(href: string) {
+    window.setTimeout(() => {
+      if (window.location.pathname !== href) window.location.assign(href);
+    }, 1800);
+  }
+
   return (
     <nav
       aria-label="Main"
@@ -153,6 +170,7 @@ function TabBar({ pathname }: { pathname: string }) {
             <li key={href}>
               <Link
                 href={href}
+                onClick={() => !active && insist(href)}
                 aria-current={active ? "page" : undefined}
                 className={cx(
                   "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",

@@ -39,7 +39,35 @@ const themeScript = `(function(){try{var p=localStorage.getItem('dockin-theme')|
  * its caches, and reloads once; `sessionStorage` makes sure "once" means once,
  * so a genuinely missing file can never become a loop.
  */
-const healScript = `(function(){function heal(){try{if(sessionStorage.getItem('dockin-healed'))return;sessionStorage.setItem('dockin-healed','1');}catch(e){}if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){if(r.active)r.active.postMessage('dockin-reset');r.unregister();});}).catch(function(){});}if(window.caches){caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}).catch(function(){}).then(function(){location.reload()});}else{location.reload();}}window.addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='SCRIPT'&&t.src)heal();},true);window.addEventListener('load',function(){try{sessionStorage.removeItem('dockin-healed')}catch(e){}});})();`;
+const healScript = `(function(){
+var CHUNK=/ChunkLoadError|Loading chunk|Loading CSS chunk|dynamically imported module|Importing a module script failed|error loading dynamically imported/i;
+function heal(){
+  try{ if(sessionStorage.getItem('dockin-healed'))return; sessionStorage.setItem('dockin-healed','1'); }catch(e){}
+  var done=function(){ location.reload(); };
+  try{
+    if('serviceWorker'in navigator){
+      navigator.serviceWorker.getRegistrations().then(function(rs){
+        rs.forEach(function(r){ if(r.active)r.active.postMessage('dockin-reset'); r.unregister(); });
+      }).catch(function(){});
+    }
+  }catch(e){}
+  if(window.caches){
+    caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k) })) })
+      .catch(function(){}).then(done);
+  } else { done(); }
+}
+window.addEventListener('error',function(e){
+  var t=e.target;
+  if(t&&t.tagName==='SCRIPT'&&t.src){ heal(); return; }
+  if(e.message&&CHUNK.test(e.message)) heal();
+},true);
+window.addEventListener('unhandledrejection',function(e){
+  var r=e.reason; if(!r)return;
+  var m=(r.name||'')+' '+(r.message||r);
+  if(CHUNK.test(m)) heal();
+});
+window.addEventListener('load',function(){ setTimeout(function(){ try{ sessionStorage.removeItem('dockin-healed') }catch(e){} },8000); });
+})();`.replace(/\s*\n\s*/g, " ");
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
