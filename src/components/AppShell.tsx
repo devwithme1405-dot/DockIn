@@ -129,6 +129,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         localStorage.setItem("dockin-app", appVersion);
         // The app only sends this once it has the listener in it.
         localStorage.setItem("dockin-app-pay", q.get("pay") === "1" ? "1" : "0");
+        // Whether Android has actually granted the listener. Only the app can
+        // know this, so only the app can tell us.
+        if (q.get("notif") !== null) {
+          localStorage.setItem("dockin-app-notif", q.get("notif") === "1" ? "1" : "0");
+        }
       } catch {
         /* private browsing */
       }
@@ -141,6 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         url.searchParams.delete("dev");
         url.searchParams.delete("app");
         url.searchParams.delete("pay");
+        url.searchParams.delete("notif");
         window.history.replaceState(null, "", url.toString());
       });
   }, [userId]);
@@ -150,10 +156,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       process.env.NODE_ENV === "production" &&
       "serviceWorker" in navigator
     ) {
-      // The build stamp is part of the address on purpose: a new deploy is a
-      // new worker, and a new worker drops the shell the old one cached.
-      const build = process.env.NEXT_PUBLIC_BUILD ?? "1";
-      navigator.serviceWorker.register(`/sw.js?v=${build}`).catch(() => {});
+      // The stamp lives inside the script now, not in this address: the page
+      // asking for it is usually served from the cache, where its own stamp is
+      // out of date, so a stamp here would pin the worker to whatever build the
+      // cached page came from.
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
     } else if ("serviceWorker" in navigator) {
       // Dev mode: a worker left over from an earlier production run on this
       // address would keep serving old pages, so remove it and its caches.
@@ -165,10 +172,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // The launch screen stays up for a moment even on fast phones so it never just flickers.
+  // Just long enough not to flash. It used to be 900ms, which on a phone that
+  // was ready in 200 was two thirds of a second of staring at a logo for no
+  // reason — and the first thing anybody notices about an app is how long it
+  // takes to show them something.
   const [minShown, setMinShown] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setMinShown(true), Math.max(0, 900 - performance.now()));
+    const t = setTimeout(() => setMinShown(true), Math.max(0, 260 - performance.now()));
     return () => clearTimeout(t);
   }, []);
 

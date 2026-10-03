@@ -102,6 +102,31 @@ public final class PayLink {
         flush(c);
     }
 
+    /**
+     * Tells the site this phone is here, without sending anything about it.
+     *
+     * It is the one call that separates "the phone cannot reach us" from "the
+     * phone is here but nothing is being heard", which used to be the same
+     * silence.
+     */
+    public static void ping(final Context c) {
+        final Context app = c.getApplicationContext();
+        IO.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JSONObject payload = new JSONObject();
+                    payload.put("secret", secret(app));
+                    payload.put("ping", true);
+                    post(payload);
+                } catch (Exception ignored) {
+                    /* the queue below carries anything that matters */
+                }
+            }
+        });
+        flush(c);
+    }
+
     /** Sends whatever is waiting, oldest first, and keeps anything that fails. */
     public static void flush(final Context c) {
         final Context app = c.getApplicationContext();
@@ -136,11 +161,18 @@ public final class PayLink {
     private enum Result { DONE, RETRY, DROP }
 
     private static Result post(Context c, JSONObject row) {
-        HttpURLConnection conn = null;
         try {
             JSONObject payload = new JSONObject(row.toString());
             payload.put("secret", secret(c));
+            return post(payload);
+        } catch (Exception e) {
+            return Result.RETRY;
+        }
+    }
 
+    private static Result post(JSONObject payload) {
+        HttpURLConnection conn = null;
+        try {
             conn = (HttpURLConnection) new URL(ENDPOINT).openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(10000);

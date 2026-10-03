@@ -373,6 +373,25 @@ await step("the timetable wizard opens and takes a subject", async () => {
   if (!/subject|period|day/i.test(text)) throw new Error("the wizard drew nothing recognisable");
 });
 
+await step("the app opens with no network at all", async () => {
+  // The service worker needs one online visit to take hold.
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  await ctx.setOffline(true);
+  try {
+    const began = Date.now();
+    await page.goto(BASE, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => /Today|Due soon|Timetable/.test(document.body.innerText), {
+      timeout: 12000,
+    });
+    const took = Date.now() - began;
+    console.log(`     (offline cold start: ${took}ms)`);
+    if (took > 6000) throw new Error(`took ${took}ms offline`);
+  } finally {
+    await ctx.setOffline(false);
+  }
+});
+
 await step("the tab bar moves between screens", async () => {
   for (const [label, expect] of [
     ["Money", "Spent"],

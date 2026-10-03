@@ -5,6 +5,8 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.text.TextUtils;
 
 import com.google.androidbrowserhelper.trusted.LauncherActivity;
 
@@ -42,11 +44,23 @@ public class MainActivity extends LauncherActivity {
                                 .appendQueryParameter("dev", PayLink.secret(this))
                                 .appendQueryParameter("app", version())
                                 .appendQueryParameter("pay", "1")
+                                // Whether the person has actually granted the
+                                // listener. Without this the site can tell you
+                                // the app is capable but not whether it is
+                                // allowed, which is the one step that is
+                                // genuinely someone else's to take.
+                                .appendQueryParameter("notif", listening() ? "1" : "0")
                                 .build());
                 setIntent(intent);
             }
         }
         super.onCreate(state);
+
+        // A heartbeat, on every launch. It proves the phone can reach the site
+        // and that the site knows this phone — the two links in the chain that
+        // are otherwise invisible, and that a missing payment could be blamed
+        // on either.
+        PayLink.ping(this);
     }
 
     /** The address this app was built around, as the manifest states it. */
@@ -58,6 +72,17 @@ public class MainActivity extends LauncherActivity {
             return url == null ? null : Uri.parse(url);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /** Is this app in Android's list of notification listeners? */
+    private boolean listening() {
+        try {
+            String allowed = Settings.Secure.getString(
+                    getContentResolver(), "enabled_notification_listeners");
+            return !TextUtils.isEmpty(allowed) && allowed.contains(getPackageName());
+        } catch (Exception e) {
+            return false;
         }
     }
 

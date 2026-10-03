@@ -291,3 +291,10 @@ export function strayIds(notices: StoredNotice[]): string[] {
     .filter((n) => !parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at }))
     .map((n) => n.id);
 }
+
+/** How many notifications this phone has sent lately, payment or not. */
+export async function noticeCount(hours = 24): Promise<number> {
+  const { data, error } = await sb().rpc("notice_count", { since_hours: hours });
+  if (error) throw new PaymentError(plain(error.message));
+  return Number(data ?? 0);
+}

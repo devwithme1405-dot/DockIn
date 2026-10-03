@@ -8,4 +8,5 @@ public class Context {
   public android.content.pm.PackageManager getPackageManager() { return null; }
   public String getPackageName() { return null; }
   public ComponentName getComponentName() { return null; }
+  public ContentResolver getContentResolver() { return null; }
 }

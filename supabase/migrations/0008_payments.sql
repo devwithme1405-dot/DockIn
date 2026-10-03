@@ -156,3 +156,37 @@ end $$;
 
 revoke all on function public.log_notice(text, text, text, text, bigint) from public;
 grant execute on function public.log_notice(text, text, text, text, bigint) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 5. A phone saying hello
+-- ---------------------------------------------------------------------------
+
+-- The app calls this every time it opens. It stores nothing and says nothing
+-- back; all it does is move last_seen_at, which is what turns "no payments are
+-- arriving" from one silence into two different answers: the phone cannot reach
+-- us, or the phone is here and is not hearing anything.
+create or replace function public.ping_device(token text)
+returns void language plpgsql security definer set search_path = public, extensions as $$
+declare
+  hash text := encode(sha256(convert_to(coalesce(token, ''), 'utf8')), 'hex');
+begin
+  update public.pay_devices set last_seen_at = clock_timestamp() where token_hash = hash;
+  if not found then raise exception 'unknown_device'; end if;
+end $$;
+
+revoke all on function public.ping_device(text) from public;
+grant execute on function public.ping_device(text) to anon, authenticated;
+
+-- How many notifications this phone has sent lately, whether or not any of them
+-- turned out to be a payment. A count of zero with a healthy heartbeat means the
+-- listener is off or the phone is filtering everything out — which is a
+-- different problem from the phone never arriving at all.
+create or replace function public.notice_count(since_hours int default 24)
+returns int language sql stable security definer set search_path = public as $$
+  select count(*)::int from public.pay_notices
+   where user_id = auth.uid()
+     and seen_at > clock_timestamp() - make_interval(hours => greatest(1, since_hours));
+$$;
+
+revoke all on function public.notice_count(int) from public, anon;
+grant execute on function public.notice_count(int) to authenticated;
