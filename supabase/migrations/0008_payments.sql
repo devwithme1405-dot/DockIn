@@ -6,9 +6,11 @@
 --     forwards them here. It does not understand them — the web app does the
 --     reading, so a bank that changes its wording is a deploy rather than an
 --     APK everyone has to reinstall.
---   * The phone has no login of its own. The web app, already signed in, mints
---     a device token once and hands it to the app through a link. Only the hash
---     is stored, so a copy of this table does not let anyone post as that phone.
+--   * The phone has no login of its own, and is not asked to get one. It makes
+--     a secret for itself on first run and carries it on the address it opens
+--     the site with; the signed-in site calls claim_device() and the pairing is
+--     done without anybody tapping anything. Only the hash is stored, so a copy
+--     of this table does not let anyone post as that phone.
 --   * `pay_notices` is an inbox, not a record: rows are deleted once the person
 --     has dealt with them, and in any case after a fortnight. The money itself
 --     lives in the normal expenses, created only when someone taps to confirm.
@@ -82,39 +84,41 @@ create policy pay_notices_delete on public.pay_notices for delete to authenticat
 -- 3. Linking a phone
 -- ---------------------------------------------------------------------------
 
--- Returns the token exactly once; only its hash is kept. Called by the web app
--- while the person is signed in, and handed to the Android app through a link.
-create or replace function public.link_payments(device_label text default null)
-returns text language plpgsql security definer set search_path = public, extensions as $$
+-- The phone brings its own secret; this is the site, already signed in, saying
+-- "that one is mine". Running it again with the same secret changes nothing,
+-- which matters because the app passes it on every single launch.
+create or replace function public.claim_device(secret text, device_label text default 'Phone')
+returns void language plpgsql security definer set search_path = public, extensions as $$
 declare
-  me    uuid := auth.uid();
-  token text;
+  me   uuid := auth.uid();
+  hash text;
 begin
   if me is null then raise exception 'not signed in'; end if;
+  if secret is null or char_length(secret) < 24 then raise exception 'bad_secret'; end if;
 
-  token := encode(gen_random_bytes(32), 'hex');
-
-  -- One phone at a time per label keeps the list honest when someone re-links
-  -- after reinstalling the app.
-  delete from public.pay_devices
-   where user_id = me and label is not distinct from device_label;
+  hash := encode(sha256(convert_to(secret, 'utf8')), 'hex');
 
   insert into public.pay_devices (user_id, token_hash, label)
-  values (me, encode(sha256(convert_to(token, 'utf8')), 'hex'), left(coalesce(device_label, 'Phone'), 40));
-
-  return token;
+  values (me, hash, left(coalesce(device_label, 'Phone'), 40))
+  on conflict (token_hash) do update
+    -- A phone belongs to whoever is signed in on it now, so a shared or
+    -- handed-down handset follows its owner instead of posting to the last one.
+    set user_id = excluded.user_id;
 end $$;
 
-revoke all on function public.link_payments(text) from public, anon;
-grant execute on function public.link_payments(text) to authenticated;
+revoke all on function public.claim_device(text, text) from public, anon;
+grant execute on function public.claim_device(text, text) to authenticated;
+
+drop function if exists public.link_payments(text);
 
 -- ---------------------------------------------------------------------------
 -- 4. What the phone calls
 -- ---------------------------------------------------------------------------
 
--- The phone has only its token, so this runs as anon and the token is the whole
--- of the authentication. It can do exactly one thing: drop a notification into
--- its own owner's inbox. It cannot read anything back.
+-- The phone has only its secret, so the secret is the whole of the
+-- authentication. It can do exactly one thing: drop a notification into its own
+-- owner's inbox. It cannot read anything back. The app reaches this through the
+-- site's own /api/notice, so no key or address of this project is in the APK.
 create or replace function public.log_notice(
   token text,
   app text,

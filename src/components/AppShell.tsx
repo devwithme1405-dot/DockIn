@@ -11,6 +11,7 @@ import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
+import { claimDevice } from "@/lib/payments";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 
@@ -92,6 +93,31 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     void ensureCategories();
   }, []);
+
+  /**
+   * Pairing the phone, without asking anyone to pair anything.
+   *
+   * The Android app opens this site with its own secret on the address. If
+   * somebody is signed in, that is all the server needs to know whose phone it
+   * is — so the feature sets itself up the first time the app is opened, and
+   * the address is tidied straight afterwards so the secret is not left sitting
+   * in the bar or in history.
+   *
+   * It runs on every launch because the first one usually happens before anyone
+   * has signed in, and because claiming twice costs nothing.
+   */
+  useEffect(() => {
+    if (!userId) return;
+    const dev = new URLSearchParams(window.location.search).get("dev");
+    if (!dev) return;
+    void claimDevice(dev)
+      .catch(() => {})
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("dev");
+        window.history.replaceState(null, "", url.toString());
+      });
+  }, [userId]);
 
   useEffect(() => {
     if (

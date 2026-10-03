@@ -19,7 +19,7 @@
             android:value="https://dock-in.vercel.app/manifest.webmanifest" />
 
         <activity
-            android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+            android:name=".MainActivity"
             android:alwaysRetainTaskState="true"
             android:exported="true"
             android:label="@string/app_name"
@@ -58,10 +58,10 @@
 
 
         <!--
-            Payment detection. The link activity answers dockin://pay/<token>,
-            which only the signed-in web app sends; the listener reads the
-            notifications of payment apps and banks, and only runs once the
-            person turns it on in Android's own settings.
+            Payment detection. The phone pairs itself when the app opens the
+            site (see MainActivity), so the only thing left for a person to do
+            is switch the listener on — which Android allows nowhere but its own
+            screen, and which dockin://notifications opens.
         -->
         <activity
             android:name=".LinkActivity"
@@ -73,7 +73,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="dockin" android:host="pay" />
+                <data android:scheme="dockin" android:host="notifications" />
             </intent-filter>
         </activity>
 

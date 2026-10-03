@@ -3,7 +3,6 @@
     <string name="app_name">DockIn</string>
     <string name="asset_statements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://dock-in.vercel.app\" } }]</string>
     <string name="pay_watch_label">DockIn payment detection</string>
-    <string name="pay_link_ok">Phone linked. Now switch DockIn on in the list that opens.</string>
-    <string name="pay_link_failed">That link was incomplete. Try again from DockIn settings.</string>
-    <string name="pay_link_manual">Phone linked. Turn on notification access for DockIn in Android settings.</string>
+    <string name="pay_turn_on">Switch DockIn on in this list to spot payments.</string>
+    <string name="pay_turn_on_manual">Open Settings, search for notification access, and switch DockIn on.</string>
 </resources>

@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
@@ -17,24 +18,27 @@ import java.util.regex.Pattern;
 /**
  * The phone's half of payment detection.
  *
- * It holds three things it was handed once, through a link from the signed-in
- * web app: a device token, and the project address and public key to send it
- * to. Nothing about the account is built into this app, so moving project is a
- * deploy rather than a reinstall, and a phone that is unlinked on the server
- * simply stops being accepted.
+ * It knows one thing: a secret it made for itself the first time the app ran.
+ * That secret rides along on the address the app opens the site with, and the
+ * signed-in site tells the server to trust it — so there is nothing to set up
+ * and nothing for the person to understand.
  *
- * What it sends is the notification's text, with account and card numbers taken
- * out first. It deliberately does not try to understand the message: Indian
- * banks word these a dozen ways and keep changing them, and the reading is done
- * in the web app where a wrong rule is fixed by a deploy everyone already gets,
- * not by an APK everyone has to reinstall.
+ * It sends what it sees to DockIn's own address rather than to the database
+ * directly. That keeps every key and every detail of the backend out of the
+ * APK: the app only knows its own site, which it was already built around.
+ *
+ * What it sends is the notification's text with account and card numbers taken
+ * out. It deliberately does not try to understand the message — Indian banks
+ * word these a dozen ways and keep changing them, and the reading is done on
+ * the site, where a wrong rule is fixed by a deploy everybody already has.
  */
 public final class PayLink {
 
+    /** Where the site lives. The same address the app itself opens. */
+    private static final String ENDPOINT = "https://dock-in.vercel.app/api/notice";
+
     private static final String PREFS = "dockin-pay";
-    private static final String K_TOKEN = "token";
-    private static final String K_URL = "url";
-    private static final String K_KEY = "key";
+    private static final String K_SECRET = "secret";
     private static final String K_QUEUE = "queue";
     /** A phone with no signal for a week should not grow a queue forever. */
     private static final int MAX_QUEUED = 100;
@@ -53,18 +57,16 @@ public final class PayLink {
         return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    /** Stores what the web app handed over when this phone was linked. */
-    public static void save(Context c, String token, String url, String key) {
-        prefs(c).edit().putString(K_TOKEN, token).putString(K_URL, url).putString(K_KEY, key).apply();
-    }
-
-    public static boolean linked(Context c) {
+    /** This phone's secret, made once and kept until the app is uninstalled. */
+    public static synchronized String secret(Context c) {
         SharedPreferences p = prefs(c);
-        return p.getString(K_TOKEN, null) != null && p.getString(K_URL, null) != null;
-    }
-
-    public static void forget(Context c) {
-        prefs(c).edit().clear().apply();
+        String s = p.getString(K_SECRET, null);
+        if (s == null) {
+            s = UUID.randomUUID().toString().replace("-", "")
+                    + UUID.randomUUID().toString().replace("-", "");
+            p.edit().putString(K_SECRET, s).apply();
+        }
+        return s;
     }
 
     public static String redact(String text) {
@@ -82,13 +84,12 @@ public final class PayLink {
      * still a payment, and it goes up the next time anything else does.
      */
     public static void send(Context c, String app, String title, String body, long postedAt) {
-        if (!linked(c)) return;
         try {
             JSONObject row = new JSONObject();
             row.put("app", app);
             row.put("title", clip(redact(title), 200));
             row.put("body", clip(redact(body), 400));
-            row.put("posted_at", postedAt);
+            row.put("at", postedAt);
             synchronized (PayLink.class) {
                 JSONArray queue = queue(c);
                 queue.put(row);
@@ -107,7 +108,6 @@ public final class PayLink {
         IO.execute(new Runnable() {
             @Override
             public void run() {
-                if (!linked(app)) return;
                 JSONArray queue;
                 synchronized (PayLink.class) {
                     queue = queue(app);
@@ -117,15 +117,10 @@ public final class PayLink {
                 for (int i = 0; i < queue.length(); i++) {
                     JSONObject row = queue.optJSONObject(i);
                     if (row == null) continue;
-                    Result r = post(app, row);
-                    if (r == Result.RETRY) left.put(row);
-                    // DONE and DROP both mean stop carrying it: DROP is the
-                    // server saying this phone is no longer linked, and
-                    // retrying that forever helps nobody.
-                    if (r == Result.DROP) {
-                        forget(app);
-                        return;
-                    }
+                    // RETRY keeps it for later; anything else means stop carrying
+                    // it, since a phone the site does not know will never be
+                    // accepted by repeating the attempt.
+                    if (post(app, row) == Result.RETRY) left.put(row);
                 }
                 if (left.length() > 0) {
                     synchronized (PayLink.class) {
@@ -141,25 +136,17 @@ public final class PayLink {
     private enum Result { DONE, RETRY, DROP }
 
     private static Result post(Context c, JSONObject row) {
-        SharedPreferences p = prefs(c);
-        String base = p.getString(K_URL, null);
-        String key = p.getString(K_KEY, "");
-        String token = p.getString(K_TOKEN, null);
-        if (base == null || token == null) return Result.DROP;
-
         HttpURLConnection conn = null;
         try {
             JSONObject payload = new JSONObject(row.toString());
-            payload.put("token", token);
+            payload.put("secret", secret(c));
 
-            conn = (HttpURLConnection) new URL(base + "/rest/v1/rpc/log_notice").openConnection();
+            conn = (HttpURLConnection) new URL(ENDPOINT).openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(15000);
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("apikey", key);
-            conn.setRequestProperty("Authorization", "Bearer " + key);
 
             byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
             OutputStream out = conn.getOutputStream();
@@ -168,8 +155,11 @@ public final class PayLink {
 
             int code = conn.getResponseCode();
             if (code >= 200 && code < 300) return Result.DONE;
-            // 400 here is the server's "unknown_device": the link was cut.
-            if (code == 400 || code == 401 || code == 403) return Result.DROP;
+            // 4xx is the site saying it does not know this phone — usually
+            // because nobody has signed in on it yet. Keeping the payment is
+            // the point of the queue, so it waits.
+            if (code == 404 || code == 403) return Result.RETRY;
+            if (code >= 400 && code < 500) return Result.DROP;
             return Result.RETRY;
         } catch (Exception e) {
             return Result.RETRY;

@@ -205,16 +205,15 @@ function plain(message: string): string {
 }
 
 /**
- * Mints the token this phone will use, and hands it to the Android app.
+ * Says that the phone carrying this secret belongs to whoever is signed in.
  *
- * The token is shown once and never stored in the browser: the app keeps it,
- * the server keeps only its hash. Re-linking replaces the old one, so a phone
- * that was wiped cannot keep posting.
+ * The Android app makes its own secret and passes it on the address it opens
+ * this site with, so pairing costs nobody a tap. Running it again with the same
+ * secret changes nothing, which is just as well: the app passes it every launch.
  */
-export async function linkDevice(label = "Phone"): Promise<string> {
-  const { data, error } = await sb().rpc("link_payments", { device_label: label });
+export async function claimDevice(secret: string): Promise<void> {
+  const { error } = await sb().rpc("claim_device", { secret, device_label: "This phone" });
   if (error) throw new PaymentError(plain(error.message));
-  return data as string;
 }
 
 /** Every phone currently allowed to forward notifications here. */

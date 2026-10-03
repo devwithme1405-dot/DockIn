@@ -61,7 +61,6 @@ public class PayWatchService extends NotificationListenerService {
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn == null || sbn.getPackageName() == null) return;
         if (!WATCHED.contains(sbn.getPackageName())) return;
-        if (!PayLink.linked(this)) return;
 
         Notification n = sbn.getNotification();
         if (n == null) return;
