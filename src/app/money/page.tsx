@@ -4,11 +4,11 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { MoneySkeleton } from "@/components/Skeleton";
-import { ChevronLeft, ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
-import { useExpenses } from "@/lib/hooks";
+import { useCategories, useExpenses } from "@/lib/hooks";
 import {
-  CATEGORY_BY_ID,
+  metaFor,
   budgetStatus,
   byCategory,
   dailyTotals,
@@ -25,7 +25,8 @@ import {
 import { relativeDayLabel, fmtDay, toDateStr } from "@/lib/dates";
 import type { Expense } from "@/lib/types";
 import { Button, Chip, EmptyState, Sheet, cx } from "@/components/ui";
-import { CATEGORY_ICON, ExpenseForm } from "@/components/ExpenseForm";
+import { ExpenseForm } from "@/components/ExpenseForm";
+import { MoneyHero } from "@/components/MoneyHero";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
@@ -40,7 +41,11 @@ export default function MoneyPage() {
 
   const list = useMemo(() => inMonth(all ?? [], month), [all, month]);
   const spent = sum(list);
-  const cats = useMemo(() => byCategory(list), [list]);
+  // Six is as many as a breakdown can show before it stops being readable; the
+  // rest fold into one row rather than each getting a colour of its own.
+  const catList = useCategories();
+  const cats = useMemo(() => byCategory(list, catList ?? [], 6), [list, catList]);
+  const allCats = useMemo(() => byCategory(list, catList ?? []), [list, catList]);
   const daily = useMemo(() => dailyTotals(list, month), [list, month]);
   const isCurrent = month === monthKey(today);
   const budget = profile?.budget ?? 0;
@@ -62,9 +67,6 @@ export default function MoneyPage() {
         <MoneySkeleton />
       </>
     );
-
-  const barTone =
-    status?.state === "danger" ? "bg-danger" : status?.state === "warn" ? "bg-warn" : "bg-safe";
 
   return (
     <>
@@ -96,57 +98,19 @@ export default function MoneyPage() {
       />
       <div className="h-4" />
 
-      <section className="mx-5 rounded-3xl bg-hero p-5 text-hero-fg" aria-label="Month summary">
-        <p className="text-[13px] font-medium text-hero-muted">
-          {isCurrent ? "Spent this month" : `Spent in ${monthLabel(month)}`}
-        </p>
-        <p className="mt-1 text-[38px] font-semibold leading-none tracking-tight tabular-nums">
-          {fmtMoney(spent)}
-        </p>
-
-        {status ? (
-          <div className="mt-5">
-            <div className="h-2 overflow-hidden rounded-full bg-white/15">
-              <div
-                className={cx("h-full rounded-full transition-all", barTone)}
-                style={{ width: `${Math.min(status.used, 1) * 100}%` }}
-              />
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-3 text-[13px] text-hero-muted">
-              <span className="tabular-nums">
-                {status.left >= 0
-                  ? `${fmtMoney(status.left)} left of ${fmtMoney(budget)}`
-                  : `${fmtMoney(-status.left)} over ${fmtMoney(budget)}`}
-              </span>
-              <button
-                onClick={() => {
-                  setBudgetText(String(budget));
-                  setBudgetOpen(true);
-                }}
-                aria-label="Change budget"
-                className="inline-flex shrink-0 items-center gap-1 text-hero-fg/80"
-              >
-                <Pencil size={13} /> Budget
-              </button>
-            </div>
-            {isCurrent && status.perDay > 0 && (
-              <p className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-[13px]">
-                You can spend about <b className="tabular-nums">{fmtMoney(Math.floor(status.perDay))}</b> a day for the next {status.daysLeft} {status.daysLeft === 1 ? "day" : "days"}.
-              </p>
-            )}
-          </div>
-        ) : (
-          <button
-            onClick={() => {
-              setBudgetText("");
-              setBudgetOpen(true);
-            }}
-            className="mt-4 inline-flex h-9 items-center rounded-full bg-white/15 px-3.5 text-[13px] font-medium"
-          >
-            Set a monthly budget
-          </button>
-        )}
-      </section>
+      <MoneyHero
+        label={isCurrent ? "Spent this month" : `Spent in ${monthLabel(month)}`}
+        spent={spent}
+        status={status}
+        onEditBudget={() => {
+          setBudgetText(String(budget));
+          setBudgetOpen(true);
+        }}
+        onSetBudget={() => {
+          setBudgetText("");
+          setBudgetOpen(true);
+        }}
+      />
 
       <section className="mt-3 grid grid-cols-3 gap-2.5 px-5" aria-label="Quick numbers">
         <Stat label="Today" value={fmtMoney(todaySpent)} tint="bg-accent-soft" />
@@ -164,27 +128,29 @@ export default function MoneyPage() {
           <section className="mt-6 px-5" aria-label="Where it went">
             <h2 className="mb-3 text-[17px] font-semibold">Where it went</h2>
             <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
-              <div className="flex h-3 gap-0.5 overflow-hidden rounded-full">
+              <ul className="space-y-3.5">
                 {cats.map((c) => (
-                  <span key={c.meta.id} style={{ width: `${c.pct}%`, background: c.meta.color }} />
+                  <li key={c.meta.id}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[17px] leading-none">{c.meta.emoji}</span>
+                      <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium">
+                        {c.meta.label}
+                      </span>
+                      <span className="text-[14.5px] font-semibold tabular-nums">{fmtMoney(c.total)}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                        <span
+                          className="block h-full rounded-full bg-accent"
+                          style={{ width: `${Math.max(2, c.pct)}%` }}
+                        />
+                      </span>
+                      <span className="w-9 shrink-0 text-right text-[12px] text-muted tabular-nums">
+                        {Math.round(c.pct)}%
+                      </span>
+                    </div>
+                  </li>
                 ))}
-              </div>
-              <ul className="mt-4 space-y-3">
-                {cats.map((c) => {
-                  const Icon = CATEGORY_ICON[c.meta.id];
-                  return (
-                    <li key={c.meta.id} className="flex items-center gap-3">
-                      <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", c.meta.tint, c.meta.ink)}>
-                        <Icon size={17} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-medium">{c.meta.label}</span>
-                        <span className="text-xs text-muted tabular-nums">{Math.round(c.pct)}%</span>
-                      </span>
-                      <span className="text-[15px] font-semibold tabular-nums">{fmtMoney(c.total)}</span>
-                    </li>
-                  );
-                })}
               </ul>
             </div>
           </section>
@@ -196,7 +162,7 @@ export default function MoneyPage() {
         {list.length > 0 && (
           <div className="mb-3 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
             <Chip active={catFilter === "all"} onClick={() => setCatFilter("all")}>All</Chip>
-            {cats.map((c) => (
+            {allCats.map((c) => (
               <Chip key={c.meta.id} active={catFilter === c.meta.id} onClick={() => setCatFilter(c.meta.id)}>
                 {c.meta.label}
               </Chip>
@@ -222,16 +188,15 @@ export default function MoneyPage() {
                 </div>
                 <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
                   {g.items.map((e) => {
-                    const meta = CATEGORY_BY_ID[e.category];
-                    const Icon = CATEGORY_ICON[e.category];
+                    const meta = metaFor(e.category, catList ?? []);
                     return (
                       <li key={e.id}>
                         <button
                           onClick={() => setEditing(e)}
                           className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-surface-2"
                         >
-                          <span className={cx("grid size-10 shrink-0 place-items-center rounded-xl", meta.tint, meta.ink)}>
-                            <Icon size={19} />
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-[19px]">
+                            {meta.emoji}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[15px] font-medium">{e.note || meta.label}</span>

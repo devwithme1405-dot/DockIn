@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type {
   CalEvent,
+  Category,
   Expense,
   Friend,
   Group,
@@ -32,6 +33,7 @@ export class DockinDB extends Dexie {
   groups!: Table<Group, string>;
   shares!: Table<Share, string>;
   shareState!: Table<ShareState, string>;
+  categories!: Table<Category, string>;
 
   constructor() {
     super("dockin");
@@ -53,6 +55,9 @@ export class DockinDB extends Dexie {
       groups: "id",
       shares: "id, groupId, dueDate",
       shareState: "id, done",
+    });
+    this.version(5).stores({
+      categories: "id, order",
     });
   }
 }

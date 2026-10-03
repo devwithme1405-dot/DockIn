@@ -1,32 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Bus,
-  CircleEllipsis,
-  Coffee,
-  Gamepad2,
-  GraduationCap,
-  Receipt,
-  ShoppingBag,
-  Utensils,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { addExpense, deleteExpense, restoreExpense, updateExpense } from "@/lib/repo";
-import { CATEGORIES, CATEGORY_BY_ID, fmtMoney } from "@/lib/money";
+import { fmtMoney, metaFor } from "@/lib/money";
+import { useCategories } from "@/lib/hooks";
+import { addCategory, ensureCategories } from "@/lib/repo";
 import { toDateStr } from "@/lib/dates";
 import type { Expense, ExpenseCategory } from "@/lib/types";
 import { Button, cx, useToast } from "./ui";
 
-export const CATEGORY_ICON: Record<ExpenseCategory, typeof Utensils> = {
-  food: Utensils,
-  snacks: Coffee,
-  travel: Bus,
-  shopping: ShoppingBag,
-  study: GraduationCap,
-  bills: Receipt,
-  fun: Gamepad2,
-  other: CircleEllipsis,
-};
 
 const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
@@ -39,6 +22,14 @@ export function ExpenseForm({
   onDone: () => void;
 }) {
   const toast = useToast();
+  const cats = useCategories();
+  const [newCat, setNewCat] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  useEffect(() => {
+    void ensureCategories();
+  }, []);
+
   const [amount, setAmount] = useState(expense ? String(expense.amount) : "");
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? "food");
   const [note, setNote] = useState(expense?.note ?? "");
@@ -56,7 +47,7 @@ export function ExpenseForm({
       toast.show("Expense updated");
     } else {
       const e = await addExpense({ amount: value, category, note, date });
-      toast.show(`${fmtMoney(e.amount)} added to ${CATEGORY_BY_ID[category].label}`, () => {
+      toast.show(`${fmtMoney(e.amount)} added to ${metaFor(category, cats ?? []).label}`, () => {
         deleteExpense(e.id);
       });
     }
@@ -102,10 +93,9 @@ export function ExpenseForm({
         </div>
       </div>
 
-      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">Category</p>
+      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">Where</p>
       <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Category">
-        {CATEGORIES.map((c) => {
-          const Icon = CATEGORY_ICON[c.id];
+        {(cats ?? []).map((c) => {
           const on = category === c.id;
           return (
             <button
@@ -115,18 +105,58 @@ export function ExpenseForm({
               aria-checked={on}
               onClick={() => setCategory(c.id)}
               className={cx(
-                "flex flex-col items-center gap-1.5 rounded-2xl px-1 py-2.5 text-center transition active:scale-95",
+                "flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-center transition active:scale-95",
                 on ? "bg-accent-soft shadow-[0_0_0_2px_var(--accent)]" : "bg-surface-2",
               )}
             >
-              <span className={cx("grid size-9 place-items-center rounded-xl", c.tint, c.ink)}>
-                <Icon size={18} />
-              </span>
+              <span className="text-[20px] leading-none">{c.emoji}</span>
               <span className="text-[11px] leading-tight">{c.label}</span>
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex flex-col items-center gap-1 rounded-2xl border border-dashed border-line px-1 py-2.5 text-center text-muted transition active:scale-95"
+        >
+          <Plus size={20} />
+          <span className="text-[11px] leading-tight">Add</span>
+        </button>
       </div>
+
+      {adding && (
+        <div className="mt-3 flex gap-2.5">
+          <input
+            className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3.5 text-[16px] outline-none focus:border-accent"
+            placeholder="Name of the place"
+            value={newCat}
+            maxLength={30}
+            autoFocus
+            onChange={(e) => setNewCat(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key !== "Enter" || !newCat.trim()) return;
+              const made = await addCategory({ label: newCat });
+              setCategory(made.id);
+              setNewCat("");
+              setAdding(false);
+            }}
+            aria-label="New category"
+          />
+          <Button
+            type="button"
+            className="shrink-0 px-4"
+            disabled={!newCat.trim()}
+            onClick={async () => {
+              const made = await addCategory({ label: newCat });
+              setCategory(made.id);
+              setNewCat("");
+              setAdding(false);
+            }}
+          >
+            Add
+          </Button>
+        </div>
+      )}
 
       <div className="mt-5 grid grid-cols-[1fr_auto] gap-3">
         <input

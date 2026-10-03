@@ -178,3 +178,41 @@ describe("weeklyTrend", () => {
     expect(countCancelled(day("2026-09-28", "cancelled", "present"))).toBe(1);
   });
 });
+
+describe("the recent form strip", () => {
+  const mk = (date: string, start: string, status: SessionStatus) => ({ date, start, status });
+
+  it("shows only classes you answered, oldest first", async () => {
+    const { recentForm } = await import("@/lib/attendance");
+    const out = recentForm([
+      mk("2026-10-02", "09:25", "absent"),
+      mk("2026-10-01", "09:25", "present"),
+      mk("2026-10-03", "09:25", "unmarked"),
+      mk("2026-10-03", "11:35", "cancelled"),
+      mk("2026-10-03", "13:45", "holiday"),
+      mk("2026-10-01", "08:20", "present"),
+    ]);
+    expect(out.map((s) => `${s.date} ${s.start} ${s.status}`)).toEqual([
+      "2026-10-01 08:20 present",
+      "2026-10-01 09:25 present",
+      "2026-10-02 09:25 absent",
+    ]);
+  });
+
+  it("keeps the most recent few, not the first few", async () => {
+    const { recentForm } = await import("@/lib/attendance");
+    const many = Array.from({ length: 30 }, (_, i) =>
+      mk(`2026-10-${String(i + 1).padStart(2, "0")}`, "09:25", "present"),
+    );
+    const out = recentForm(many, 5);
+    expect(out).toHaveLength(5);
+    expect(out[0].date).toBe("2026-10-26");
+    expect(out[4].date).toBe("2026-10-30");
+  });
+
+  it("copes with nothing marked at all", async () => {
+    const { recentForm } = await import("@/lib/attendance");
+    expect(recentForm([])).toEqual([]);
+    expect(recentForm([mk("2026-10-01", "09:25", "unmarked")])).toEqual([]);
+  });
+});

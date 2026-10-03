@@ -5,6 +5,7 @@ import { addExpense, deleteExpense, resetAll, restoreExpense, updateExpense } fr
 import {
   budgetStatus,
   byCategory,
+  SEED_CATEGORIES,
   dailyTotals,
   fmtMoney,
   groupByDay,
@@ -33,7 +34,7 @@ describe("expenses", () => {
 });
 
 describe("money maths", () => {
-  const mk = (amount: number, category: "food" | "travel", date: string) =>
+  const mk = (amount: number, category: string, date: string) =>
     ({ id: date + amount, amount, category, note: "", date, createdAt: 0, updatedAt: 0 }) as const;
   const list = [mk(100, "food", "2026-10-01"), mk(50, "travel", "2026-10-01"), mk(200, "food", "2026-10-03"), mk(999, "food", "2026-09-30")];
 
@@ -41,9 +42,21 @@ describe("money maths", () => {
     expect(sum(inMonth([...list], "2026-10"))).toBe(350);
   });
   it("splits by category, biggest first", () => {
-    const c = byCategory(inMonth([...list], "2026-10"));
+    const c = byCategory(inMonth([...list], "2026-10"), SEED_CATEGORIES);
     expect(c[0].meta.id).toBe("food");
     expect(Math.round(c[0].pct)).toBe(86);
+    // a category that no longer exists still gets a readable name
+    expect(c[0].meta.label).toBe("Food");
+  });
+
+  it("folds the tail into one row so a breakdown stays readable", () => {
+    const many = Array.from({ length: 10 }, (_, i) => mk(100 - i, `place-${i}`, "2026-10-02"));
+    const top = byCategory(many, SEED_CATEGORIES, 4);
+    expect(top).toHaveLength(5);
+    expect(top[4].meta.label).toBe("6 more");
+    // nothing is lost in the fold
+    expect(Math.round(top.reduce((n, r) => n + r.total, 0))).toBe(Math.round(sum(many)));
+    expect(Math.round(top.reduce((n, r) => n + r.pct, 0))).toBe(100);
   });
   it("totals per day and groups newest first", () => {
     const d = dailyTotals([...list], "2026-10");

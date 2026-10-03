@@ -99,15 +99,19 @@ export interface AttendanceSummary {
   state: AttendanceState;
 }
 
-export type ExpenseCategory =
-  | "food"
-  | "snacks"
-  | "travel"
-  | "shopping"
-  | "study"
-  | "bills"
-  | "fun"
-  | "other";
+/**
+ * Where the money went. These are the user's own, not a fixed list: on a campus
+ * "Monginis" and "Tuck Shop" are the real answers, and every campus has
+ * different ones.
+ */
+export type ExpenseCategory = string;
+
+export interface Category extends Base {
+  label: string;
+  emoji: string;
+  /** Position in the picker, so the ones used most sit first. */
+  order: number;
+}
 
 export interface Expense extends Base {
   /** Amount in rupees (decimals allowed). */

@@ -1,7 +1,9 @@
 import { db } from "./db";
 import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
+import { SEED_CATEGORIES } from "./money";
 import type {
   CalEvent,
+  Category,
   ClassKind,
   EventKind,
   Expense,
@@ -632,6 +634,52 @@ export async function seedSampleTimetable(): Promise<void> {
 }
 
 // ---------- backup / reset ----------
+
+// ---------- categories ----------
+
+/** Puts the starting set in the first time, and never again. */
+export async function ensureCategories(): Promise<void> {
+  if ((await db.categories.count()) > 0) return;
+  const t = now();
+  await db.categories.bulkPut(
+    SEED_CATEGORIES.map((c, i) => ({
+      ...c,
+      order: i,
+      createdAt: t,
+      updatedAt: t,
+      deletedAt: null,
+    })),
+  );
+}
+
+export async function addCategory(input: { label: string; emoji?: string }): Promise<Category> {
+  const t = now();
+  const last = await db.categories.orderBy("order").last();
+  const cat: Category = {
+    id: uid(),
+    label: input.label.trim().slice(0, 30),
+    emoji: input.emoji?.trim().slice(0, 4) || "💸",
+    order: (last?.order ?? 0) + 1,
+    createdAt: t,
+    updatedAt: t,
+    deletedAt: null,
+  };
+  await db.categories.add(cat);
+  return cat;
+}
+
+export async function updateCategory(
+  id: string,
+  patch: Partial<Pick<Category, "label" | "emoji" | "order">>,
+): Promise<void> {
+  await db.categories.update(id, { ...patch, updatedAt: now() });
+}
+
+/** Expenses already filed under it keep their label, they just lose the chip. */
+export async function deleteCategory(id: string): Promise<void> {
+  const t = now();
+  await db.categories.update(id, { deletedAt: t, updatedAt: t });
+}
 
 // ---------- expenses ----------
 

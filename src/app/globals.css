@@ -268,3 +268,25 @@ textarea {
     transition: none;
   }
 }
+
+/* ---------- the money hero's water ---------- */
+@keyframes money-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.money-wave {
+  animation: money-drift 9s linear infinite;
+}
+.money-wave-back {
+  animation-duration: 14s;
+  animation-direction: reverse;
+}
+@media (prefers-reduced-motion: reduce) {
+  .money-wave {
+    animation: none;
+  }
+}

@@ -11,7 +11,7 @@ import {
   Sun,
   Wallet,
 } from "lucide-react";
-import { applyTextScale, applyTheme, getProfile } from "@/lib/repo";
+import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
@@ -94,6 +94,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (!onboarded && pathname !== "/onboarding") router.replace("/onboarding");
     if (onboarded && pathname === "/onboarding") router.replace("/");
   }, [profile, pathname, router, authLoading, userId, sync.ready, gaveUp]);
+
+  useEffect(() => {
+    void ensureCategories();
+  }, []);
 
   useEffect(() => {
     if (

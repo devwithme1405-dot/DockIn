@@ -7,6 +7,7 @@ import { countCancelled, summarize, withBase } from "./attendance";
 import type {
   AttendanceSummary,
   CalEvent,
+  Category,
   Expense,
   Friend,
   Group,
@@ -149,6 +150,14 @@ export function useShares(): Share[] | undefined {
 export function useShareState(): Map<string, ShareState> | undefined {
   return useLiveQuery(
     async () => new Map((await db.shareState.toArray()).map((s) => [s.id, s])),
+    [],
+  );
+}
+
+export function useCategories(): Category[] | undefined {
+  return useLiveQuery(
+    async () =>
+      (await db.categories.filter((c) => !c.deletedAt).toArray()).sort((a, b) => a.order - b.order),
     [],
   );
 }

@@ -1,4 +1,4 @@
-import type { AttendanceSummary, Session, Subject } from "./types";
+import type { AttendanceSummary, Session, SessionStatus, Subject } from "./types";
 
 /**
  * Attendance maths.
@@ -174,4 +174,21 @@ export function weeklyTrend(
 
 export function countCancelled(sessions: Pick<Session, "status">[]): number {
   return sessions.filter((s) => s.status === "cancelled").length;
+}
+
+/**
+ * The last few classes you actually marked, oldest first.
+ *
+ * Shown as a strip under the ring, so a run of absences is visible as a shape
+ * before you have read a single number. Unmarked, cancelled and holiday classes
+ * are skipped: a gap you never answered says nothing about how you are doing.
+ */
+export function recentForm<T extends { status: SessionStatus; date: string; start: string }>(
+  sessions: T[],
+  n = 14,
+): T[] {
+  return sessions
+    .filter((s) => s.status === "present" || s.status === "absent")
+    .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
+    .slice(-n);
 }

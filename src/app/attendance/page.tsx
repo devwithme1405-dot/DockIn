@@ -8,13 +8,15 @@ import { AttendanceSkeleton } from "@/components/Skeleton";
 import { CalendarClock, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useAttendanceStats } from "@/lib/hooks";
-import { describe, fmtPct } from "@/lib/attendance";
-import type { AttendanceState } from "@/lib/types";
+import { describe, fmtPct, recentForm } from "@/lib/attendance";
+import type { AttendanceState, SessionStatus } from "@/lib/types";
 import {
   Chip,
   EmptyState,
   ProgressBar,
   Ring,
+  STATE_BAR,
+  STATE_SOFT,
   STATE_TEXT,
   Sheet,
   SubjectTile,
@@ -32,6 +34,15 @@ function overallLine(state: AttendanceState, target: number, mustAttend: number)
   if (state === "warn") return `Right on the edge of ${target}%`;
   return `Good, you are above ${target}%`;
 }
+
+/** The strip under the ring: one bar per class, coloured by what happened. */
+const DOT_TONE: Record<SessionStatus, string> = {
+  present: "bg-safe",
+  absent: "bg-danger",
+  cancelled: "bg-muted/40",
+  holiday: "bg-muted/25",
+  unmarked: "bg-muted/25",
+};
 
 export default function AttendancePage() {
   const profile = useLiveQuery(() => getProfile(), []);
@@ -63,6 +74,11 @@ export default function AttendancePage() {
           s.subject.code.toLowerCase().includes(q),
       );
   }, [data, query, filter]);
+
+  // The last few classes, oldest first, so the strip reads left to right like a
+  // calendar rather than a feed.
+  const recent = useMemo(() => recentForm(data?.sessions ?? []), [data]);
+  const recentLabel = `Last ${recent.length} classes: ${recent.filter((r) => r.status === "present").length} present`;
 
   if (!profile || !data)
     return (
@@ -96,8 +112,23 @@ export default function AttendancePage() {
       />
       <div className="h-4" />
 
-      <section className="mx-5 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]" aria-label="Overall attendance">
-        <div className="flex items-center gap-4">
+      <section
+        className={cx(
+          "relative mx-5 overflow-hidden rounded-3xl p-4 shadow-[0_0_0_1px_var(--line)]",
+          STATE_SOFT[overall.state],
+        )}
+        aria-label="Overall attendance"
+      >
+        {/* A soft glow behind the ring in the state's own colour, so the card
+            reads before the number does. The words below still say it outright. */}
+        <span
+          aria-hidden
+          className={cx(
+            "pointer-events-none absolute -top-14 -left-10 size-44 rounded-full blur-3xl opacity-40",
+            STATE_BAR[overall.state],
+          )}
+        />
+        <div className="relative flex items-center gap-4">
           <Ring pct={overall.pct} state={overall.state} size={124} stroke={10} target={target}>
             <div>
               <p className={cx("text-[22px] font-semibold leading-none tabular-nums", STATE_TEXT[overall.state])}>
@@ -111,6 +142,16 @@ export default function AttendancePage() {
             <p className={cx("mt-0.5 text-[17px] font-semibold leading-snug", STATE_TEXT[overall.state])}>
               {overallLine(overall.state, target, overall.mustAttend)}
             </p>
+            {recent.length > 0 && (
+              <>
+                <div className="mt-3 flex gap-1" role="img" aria-label={recentLabel}>
+                  {recent.map((r) => (
+                    <span key={r.id} className={cx("h-5 w-1.5 rounded-full", DOT_TONE[r.status])} />
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-muted">Last {recent.length} classes</p>
+              </>
+            )}
           </div>
         </div>
         <dl className="mt-4 grid grid-cols-3 divide-x divide-line border-t border-line pt-3 text-center">
