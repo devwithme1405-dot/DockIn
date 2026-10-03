@@ -53,11 +53,11 @@ export default function OnboardingPage() {
         {step === 1 && (
           <>
             <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              Sign in with your college email
+              Sign in to back things up
             </h1>
             <p className="mt-3 text-muted">
-              Your classes, expenses and tasks are backed up and follow you to any phone. Only
-              Bennett students can join.
+              Your classes, expenses and tasks follow you to any phone, and you can share
+              assignments with your friends. You can skip this and do it later.
             </p>
             <div className="mt-8">
               {session ? (
@@ -99,7 +99,7 @@ export default function OnboardingPage() {
               Required attendance
             </h1>
             <p className="mt-3 text-muted">
-              Bennett asks for 75%. DockIn will tell you how many classes you can still miss
+              Most colleges ask for 75%. DockIn will tell you how many classes you can still miss
               against this number.
             </p>
             <div className="mt-8 flex flex-wrap gap-2.5">
@@ -123,7 +123,7 @@ export default function OnboardingPage() {
                 selected={start === "sample"}
                 onClick={() => setStart("sample")}
                 title="Start with a sample"
-                body="5 subjects and a Mon to Fri Bennett CSE week. Edit the times to match yours."
+                body="5 subjects and a Mon to Fri week. Edit the times to match yours."
               />
               <Choice
                 selected={start === "empty"}
@@ -204,7 +204,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
             <ArrowRight size={19} />
           </button>
           <p className="mt-3 text-center text-xs text-white/70">
-            Free for Bennett students. Your data stays on this phone for now.
+            Free. Your data stays on this phone for now.
           </p>
         </div>
       </div>

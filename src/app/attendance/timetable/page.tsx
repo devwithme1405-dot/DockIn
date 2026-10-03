@@ -50,7 +50,7 @@ export default function TimetablePage() {
         <div className="mb-6">
           <EmptyState
             title="Start with your subjects"
-            body="Add them one by one, or load a sample Bennett CSE timetable and edit it."
+            body="Add them one by one, or load a sample week and edit it."
             action={
               <Button variant="secondary" size="sm" onClick={() => seedSampleTimetable()}>
                 Load sample timetable

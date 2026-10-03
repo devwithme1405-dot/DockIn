@@ -79,8 +79,9 @@ export async function signInWithGoogle(): Promise<string | null> {
   return error ? error.message : null;
 }
 
-export const isBennettEmail = (email: string) =>
-  email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
+/** Only used to word an error better; the database decides who may sign up. */
+export const matchesAllowedDomain = (email: string) =>
+  !ALLOWED_DOMAIN || email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 
 export async function sendEmailCode(email: string): Promise<string | null> {
   const sb = getSupabase();
@@ -90,11 +91,13 @@ export async function sendEmailCode(email: string): Promise<string | null> {
     options: { shouldCreateUser: true },
   });
   if (!error) return null;
-  if (!isBennettEmail(email)) return `Use your Bennett email (@${ALLOWED_DOMAIN}).`;
+  if (!matchesAllowedDomain(email)) return `Use your college email (@${ALLOWED_DOMAIN}).`;
   if (/rate limit|too many/i.test(error.message))
     return "Too many codes requested. Wait a few minutes and try again.";
   if (/database error|P0001/i.test(error.message))
-    return `Only Bennett accounts (@${ALLOWED_DOMAIN}) can use DockIn.`;
+    return ALLOWED_DOMAIN
+      ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn.`
+      : "That email address cannot sign up.";
   if (/Failed to fetch|NetworkError/i.test(error.message)) return "No internet right now.";
   return error.message;
 }
@@ -121,7 +124,9 @@ export function readAuthRedirectError(): string | null {
   const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const desc = q.get("error_description") ?? h.get("error_description");
   if (!desc) return null;
-  if (/database error|bennett|P0001/i.test(desc))
-    return `Only Bennett accounts (@${ALLOWED_DOMAIN}) can use DockIn. Sign in with your college email.`;
+  if (/database error|P0001|cannot sign up/i.test(desc))
+    return ALLOWED_DOMAIN
+      ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn. Sign in with your college email.`
+      : "That account cannot sign up for DockIn.";
   return desc.replace(/\+/g, " ");
 }

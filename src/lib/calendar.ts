@@ -72,7 +72,7 @@ export function isWeekend(date: string): boolean {
   return d === 0 || d === 6;
 }
 
-/** Fixed-date national holidays in India. Bennett's own calendar may differ, so these are optional. */
+/** Fixed-date national holidays in India. your college's own calendar may differ, so these are optional. */
 export function nationalHolidays(year: number): { title: string; date: string }[] {
   return [
     { title: "Republic Day", date: `${year}-01-26` },

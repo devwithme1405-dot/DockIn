@@ -39,7 +39,7 @@ function MicrosoftSquares() {
 /**
  * Signing in with your college email.
  *
- * The code goes to whatever address you type, so a Bennett Outlook inbox works
+ * The code goes to whatever address you type, so a college Outlook inbox works
  * exactly like any other. One-tap buttons are drawn only for the providers this
  * Supabase project actually has switched on, so the screen never offers a button
  * that is going to fail.
@@ -91,7 +91,7 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
       {!sent ? (
         <>
           <label className={cx("mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-email">
-            Your college email
+            Your email
           </label>
           <input
             id="dockin-email"
@@ -99,7 +99,7 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
             type="email"
             inputMode="email"
             autoComplete="email"
-            placeholder={`name@${ALLOWED_DOMAIN}`}
+            placeholder={ALLOWED_DOMAIN ? `name@${ALLOWED_DOMAIN}` : "you@example.com"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && email.includes("@") && void send()}

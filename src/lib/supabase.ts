@@ -23,8 +23,14 @@ const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 /** The project address, already tidied. Used by the few calls that bypass the client. */
 export const SUPABASE_URL = URL;
 
-/** Bennett students only. The database enforces this too; this is for friendly messages. */
-export const ALLOWED_DOMAIN = process.env.NEXT_PUBLIC_ALLOWED_DOMAIN || "bennett.edu.in";
+/**
+ * Limit sign-up to one college's email domain, or leave it unset for anyone.
+ * The database is what actually enforces this (see allowed_domain() in the
+ * migrations); here it only shapes the wording and the placeholder, so the two
+ * can never disagree in a way that locks someone out of a screen they are
+ * allowed to use.
+ */
+export const ALLOWED_DOMAIN = process.env.NEXT_PUBLIC_ALLOWED_DOMAIN?.trim() || null;
 
 export const isCloudConfigured = Boolean(URL && KEY);
 

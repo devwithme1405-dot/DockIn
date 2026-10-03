@@ -227,14 +227,24 @@ end $$;
 
 reset role;
 
--- A non-Bennett address never becomes an account in the first place, so it can
--- never reach any of the above.
+-- Sign-up follows whatever allowed_domain() says, and nothing else.
 do $$
+declare
+  domain text := public.allowed_domain();
+  blocked boolean := false;
 begin
-  insert into auth.users (id, email)
-    values ('44444444-4444-4444-4444-444444444444', 'random@gmail.com');
-  raise exception 'FAILED: a non-Bennett address was allowed to sign up';
-exception when others then
-  if sqlerrm like 'FAILED%' then raise; end if;
-  raise notice 'ok: a non-Bennett address cannot sign up at all';
+  begin
+    insert into auth.users (id, email)
+      values ('44444444-4444-4444-4444-444444444444', 'random@gmail.com');
+  exception when others then
+    blocked := true;
+  end;
+
+  if domain = '' then
+    if blocked then raise exception 'FAILED: sign-up is open but an address was refused'; end if;
+    raise notice 'ok: with no domain set, any address can sign up';
+  else
+    if not blocked then raise exception 'FAILED: sign-up is limited to @% but another address got in', domain; end if;
+    raise notice 'ok: with a domain set, other addresses cannot sign up';
+  end if;
 end $$;

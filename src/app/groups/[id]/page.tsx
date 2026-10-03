@@ -237,7 +237,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                   </p>
                   <p className="truncate text-[12.5px] text-muted">
                     {[p.branch, p.year ? `Year ${p.year}` : null].filter(Boolean).join(" · ") ||
-                      "Bennett student"}
+                      "Student"}
                   </p>
                 </div>
               </div>

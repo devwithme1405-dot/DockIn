@@ -450,7 +450,7 @@ export default function ProfilePage() {
                   <span className={sync.state === "error" ? "text-danger" : "text-muted"}>{syncLine}</span>
                 </p>
                 <p className="mt-1.5 text-[12.5px] text-muted">
-                  Your data syncs to your Bennett account, so a new phone gets everything back when you sign in.
+                  Your data syncs to your account, so a new phone gets everything back when you sign in.
                 </p>
                 <Button className="mt-3" variant="secondary" size="sm" onClick={syncNow} disabled={sync.state === "syncing"}>
                   Sync now
@@ -459,7 +459,7 @@ export default function ProfilePage() {
             ) : (
               <>
                 <p className="text-sm text-muted">
-                  Sign in with your Bennett email to back up your data and use DockIn on more than one phone.
+                  Sign in to back up your data and use DockIn on more than one phone.
                 </p>
                 <Button className="mt-3" size="sm" onClick={() => setSheet("signin")}>
                   Sign in
@@ -542,7 +542,7 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        <p className="pb-2 text-center text-[12px] text-muted">DockIn · made for Bennett students</p>
+        <p className="pb-2 text-center text-[12px] text-muted">DockIn · made for students</p>
       </div>
 
       {/* sheets */}

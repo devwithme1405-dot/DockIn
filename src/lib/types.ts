@@ -12,7 +12,7 @@ export type ThemePref = "system" | "light" | "dark";
 export interface Profile {
   id: "me";
   name: string;
-  /** Required attendance, in percent (Bennett default is 75). */
+  /** Required attendance, in percent (most colleges ask for 75). */
   target: number;
   theme: ThemePref;
   onboarded: boolean;

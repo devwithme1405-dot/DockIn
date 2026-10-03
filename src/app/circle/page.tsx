@@ -148,7 +148,7 @@ function Circle() {
         <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
         <div className="px-5">
           <p className="mb-5 text-[15px] text-muted">
-            Sign in with your Bennett email to share assignments with your class and keep up with friends.
+            Sign in to share assignments with your class and keep up with friends.
           </p>
           <SignIn />
         </div>
@@ -518,7 +518,7 @@ function Circle() {
               <p className="truncate font-medium text-text">{preview.name}</p>
               <p className="truncate text-[12.5px]">
                 {[preview.branch, preview.year ? `Year ${preview.year}` : null].filter(Boolean).join(" · ") ||
-                  "Bennett student"}
+                  "Student"}
               </p>
             </div>
           </div>
@@ -596,6 +596,6 @@ function Circle() {
 
 function describe(f: Friend): string {
   return (
-    [f.branch, f.year ? `Year ${f.year}` : null, f.section].filter(Boolean).join(" · ") || "Bennett student"
+    [f.branch, f.year ? `Year ${f.year}` : null, f.section].filter(Boolean).join(" · ") || "Student"
   );
 }

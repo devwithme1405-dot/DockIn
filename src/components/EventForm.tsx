@@ -134,7 +134,7 @@ export function EventForm({
             Add national holidays for {date.slice(0, 4) || toDateStr().slice(0, 4)}
           </button>
           <p className="mt-1 text-xs text-muted">
-            Republic Day, Independence Day, Gandhi Jayanti and Christmas. Add Bennett&apos;s own
+            Republic Day, Independence Day, Gandhi Jayanti and Christmas. Add your college&apos;s own
             breaks yourself from the university calendar.
           </p>
         </div>

@@ -112,3 +112,19 @@ Two things matter for the code to land in an Outlook inbox rather than Junk:
 
 While testing on your own, the built-in sender is usually enough for your own
 address.
+
+
+## 7. Who may sign up
+
+`supabase/migrations/0004_open_signup.sql` opens sign-up to any email address.
+
+The lock is not gone, only switched off: `allowed_domain()` returning an empty
+string means "no restriction". Put a domain back into that function and the old
+behaviour returns, with the `allowed_emails` table still working as a per-address
+exception list. `NEXT_PUBLIC_ALLOWED_DOMAIN` only changes the wording and the
+placeholder in the app — the database is what decides.
+
+Worth being clear about why this was the right way round. Locking sign-up to one
+college sounds safer, but it protected nothing: people find each other by code,
+and row level security decides what anyone can read either way. All the lock did
+was stop the app being shown to anybody without a college account.
