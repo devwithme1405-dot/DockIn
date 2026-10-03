@@ -69,9 +69,14 @@ export function PayLinkCard() {
         : onAndroid
           ? "Open this page inside the DockIn app, not the browser."
           : "This only works in the Android app.",
+      ...(app
+        ? {}
+        : onAndroid
+          ? { action: { label: "Get the app", href: "/app" } }
+          : {}),
       action:
         app && !app.pay
-          ? { label: "Get the latest app", href: "https://github.com/devwithme1405-dot/DockIn/releases/latest" }
+          ? { label: "Get the latest app", href: "/app" }
           : undefined,
     },
     {
@@ -80,7 +85,7 @@ export function PayLinkCard() {
       body:
         app?.notif === true
           ? "Granted. DockIn can see what your payment apps post."
-          : "Android only grants this on its own screen — no app can give it to itself.",
+          : "Android only grants this on its own screen. If the switch there is greyed out, open Settings → Apps → DockIn → the ⋮ menu → Allow restricted settings first: Android hides this from apps installed from a file until you say so.",
       action: onAndroid && app?.pay && app.notif !== true
         ? { label: "Open that screen", href: "dockin://notifications" }
         : undefined,

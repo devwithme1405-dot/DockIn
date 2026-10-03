@@ -190,6 +190,7 @@ const SCREENS = [
   { path: "/calendar", name: "calendar", expect: "" },
   { path: "/add", name: "quick-add", expect: "" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
+  { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
 ];
 
 const problems = [];

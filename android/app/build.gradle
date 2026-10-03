@@ -3,6 +3,13 @@ plugins {
 }
 
 def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+
+// Android refuses to install a version number lower than the one already on the
+// phone, and says almost nothing about why. A build counter can go backwards —
+// a workflow renamed or recreated starts again at one — so the number that must
+// only ever rise is time itself: minutes since the start of 2020. The readable
+// version stays the build number, which is what a person quotes back to you.
+def minutesSince2020 = (long) ((System.currentTimeMillis() - 1577836800000L) / 60000L)
 def keystorePath = System.getenv("DOCKIN_KEYSTORE")
 
 android {
@@ -13,7 +20,7 @@ android {
         applicationId 'com.dockin.app'
         minSdk 26
         targetSdk 35
-        versionCode runNumber
+        versionCode minutesSince2020.intValue()
         versionName "1.0.${runNumber}"
     }
 
@@ -25,6 +32,14 @@ android {
                 keyAlias System.getenv("DOCKIN_KEY_ALIAS") ?: "dockin"
                 keyPassword System.getenv("DOCKIN_KEY_PASSWORD")
             }
+            // Sign it every way there is. Android itself is happy with v2 alone
+            // at this minimum version, but the installers some phones ship
+            // instead — MIUI's and ColorOS's among them — do their own checks,
+            // and a missing signature block is one of the things they refuse
+            // over while saying only "app can't be installed".
+            v1SigningEnabled true
+            v2SigningEnabled true
+            enableV3Signing true
         }
     }
 
