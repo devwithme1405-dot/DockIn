@@ -4,13 +4,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import {
-  CalendarCheck,
-  CalendarDays,
-  ListChecks,
-  Sun,
-  Wallet,
-} from "lucide-react";
+import { CalendarCheck, ListChecks, Sun, Users, Wallet } from "lucide-react";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
@@ -48,7 +42,7 @@ const TABS = [
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/circle", label: "Friends", icon: Users },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {

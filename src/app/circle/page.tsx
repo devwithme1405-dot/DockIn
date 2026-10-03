@@ -35,7 +35,7 @@ import {
   inputCls,
   useToast,
 } from "@/components/ui";
-import { BackHeader } from "@/components/PageHeader";
+import { PageHeader } from "@/components/PageHeader";
 import { QrCode } from "@/components/QrCode";
 import { SignIn } from "@/components/SignIn";
 import { ListSkeleton } from "@/components/Skeleton";
@@ -54,7 +54,7 @@ export default function CirclePage() {
     <Suspense
       fallback={
         <>
-          <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
+          <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
           <ListSkeleton />
         </>
       }
@@ -120,7 +120,7 @@ function Circle() {
   if (!isCloudConfigured) {
     return (
       <>
-        <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
+        <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <div className="px-5">
           <EmptyState
             flush
@@ -136,7 +136,7 @@ function Circle() {
   if (authLoading) {
     return (
       <>
-        <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
+        <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <ListSkeleton n={3} />
       </>
     );
@@ -145,7 +145,7 @@ function Circle() {
   if (!signedIn) {
     return (
       <>
-        <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
+        <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <div className="px-5">
           <p className="mb-5 text-[15px] text-muted">
             Sign in to share assignments with your class and keep up with friends.
@@ -272,7 +272,7 @@ function Circle() {
 
   return (
     <>
-      <BackHeader href="/settings" backLabel="Profile" title="Friends and groups" hideLargeTitle />
+      <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
 
       <div className="px-5">
         <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1" role="tablist">

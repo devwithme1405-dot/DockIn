@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PageHeader } from "@/components/PageHeader";
+import { BackHeader } from "@/components/PageHeader";
 import { CalendarSkeleton } from "@/components/Skeleton";
 import { CalendarPlus, ChevronLeft, ChevronRight, Plane, Star } from "lucide-react";
 import { useAllSessions, useEvents, useSlots, useSubjects, useTasks } from "@/lib/hooks";
@@ -63,8 +63,20 @@ export default function CalendarPage() {
   if (!tasks || !events || !sessions || !slots || !subjects)
     return (
       <>
-        <PageHeader title="Calendar" subtitle="Classes, deadlines, exams and holidays" />
-        <div className="h-3" />
+        <BackHeader
+        href="/attendance"
+        backLabel="Attendance"
+        title="Calendar"
+        right={
+          <button
+            onClick={() => setSheet("event")}
+            aria-label="Add holiday or event"
+            className="grid size-10 place-items-center rounded-full text-muted"
+          >
+            <CalendarPlus size={20} />
+          </button>
+        }
+      />
         <CalendarSkeleton />
       </>
     );
@@ -91,20 +103,20 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader
+      <BackHeader
+        href="/attendance"
+        backLabel="Attendance"
         title="Calendar"
-        subtitle="Classes, deadlines, exams and holidays"
         right={
           <button
             onClick={() => setSheet("event")}
             aria-label="Add holiday or event"
-            className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
+            className="grid size-10 place-items-center rounded-full text-muted"
           >
             <CalendarPlus size={20} />
           </button>
         }
       />
-      <div className="h-3" />
 
       <section className="mx-5 rounded-3xl bg-surface p-3 shadow-[0_0_0_1px_var(--line)]" aria-label="Month">
         <div className="mb-2 flex items-center justify-between px-1">

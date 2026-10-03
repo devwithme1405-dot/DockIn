@@ -66,7 +66,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   if (!groups || !shares) {
     return (
       <>
-        <BackHeader href="/circle?tab=groups" backLabel="Groups" title="Group" hideLargeTitle />
+        <BackHeader href="/circle?tab=groups" backLabel="Friends" title="Group" hideLargeTitle />
         <ListSkeleton n={3} />
       </>
     );
@@ -75,7 +75,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   if (!group) {
     return (
       <>
-        <BackHeader href="/circle?tab=groups" backLabel="Groups" title="Group" hideLargeTitle />
+        <BackHeader href="/circle?tab=groups" backLabel="Friends" title="Group" hideLargeTitle />
         <EmptyState
           title="You are not in this group"
           body="It may have been deleted, or you left it on another phone."
@@ -126,7 +126,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
   return (
     <>
-      <BackHeader href="/circle?tab=groups" backLabel="Groups" title={group.name} hideLargeTitle />
+      <BackHeader href="/circle?tab=groups" backLabel="Friends" title={group.name} hideLargeTitle />
 
       <div className="px-5">
         <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">

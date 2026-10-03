@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { AttendanceSkeleton } from "@/components/Skeleton";
-import { CalendarClock, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronRight, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useAttendanceStats } from "@/lib/hooks";
 import { describe, fmtPct, recentForm } from "@/lib/attendance";
@@ -101,6 +101,14 @@ export default function AttendancePage() {
         title="Attendance"
         subtitle="Track your classes and stay above target"
         right={
+          <>
+          <Link
+            href="/calendar"
+            aria-label="Calendar and holidays"
+            className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
+          >
+            <CalendarDays size={20} />
+          </Link>
           <Link
             href="/attendance/timetable"
             aria-label="Timetable"
@@ -108,6 +116,7 @@ export default function AttendancePage() {
           >
             <CalendarClock size={20} />
           </Link>
+          </>
         }
       />
       <div className="h-4" />
