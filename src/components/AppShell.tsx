@@ -98,7 +98,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       process.env.NODE_ENV === "production" &&
       "serviceWorker" in navigator
     ) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // The build stamp is part of the address on purpose: a new deploy is a
+      // new worker, and a new worker drops the shell the old one cached.
+      const build = process.env.NEXT_PUBLIC_BUILD ?? "1";
+      navigator.serviceWorker.register(`/sw.js?v=${build}`).catch(() => {});
     } else if ("serviceWorker" in navigator) {
       // Dev mode: a worker left over from an earlier production run on this
       // address would keep serving old pages, so remove it and its caches.
