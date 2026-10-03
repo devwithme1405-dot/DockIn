@@ -72,6 +72,12 @@ export default function GetTheApp() {
         </section>
 
         <p className="mt-8 text-center text-[13px] text-muted">
+          <Link href="/privacy" className="font-medium text-accent">
+            What DockIn can see
+          </Link>
+        </p>
+
+        <p className="mt-3 text-center text-[13px] text-muted">
           Already have it?{" "}
           <Link href="/" className="font-medium text-accent">
             Open DockIn

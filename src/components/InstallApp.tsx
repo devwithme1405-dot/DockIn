@@ -113,13 +113,21 @@ export function InstallApp({ apkHref }: { apkHref: string }) {
       >
         <Download size={18} /> Download the Android file
       </a>
-      <p className="mt-2 flex gap-2 text-[12.5px] text-muted">
-        <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warn" />
-        <span>
-          Everything else works without this. When it asks, allow your browser to install apps, and
-          tap through Play Protect — it does not recognise a small college app.
-        </span>
-      </p>
+      <div className="mt-2 rounded-2xl bg-warn-soft p-3.5">
+        <p className="flex gap-2 text-[12.5px] text-warn">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0" />
+          <span>
+            <b className="font-semibold">Play Protect will block this one.</b> Google blocks any
+            app installed from a file that can read notifications — which is exactly the permission
+            payment detection needs. It is a rule about the permission, not about this app.
+          </span>
+        </p>
+        <p className="mt-2 pl-6 text-[12.5px] text-muted">
+          To get past it: Play Store → your picture → <b className="text-text">Play Protect</b> →
+          the gear → turn off <b className="text-text">Scan apps with Play Protect</b>, install, then
+          turn it back on. Everything except payment detection works without any of this.
+        </p>
+      </div>
     </>
   );
 }
