@@ -9,7 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

@@ -75,12 +75,23 @@ export function AppShell({ children }: { children: ReactNode }) {
     return startSync(sb, userId);
   }, [userId]);
   useEffect(() => {
-    // Never keep someone waiting on a slow network: open the app after a few seconds.
+    // Never keep someone waiting on a slow network: open the app regardless
+    // after a few seconds.
     if (!userId) return;
-    const t = setTimeout(() => setGaveUp(true), 6000);
+    const t = setTimeout(() => setGaveUp(true), 5000);
     return () => clearTimeout(t);
   }, [userId]);
-  const restoring = authLoading || (!!userId && !sync.ready && !gaveUp);
+
+  /**
+   * Hold the launch screen only when there is genuinely nothing to show.
+   *
+   * Waiting for the first sync makes sense on a phone that has just signed in
+   * and has no data of its own — showing an empty app and filling it in a
+   * second later would look like everything had been lost. On every other
+   * launch the data is already here, and waiting on the network to confirm what
+   * is already on the screen is how an app on a bad signal feels broken.
+   */
+  const restoring = authLoading || (!!userId && profile === null && !sync.ready && !gaveUp);
 
   useEffect(() => {
     if (profile === undefined) return;

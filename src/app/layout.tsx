@@ -40,7 +40,7 @@ const themeScript = `(function(){try{var p=localStorage.getItem('dockin-theme')|
  * so a genuinely missing file can never become a loop.
  */
 const healScript = `(function(){
-var CHUNK=/ChunkLoadError|Loading chunk|Loading CSS chunk|dynamically imported module|Importing a module script failed|error loading dynamically imported/i;
+var CHUNK=/ChunkLoadError|Loading chunk|Loading CSS chunk|Failed to load chunk|dynamically imported module|Importing a module script failed|error loading dynamically imported/i;
 function heal(){
   // Once per ten minutes, and never twice in a row. A page whose scripts are
   // genuinely gone would otherwise reload itself forever, which is far worse
