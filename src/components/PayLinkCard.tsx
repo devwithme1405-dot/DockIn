@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Radio, Smartphone, Trash2 } from "lucide-react";
 import { PaymentError, linkDevice, linkedDevices, unlinkDevice } from "@/lib/payments";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase";
-import { Button, ConfirmSheet, cx, useToast } from "./ui";
+import { ConfirmSheet, cx, useToast } from "./ui";
 
 /**
  * Letting the Android app watch payment notifications.
@@ -24,8 +24,10 @@ export function PayLinkCard() {
   const [devices, setDevices] = useState<
     { id: string; label: string | null; lastSeen: string | null }[] | null
   >(null);
-  const [busy, setBusy] = useState(false);
   const [dropping, setDropping] = useState<string | null>(null);
+  // The token is fetched before anyone taps, on purpose — see below.
+  const [token, setToken] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -39,29 +41,45 @@ export function PayLinkCard() {
     void Promise.resolve().then(load);
   }, [load]);
 
-  // The app registers this scheme; in a browser nothing happens, which is the
-  // honest outcome, since there is nothing to link.
   const android = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 
-  async function connect() {
-    setBusy(true);
-    try {
-      const token = await linkDevice("This phone");
-      // The app is handed the project address and public key along with the
-      // token, so nothing about this Supabase project is baked into the APK.
-      const q = new URLSearchParams({ u: SUPABASE_URL ?? "", k: SUPABASE_KEY ?? "" });
-      window.location.href = `dockin://pay/${token}?${q}`;
-      // If the app is not installed the link goes nowhere, so say what to do
-      // rather than leaving a spinner behind.
-      setTimeout(() => {
-        void load();
-        toast.show("If nothing opened, install the DockIn app first");
-      }, 2500);
-    } catch (e) {
-      toast.show(e instanceof PaymentError ? e.message : "Could not link this phone.");
-    }
-    setBusy(false);
-  }
+  /**
+   * The token is minted when this card appears, not when the button is pressed.
+   *
+   * Opening another app is only allowed while the browser still considers the
+   * tap to be happening. Asking the server for a token first spends that tap on
+   * a network round trip, and by the time the answer arrives Chrome quietly
+   * refuses to open anything — the button appears to do nothing at all. Having
+   * the token in hand beforehand makes the tap an ordinary link, which is also
+   * why it is a real link below rather than a button that navigates.
+   *
+   * Minting one that is never used costs nothing: re-linking replaces it.
+   */
+  useEffect(() => {
+    void Promise.resolve().then(async () => {
+      try {
+        setToken(await linkDevice("This phone"));
+      } catch (e) {
+        setProblem(e instanceof PaymentError ? e.message : "Could not prepare the link.");
+      }
+    });
+  }, []);
+
+  // The app is handed the project address and public key along with the token,
+  // so nothing about this Supabase project is baked into the APK. The intent:
+  // form is what Android understands best: it names the app outright, and says
+  // where to send someone who does not have it yet.
+  const deepLink = (() => {
+    if (!token) return null;
+    const q = new URLSearchParams({ u: SUPABASE_URL ?? "", k: SUPABASE_KEY ?? "" });
+    const fallback = encodeURIComponent(
+      "https://github.com/devwithme1405-dot/DockIn/releases/latest",
+    );
+    return (
+      `intent://pay/${token}?${q}#Intent;scheme=dockin;package=com.dockin.app;` +
+      `S.browser_fallback_url=${fallback};end`
+    );
+  })();
 
   async function drop(id: string) {
     try {
@@ -126,20 +144,26 @@ export function PayLinkCard() {
         </ul>
       )}
 
-      <Button
-        className={cx("mt-4 w-full", linked.length > 0 && "opacity-90")}
-        onClick={() => void connect()}
-        disabled={busy}
+      <a
+        href={deepLink ?? undefined}
+        aria-disabled={!deepLink}
+        onClick={() => window.setTimeout(load, 3000)}
+        className={cx(
+          "mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-full",
+          "bg-accent text-[15px] font-medium text-on-accent",
+          !deepLink && "pointer-events-none opacity-60",
+        )}
       >
-        {busy ? <Loader2 size={17} className="animate-spin" /> : <Check size={17} />}
+        {deepLink ? <Check size={17} /> : <Loader2 size={17} className="animate-spin" />}
         {linked.length > 0 ? "Link this phone again" : "Link this phone"}
-      </Button>
+      </a>
 
-      {!android && (
-        <p className="mt-2 text-center text-[12.5px] text-muted">
-          Only the Android app can do this. On a computer there is nothing to link.
-        </p>
-      )}
+      <p className="mt-2 text-center text-[12.5px] text-muted">
+        {!android
+          ? "Only the Android app can do this. On a computer there is nothing to link."
+          : "Android will ask you to switch DockIn on in its notification-access list."}
+      </p>
+      {problem && <p className="mt-2 text-center text-[13px] text-danger">{problem}</p>}
 
       <ConfirmSheet
         open={!!dropping}
