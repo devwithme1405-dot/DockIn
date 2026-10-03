@@ -84,6 +84,45 @@ interface Edit {
 }
 
 /**
+ * How a name is looked for.
+ *
+ * Case is ignored, because the same name is set in capitals on a cover page and
+ * in normal case in the declaration below it. Spacing is forgiven too: a name
+ * typed with two spaces, or holding the non-breaking space Word inserts to stop
+ * a name wrapping, is the same name, and a reader whose copy kept the author's
+ * name because of an invisible character would never work out why.
+ */
+export function matcher(find: string): RegExp | null {
+  const words = find.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return new RegExp(escaped.join("\\s+"), "gi");
+}
+
+/** How many times a name appears in some text, by the same rules as the rewrite. */
+export function countIn(text: string, find: string): number {
+  const re = matcher(find);
+  return re ? (text.match(re)?.length ?? 0) : 0;
+}
+
+/**
+ * Enrolment numbers in a document, commonest first.
+ *
+ * A roll number is the one thing in an assignment with a shape: letters, the
+ * year, the branch, digits. Finding it beats asking for it — the author only has
+ * to recognise it rather than type it, and a typo cannot slip through.
+ */
+export function guessRolls(text: string): string[] {
+  const tally = new Map<string, number>();
+  for (const m of text.matchAll(/\b(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z0-9]{6,16}\b/gi)) {
+    const token = m[0].toUpperCase();
+    // A word that is all digits or all letters is a year or an acronym, not a roll.
+    tally.set(token, (tally.get(token) ?? 0) + 1);
+  }
+  return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+}
+
+/**
  * Replace every occurrence of each swap inside one paragraph's worth of XML.
  * Matching ignores case, because a name set in a heading is often typed in
  * capitals; the replacement always goes in exactly as given.
@@ -120,17 +159,15 @@ function rewriteParagraph(xml: string, swaps: Swap[]): string {
     for (let k = at; k < raw.length; k++) push(k, k + 1, raw[k]);
   });
 
-  const hay = plain.toLowerCase();
   type Hit = { at: number; len: number; replace: string };
   const hits: Hit[] = [];
 
   for (const swap of swaps) {
-    const needle = swap.find.toLowerCase();
-    if (!needle) continue;
-    let at = hay.indexOf(needle);
-    while (at >= 0) {
-      hits.push({ at, len: needle.length, replace: swap.replace });
-      at = hay.indexOf(needle, at + needle.length);
+    const re = matcher(swap.find);
+    if (!re) continue;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(plain))) {
+      hits.push({ at: m.index, len: m[0].length, replace: swap.replace });
     }
   }
   if (hits.length === 0) return xml;

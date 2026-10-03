@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   AlertTriangle,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { ShareFile } from "@/lib/types";
 import { MAX_FILE_BYTES, SocialError, copyAssignment, fileKind } from "@/lib/social";
-import { readDocxText } from "@/lib/docx";
+import { countIn, guessRolls, readDocxText } from "@/lib/docx";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { Button, Field, Sheet, cx, inputCls, useToast } from "./ui";
 
@@ -56,22 +56,22 @@ async function handOver(blob: Blob, name: string): Promise<void> {
 export interface Attachment {
   file: File;
   kind: "docx" | "pdf";
-  /** The author's name and roll as they appear inside the document. */
+  /** The author's OWN name and roll, exactly as they are written inside the file. */
   name: string;
   roll: string;
-  /** Whether those two strings were actually found in the text. */
-  found: { name: boolean; roll: boolean } | null;
+  /** Everything the document says, so the two fields can be checked as they are typed. */
+  text: string | null;
 }
 
 /**
- * The file picker on the share sheet, plus the two strings that make the whole
- * feature work.
+ * The file picker on the share sheet, and the two strings the whole feature
+ * hangs on.
  *
- * Everything hangs on replacing the right text, and only the author knows what
- * that text is — so rather than guessing, the app prefills from their profile,
- * then actually reads the document and says whether it found it. A mismatch is
- * caught here, by the one person who can fix it, instead of silently reaching
- * thirty classmates.
+ * These two fields are the author's own details — what is written in the
+ * document today — not the reader's. That is easy to read the wrong way round,
+ * so the app does not rely on the labels: it reads the document, fills both
+ * fields in from what it finds, and says how many times each one appears. In
+ * the normal case the author changes nothing and just sees that it is right.
  */
 export function AttachPicker({
   value,
@@ -92,58 +92,29 @@ export function AttachPicker({
     if (!kind) return setProblem("Attach a Word file (.docx) or a PDF.");
     if (file.size > MAX_FILE_BYTES) return setProblem("That file is over 10 MB.");
 
-    const name = profile?.name?.trim() ?? "";
-    const roll = profile?.roll?.trim() ?? "";
-    onChange({ file, kind, name, roll, found: null });
+    const myName = profile?.name?.trim() ?? "";
+    const myRoll = profile?.roll?.trim() ?? "";
+    if (kind !== "docx") {
+      onChange({ file, kind, name: myName, roll: myRoll, text: null });
+      return;
+    }
 
-    if (kind !== "docx") return;
+    onChange({ file, kind, name: myName, roll: myRoll, text: null });
     setReading(true);
     try {
-      const text = (await readDocxText(file)).toLowerCase();
-      onChange({
-        file,
-        kind,
-        name,
-        roll,
-        found: {
-          name: !!name && text.includes(name.toLowerCase()),
-          roll: !!roll && text.includes(roll.toLowerCase()),
-        },
-      });
+      const text = await readDocxText(file);
+      // Work out what is really in there rather than trusting the profile: the
+      // name on an assignment is often fuller than the one in Settings, and the
+      // roll is in the document and usually in its filename too.
+      const rolls = guessRolls(`${text}\n${file.name}`);
+      const roll = myRoll && countIn(text, myRoll) > 0 ? myRoll : (rolls[0] ?? myRoll);
+      onChange({ file, kind, name: myName, roll, text });
     } catch {
       setProblem("That Word file could not be read. Try saving it again as .docx.");
       onChange(null);
     }
     setReading(false);
   }
-
-  // Re-check against the document whenever the author corrects either string.
-  const text = useRef<string | null>(null);
-  useEffect(() => {
-    if (!value || value.kind !== "docx") return;
-    let alive = true;
-    void (async () => {
-      if (text.current === null) {
-        try {
-          text.current = (await readDocxText(value.file)).toLowerCase();
-        } catch {
-          return;
-        }
-      }
-      const body = text.current;
-      const found = {
-        name: !!value.name.trim() && body.includes(value.name.trim().toLowerCase()),
-        roll: !!value.roll.trim() && body.includes(value.roll.trim().toLowerCase()),
-      };
-      if (!alive) return;
-      if (found.name !== value.found?.name || found.roll !== value.found?.roll) {
-        onChange({ ...value, found });
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [value, onChange]);
 
   if (!value) {
     return (
@@ -174,7 +145,16 @@ export function AttachPicker({
     );
   }
 
-  const swapsReady = value.kind === "docx" && !!value.name.trim();
+  const text = value.text;
+  const hits = {
+    name: text ? countIn(text, value.name) : 0,
+    roll: text ? countIn(text, value.roll) : 0,
+  };
+  // Anything in the document that looks like a roll number and is not the one
+  // already chosen — one tap to correct it.
+  const otherRolls = (text ? guessRolls(`${text}\n${value.file.name}`) : [])
+    .filter((r) => r.toLowerCase() !== value.roll.trim().toLowerCase())
+    .slice(0, 3);
 
   return (
     <div className="mb-4 rounded-2xl bg-surface-2 p-3.5">
@@ -206,32 +186,50 @@ export function AttachPicker({
           </span>
         </p>
       ) : (
-        <div className="mt-3">
-          <p className="mb-2 text-[12.5px] text-muted">
-            Swapped for each person&rsquo;s own details when they take a copy.
+        <div className="mt-4">
+          <p className="text-[13px] font-medium">Your details inside this file</p>
+          <p className="mt-0.5 mb-2.5 text-[12.5px] text-muted">
+            Each person&rsquo;s copy gets their own name and roll in place of these.
           </p>
-          <div className="grid grid-cols-2 gap-2.5">
-            <Field label="Your name in the file" compact>
-              <input
-                className={inputCls}
-                value={value.name}
-                onChange={(e) => onChange({ ...value, name: e.target.value })}
-                placeholder="Sachin Kumar"
-              />
-            </Field>
-            <Field label="Your roll in the file" compact>
-              <input
-                className={inputCls}
-                value={value.roll}
-                onChange={(e) => onChange({ ...value, roll: e.target.value })}
-                placeholder="E23CSEU0155"
-              />
-            </Field>
-          </div>
-          {value.found && <FoundNote found={value.found} hasRoll={!!value.roll.trim()} />}
-          {!swapsReady && (
-            <p className="text-[12.5px] text-muted">
-              Leave these blank and everyone gets your file unchanged.
+
+          <Field label="Your name, as written in the document" compact>
+            <input
+              className={inputCls}
+              value={value.name}
+              onChange={(e) => onChange({ ...value, name: e.target.value })}
+              placeholder="Sachin Kumar"
+            />
+          </Field>
+          {text && <Hits found={hits.name} what="name" typed={value.name} />}
+
+          <Field label="Your roll number, as written in the document" compact>
+            <input
+              className={inputCls}
+              value={value.roll}
+              onChange={(e) => onChange({ ...value, roll: e.target.value })}
+              placeholder="E23CSEU0155"
+            />
+          </Field>
+          {text && <Hits found={hits.roll} what="roll number" typed={value.roll} />}
+
+          {otherRolls.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-[12px] text-muted">Also in the file:</span>
+              {otherRolls.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => onChange({ ...value, roll: r })}
+                  className="rounded-full bg-surface px-2.5 py-1 font-mono text-[12px] font-medium"
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!value.name.trim() && !value.roll.trim() && (
+            <p className="mt-1 text-[12.5px] text-muted">
+              Leave both blank and everyone gets your file exactly as it is.
             </p>
           )}
         </div>
@@ -241,25 +239,28 @@ export function AttachPicker({
   );
 }
 
-/** Says in words what was found, because a tick on its own is not an answer. */
-function FoundNote({ found, hasRoll }: { found: { name: boolean; roll: boolean }; hasRoll: boolean }) {
-  const missing = [!found.name && "name", hasRoll && !found.roll && "roll number"].filter(
-    Boolean,
-  ) as string[];
-
-  if (missing.length === 0) {
+/**
+ * How many times this will actually be replaced.
+ *
+ * A count rather than a tick: "found 4 times" tells the author the swap will
+ * reach the cover page and the declaration, and a quiet "1" on a name they
+ * expected everywhere is worth noticing too.
+ */
+function Hits({ found, what, typed }: { found: number; what: string; typed: string }) {
+  if (!typed.trim()) return null;
+  if (found > 0) {
     return (
-      <p className="flex items-center gap-1.5 text-[12.5px] text-safe">
-        <Check size={13} /> Found in the document, so the swap will work.
+      <p className="mb-2 flex items-center gap-1.5 text-[12.5px] text-safe">
+        <Check size={13} /> Found {found} {found === 1 ? "time" : "times"} — will be swapped.
       </p>
     );
   }
   return (
-    <p className="flex gap-1.5 text-[12.5px] text-warn">
+    <p className="mb-2 flex gap-1.5 text-[12.5px] text-warn">
       <AlertTriangle size={13} className="mt-0.5 shrink-0" />
       <span>
-        Could not find your {missing.join(" or ")} in the document — check the spelling, or it will
-        stay as it is in everyone&rsquo;s copy.
+        This {what} is not in the document, so nothing will change. Put in the {what} exactly as it
+        appears inside the file.
       </span>
     </p>
   );

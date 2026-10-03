@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { readDocxText, renameFile, replaceInDocx, replaceInXml } from "@/lib/docx";
+import { countIn, guessRolls, readDocxText, renameFile, replaceInDocx, replaceInXml } from "@/lib/docx";
 
 const SWAPS = [
   { find: "Sachin Kumar", replace: "Harshit Jain" },
@@ -165,5 +165,30 @@ describe("renaming the file", () => {
 
   it("copes with a name that has regex characters in it", () => {
     expect(renameFile("a (b).docx", [{ find: "(b)", replace: "c" }])).toBe("a c.docx");
+  });
+});
+
+describe("finding the name the way a document really holds it", () => {
+  it("forgives extra and non-breaking spaces", () => {
+    const xml = para(`<w:t>SACHIN  KUMAR</w:t>`);
+    expect(replaceInXml(xml, SWAPS).replace(/<[^>]+>/g, "")).toBe("Harshit Jain");
+    expect(countIn("Sachin  Kumar and Sachin Kumar", "Sachin Kumar")).toBe(2);
+  });
+
+  it("counts what it would replace, so the author sees it before posting", () => {
+    expect(countIn("Sachin Kumar wrote this. — Sachin Kumar", "Sachin Kumar")).toBe(2);
+    expect(countIn("nothing here", "Sachin Kumar")).toBe(0);
+    expect(countIn("anything", "   ")).toBe(0);
+  });
+
+  it("picks the enrolment number out of the document itself", () => {
+    const rolls = guessRolls("Name: Sachin Kumar\nRoll No: E23CSEU0155\nDue 2026\nDBMS");
+    expect(rolls[0]).toBe("E23CSEU0155");
+    // a plain year or a plain word is not a roll number
+    expect(guessRolls("submitted in 2026 for DBMS")).toEqual([]);
+  });
+
+  it("offers the roll that appears most often first", () => {
+    expect(guessRolls("E23CSEU0155 ... AB12CD34 ... E23CSEU0155")[0]).toBe("E23CSEU0155");
   });
 });
