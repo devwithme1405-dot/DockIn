@@ -30,6 +30,8 @@ export interface Profile {
   section?: string;
   /** One line a friend sees on your profile. */
   bio?: string;
+  /** The shape of a college day; see lib/periods.ts. */
+  grid?: { start: string; length: number; gap: number; count: number };
   createdAt: number;
   updatedAt: number;
 }
@@ -55,6 +57,13 @@ export interface Slot extends Base {
   room?: string;
   /** How many attendance units this class is worth (default 1). */
   weight: number;
+  /**
+   * When a timetable is revised mid-semester the old one still has to explain
+   * the attendance already recorded against it, so a slot can start and stop on
+   * a date instead of being edited in place. Null on both means "always".
+   */
+  from?: string | null;
+  until?: string | null;
 }
 
 export type SessionStatus =

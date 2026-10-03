@@ -64,7 +64,16 @@ export function buildDayMap(
 /** Slots that happen on a given date (used for days with no sessions yet). */
 export function slotsOn(slots: Slot[], date: string): Slot[] {
   const wd = weekdayOf(date);
-  return slots.filter((s) => s.weekday === wd).sort((a, b) => a.start.localeCompare(b.start));
+  return slots
+    .filter((s) => s.weekday === wd && applies(s, date))
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** A slot only belongs to the days its validity window covers. */
+function applies(slot: Pick<Slot, "from" | "until">, date: string): boolean {
+  if (slot.from && date < slot.from) return false;
+  if (slot.until && date > slot.until) return false;
+  return true;
 }
 
 export function isWeekend(date: string): boolean {

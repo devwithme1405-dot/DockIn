@@ -27,7 +27,7 @@ import { SkyScene } from "@/components/SkyScene";
 import { StickyBar } from "@/components/PageHeader";
 import { Logo } from "@/components/Logo";
 import { TodaySkeleton } from "@/components/Skeleton";
-import { ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
+import { appliesOn, ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
 import { useAttendanceStats, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
 import { fmtMoney, monthKey, sum } from "@/lib/money";
@@ -465,7 +465,7 @@ function DayHero({
       const d = addDays(today, i);
       const wd = weekdayOf(d);
       const first = slots
-        .filter((s) => s.weekday === wd)
+        .filter((s) => s.weekday === wd && appliesOn(s, d))
         .sort((a, b) => a.start.localeCompare(b.start))[0];
       if (first) {
         const sub1 = subjectById.get(first.subjectId);

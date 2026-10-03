@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { addDays, fromDateStr, weekdayOf } from "./dates";
+import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
 import type {
   CalEvent,
   ClassKind,
@@ -61,6 +61,7 @@ export async function saveProfile(
       | "budget"
       | "avatar"
       | "textScale"
+      | "grid"
       | "branch"
       | "year"
       | "section"
@@ -178,6 +179,8 @@ export async function addSlot(input: {
   kind: ClassKind;
   weight?: number;
   room?: string;
+  from?: string | null;
+  until?: string | null;
 }): Promise<Slot> {
   const t = now();
   const slot: Slot = {
@@ -189,6 +192,8 @@ export async function addSlot(input: {
     kind: input.kind,
     room: input.room,
     weight: input.weight ?? 1,
+    from: input.from ?? null,
+    until: input.until ?? null,
     createdAt: t,
     updatedAt: t,
     deletedAt: null,
@@ -208,12 +213,19 @@ export async function deleteSlot(id: string): Promise<void> {
  * Make sure a Session row exists for every class scheduled on `date`.
  * Safe to call repeatedly: ids are deterministic, existing rows are untouched.
  */
+/** Whether a slot is part of the timetable on a given date. */
+export function appliesOn(slot: Pick<Slot, "from" | "until">, date: string): boolean {
+  if (slot.from && date < slot.from) return false;
+  if (slot.until && date > slot.until) return false;
+  return true;
+}
+
 export async function ensureSessionsForDate(date: string): Promise<void> {
   const weekday = weekdayOf(date);
   const slots = await db.slots
     .where("weekday")
     .equals(weekday)
-    .filter((s) => !s.deletedAt)
+    .filter((s) => !s.deletedAt && appliesOn(s, date))
     .toArray();
   if (slots.length === 0) return;
 
@@ -466,6 +478,141 @@ const SAMPLE_SLOTS: SampleSlot[] = [
   ["DBMS", 5, "09:25", "10:25", "lecture"],
   ["FSD", 5, "13:45", "14:45", "lecture"],
 ];
+
+/**
+ * Changing a class that already has attendance against it.
+ *
+ * Editing the slot in place would quietly re-explain what was recorded: mark
+ * yourself present for a 9:25 lecture, move it to 1:45, and the old record now
+ * claims you attended a class that never ran at that hour. So once a slot has
+ * been marked even once, a change ends it yesterday and starts a new one today.
+ * Before that it is just a typo being fixed, and it edits in place.
+ */
+export async function reviseSlot(
+  id: string,
+  patch: Partial<Pick<Slot, "weekday" | "start" | "end" | "kind" | "room" | "weight" | "subjectId">>,
+): Promise<void> {
+  const slot = await db.slots.get(id);
+  if (!slot || slot.deletedAt) return;
+  const t = now();
+  const today = toDateStr();
+
+  const marked = await db.sessions
+    .filter((s) => s.slotId === id && (s.status === "present" || s.status === "absent") && s.date < today)
+    .count();
+
+  if (marked === 0) {
+    await db.transaction("rw", db.slots, db.sessions, async () => {
+      await db.slots.update(id, { ...patch, updatedAt: t });
+      await db.sessions.filter((s) => s.slotId === id && s.status === "unmarked").delete();
+    });
+    return;
+  }
+
+  await db.transaction("rw", db.slots, db.sessions, async () => {
+    await db.slots.update(id, { until: addDays(today, -1), updatedAt: t });
+    await db.sessions.filter((s) => s.slotId === id && s.date >= today).delete();
+    const next: Slot = {
+      ...slot,
+      ...patch,
+      id: uid(),
+      from: today,
+      until: null,
+      createdAt: t,
+      updatedAt: t,
+      deletedAt: null,
+    };
+    await db.slots.add(next);
+  });
+}
+
+/** Removing a class, keeping whatever it already explains. */
+export async function retireSlot(id: string): Promise<void> {
+  const slot = await db.slots.get(id);
+  if (!slot || slot.deletedAt) return;
+  const t = now();
+  const today = toDateStr();
+  const marked = await db.sessions
+    .filter((s) => s.slotId === id && (s.status === "present" || s.status === "absent"))
+    .count();
+
+  await db.transaction("rw", db.slots, db.sessions, async () => {
+    await db.sessions.filter((s) => s.slotId === id && s.date >= today && s.status === "unmarked").delete();
+    if (marked === 0) await db.slots.update(id, { deletedAt: t, updatedAt: t });
+    else await db.slots.update(id, { until: addDays(today, -1), updatedAt: t });
+  });
+}
+
+export interface WeekPlan {
+  subjects: { id?: string; name: string; code?: string; color?: string }[];
+  /** Indexes into `subjects`, so a plan can be handed around without ids. */
+  classes: {
+    subject: number;
+    weekday: number;
+    start: string;
+    end: string;
+    kind: ClassKind;
+    room?: string;
+  }[];
+}
+
+/**
+ * Writes a whole week in one go.
+ *
+ * `from` is what keeps history honest: rather than editing the old classes,
+ * which would silently re-explain attendance already recorded against them, the
+ * old slots are stopped the day before and the new ones start on the day. Pass
+ * no date and it is treated as a first-time setup, replacing outright.
+ */
+export async function applyWeekPlan(plan: WeekPlan, from?: string | null): Promise<void> {
+  const t = now();
+  await db.transaction("rw", db.subjects, db.slots, db.sessions, async () => {
+    const live = await db.subjects.filter((s) => !s.deletedAt).toArray();
+    const byName = new Map(live.map((s) => [s.name.trim().toLowerCase(), s]));
+
+    const ids: string[] = [];
+    for (const want of plan.subjects) {
+      const existing = want.id ? live.find((s) => s.id === want.id) : byName.get(want.name.trim().toLowerCase());
+      if (existing) {
+        ids.push(existing.id);
+        continue;
+      }
+      const made = await addSubject({ name: want.name, code: want.code, color: want.color });
+      ids.push(made.id);
+    }
+
+    const old = await db.slots.filter((s) => !s.deletedAt).toArray();
+    if (from) {
+      // Keep the old week, but only up to the day before the new one starts.
+      const lastDay = addDays(from, -1);
+      for (const slot of old) {
+        if (slot.from && slot.from > lastDay) await db.slots.update(slot.id, { deletedAt: t, updatedAt: t });
+        else await db.slots.update(slot.id, { until: lastDay, updatedAt: t });
+      }
+      // Anything already generated on or after the change is out of date.
+      await db.sessions
+        .filter((s) => s.date >= from && s.status === "unmarked")
+        .delete();
+    } else {
+      for (const slot of old) await db.slots.update(slot.id, { deletedAt: t, updatedAt: t });
+      await db.sessions.filter((s) => s.status === "unmarked").delete();
+    }
+
+    for (const c of plan.classes) {
+      const subjectId = ids[c.subject];
+      if (!subjectId) continue;
+      await addSlot({
+        subjectId,
+        weekday: c.weekday,
+        start: c.start,
+        end: c.end,
+        kind: c.kind,
+        room: c.room,
+        from: from ?? null,
+      });
+    }
+  });
+}
 
 export async function seedSampleTimetable(): Promise<void> {
   const byCode = new Map<string, string>();
