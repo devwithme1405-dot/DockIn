@@ -650,8 +650,8 @@ function ClassRow({
       <span className="h-9 w-1 shrink-0 self-center rounded-full" style={{ background: subject?.color ?? "#888" }} aria-hidden />
       <div className="min-w-[6.5rem] flex-1">
         <p className="line-clamp-2 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{name}</p>
-        <p className="truncate text-[13px] text-muted">
-          {session.kind === "practical" ? "Lab" : "Lecture"} · until {fmtTime(session.end)}
+        <p className="text-[13px] leading-snug text-muted">
+          {session.kind === "practical" ? "Lab" : "Lecture"} · to {fmtTime(session.end)}
           {live && <span className="ml-1.5 font-semibold text-accent">· Now</span>}
         </p>
       </div>
