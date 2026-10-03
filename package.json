@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs"
+    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs",
+    "android:check": "bash scripts/android-compile.sh",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run android:check && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
