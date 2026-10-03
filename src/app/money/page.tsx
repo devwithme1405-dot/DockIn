@@ -27,9 +27,12 @@ import type { Expense } from "@/lib/types";
 import { Button, Chip, EmptyState, Sheet, cx } from "@/components/ui";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { MoneyHero } from "@/components/MoneyHero";
+import { DetectedTray } from "@/components/DetectedTray";
+import { useAuth } from "@/lib/auth";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
+  const { session } = useAuth();
   const all = useExpenses();
   const today = toDateStr();
   const [month, setMonth] = useState(monthKey(today));
@@ -111,6 +114,8 @@ export default function MoneyPage() {
           setBudgetOpen(true);
         }}
       />
+
+      <DetectedTray signedIn={!!session} />
 
       <section className="mt-3 grid grid-cols-3 gap-2.5 px-5" aria-label="Quick numbers">
         <Stat label="Today" value={fmtMoney(todaySpent)} tint="bg-accent-soft" />

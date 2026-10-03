@@ -24,6 +24,14 @@ const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 export const SUPABASE_URL = URL;
 
 /**
+ * The public key that ships in this bundle anyway. Exported so the Android app
+ * can be handed the project's address and key when it is linked, rather than
+ * having them built into the APK — then moving project is a deploy, not a
+ * reinstall, and nothing about the project lives in the Android repo.
+ */
+export const SUPABASE_KEY = KEY;
+
+/**
  * Limit sign-up to one college's email domain, or leave it unset for anyone.
  * The database is what actually enforces this (see allowed_domain() in the
  * migrations); here it only shapes the wording and the placeholder, so the two

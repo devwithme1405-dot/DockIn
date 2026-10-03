@@ -5,6 +5,7 @@ import type {
   Expense,
   Friend,
   Group,
+  MerchantRule,
   Profile,
   Session,
   Share,
@@ -34,6 +35,8 @@ export class DockinDB extends Dexie {
   shares!: Table<Share, string>;
   shareState!: Table<ShareState, string>;
   categories!: Table<Category, string>;
+  /** Which category a payee's name means, learned the first time you say. */
+  merchants!: Table<MerchantRule, string>;
 
   constructor() {
     super("dockin");
@@ -58,6 +61,9 @@ export class DockinDB extends Dexie {
     });
     this.version(5).stores({
       categories: "id, order",
+    });
+    this.version(6).stores({
+      merchants: "id, category",
     });
   }
 }

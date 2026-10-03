@@ -8,6 +8,8 @@ import type {
   EventKind,
   Expense,
   ExpenseCategory,
+  MerchantRule,
+  Priority,
   Profile,
   Session,
   SessionStatus,
@@ -16,7 +18,6 @@ import type {
   Subtask,
   Task,
   TaskKind,
-  Priority,
   ThemePref,
 } from "./types";
 
@@ -683,6 +684,40 @@ export async function deleteCategory(id: string): Promise<void> {
 }
 
 // ---------- expenses ----------
+
+// ---------- payees the app has learned ----------
+
+/**
+ * What a payee's name means. Asked once, the first time a payment from that
+ * shop turns up, and never again — which is the difference between a tray you
+ * clear in four taps and one you stop opening.
+ */
+export async function rememberMerchant(
+  key: string,
+  label: string,
+  category: ExpenseCategory,
+): Promise<void> {
+  if (!key) return;
+  const t = now();
+  const existing = await db.merchants.get(key);
+  await db.merchants.put({
+    id: key,
+    label,
+    category,
+    createdAt: existing?.createdAt ?? t,
+    updatedAt: t,
+    deletedAt: null,
+  });
+}
+
+export async function forgetMerchant(key: string): Promise<void> {
+  const existing = await db.merchants.get(key);
+  if (existing) await db.merchants.put({ ...existing, deletedAt: now(), updatedAt: now() });
+}
+
+export async function merchantRules(): Promise<MerchantRule[]> {
+  return (await db.merchants.toArray()).filter((m) => !m.deletedAt);
+}
 
 export async function addExpense(input: {
   amount: number;

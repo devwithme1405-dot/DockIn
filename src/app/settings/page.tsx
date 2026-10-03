@@ -51,6 +51,7 @@ import {
 } from "@/components/ui";
 import Link from "next/link";
 import { BackHeader } from "@/components/PageHeader";
+import { PayLinkCard } from "@/components/PayLinkCard";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
@@ -513,6 +514,9 @@ export default function ProfilePage() {
             )}
           </Card>
         )}
+
+        {/* payments */}
+        {configured && signedIn && <PayLinkCard />}
 
         {/* data */}
         <Card title="Your data" flush>

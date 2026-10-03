@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -54,6 +56,36 @@
             </intent-filter>
         </activity>
 
+
+        <!--
+            Payment detection. The link activity answers dockin://pay/<token>,
+            which only the signed-in web app sends; the listener reads the
+            notifications of payment apps and banks, and only runs once the
+            person turns it on in Android's own settings.
+        -->
+        <activity
+            android:name=".LinkActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="dockin" android:host="pay" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".PayWatchService"
+            android:label="@string/pay_watch_label"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name="com.google.androidbrowserhelper.trusted.DelegationService"

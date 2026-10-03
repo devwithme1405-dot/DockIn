@@ -119,6 +119,16 @@ export interface Category extends Base {
   order: number;
 }
 
+/**
+ * "24/7 Kathi means Tuck Shop" — said once, remembered forever, so a detected
+ * payment from a shop you have been to before needs no decision at all.
+ */
+export interface MerchantRule extends Base {
+  /** id is the normalised payee name; see merchantKey in lib/payments.ts. */
+  label: string;
+  category: ExpenseCategory;
+}
+
 export interface Expense extends Base {
   /** Amount in rupees (decimals allowed). */
   amount: number;
