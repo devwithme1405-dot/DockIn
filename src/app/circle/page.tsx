@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useFriends, useGroups, useShareState, useShares, useSubjects } from "@/lib/hooks";
+import { useFriends, useGroups, useReactions, useShareState, useShares, useSubjects } from "@/lib/hooks";
 import { getProfile } from "@/lib/repo";
 import {
   SocialError,
@@ -38,7 +38,7 @@ import { useAuth } from "@/lib/auth";
 import { isCloudConfigured } from "@/lib/supabase";
 import { toDateStr } from "@/lib/dates";
 import { dueLabel } from "@/lib/tasks";
-import type { Friend, Share, ShareState } from "@/lib/types";
+import type { Friend, Reaction, Share, ShareState } from "@/lib/types";
 import {
   Avatar,
   Button,
@@ -56,6 +56,7 @@ import { QrCode } from "@/components/QrCode";
 import { SignIn } from "@/components/SignIn";
 import { ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
+import { Faces } from "@/components/Reactions";
 import { LMS_URL } from "@/components/AssignmentFile";
 
 const ATTENDANCE_WORD = {
@@ -94,6 +95,7 @@ function Circle() {
   const groups = useGroups();
   const shares = useShares();
   const states = useShareState();
+  const reactions = useReactions();
   const subjects = useSubjects();
   const today = toDateStr();
 
@@ -174,7 +176,7 @@ function Circle() {
 
   if (!isCloudConfigured) {
     return (
-      <>
+      <div className="page-wash">
         <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <div className="px-5">
           <EmptyState
@@ -184,22 +186,22 @@ function Circle() {
             body="Friends and groups need the hosted version of DockIn."
           />
         </div>
-      </>
+      </div>
     );
   }
 
   if (authLoading) {
     return (
-      <>
+      <div className="page-wash">
         <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <ListSkeleton n={3} />
-      </>
+      </div>
     );
   }
 
   if (!signedIn) {
     return (
-      <>
+      <div className="page-wash">
         <PageHeader title="Friends" subtitle="Your people, groups and shared work" />
         <div className="px-5">
           {/* Signing in is a cost, so the screen says what it buys before it
@@ -226,7 +228,7 @@ function Circle() {
           </ul>
           <SignIn />
         </div>
-      </>
+      </div>
     );
   }
 
@@ -356,7 +358,7 @@ function Circle() {
   }
 
   return (
-    <>
+    <div className="page-wash">
       <PageHeader
         title="Friends"
         subtitle="Your people, groups and shared work"
@@ -375,7 +377,7 @@ function Circle() {
       {/* Three numbers, one surface. The counts are the reason to open a tab,
           so they belong above the tabs rather than inside them. */}
       <section
-        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden lift rounded-3xl bg-surface"
         aria-label="Summary"
       >
         <Tally label="Friends" value={accepted.length} onClick={() => setTab("friends")} />
@@ -466,7 +468,7 @@ function Circle() {
                 }
               />
             ) : (
-              <ul className="overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <ul className="overflow-hidden lift rounded-3xl bg-surface">
                 {accepted.map((f, i) => (
                   <li
                     key={f.id}
@@ -503,7 +505,7 @@ function Circle() {
           {sent.length > 0 && (
             <section>
               <SectionTitle>Waiting</SectionTitle>
-              <ul className="overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <ul className="overflow-hidden lift rounded-3xl bg-surface">
                 {sent.map((f, i) => (
                   <li
                     key={f.id}
@@ -520,7 +522,7 @@ function Circle() {
 
           {/* This belongs with the people who would see it, not in a settings
               screen three taps away. */}
-          <label className="flex items-center gap-3 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <label className="flex items-center gap-3 lift rounded-3xl bg-surface p-4">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2">
               <Share2 size={18} />
             </span>
@@ -588,15 +590,18 @@ function Circle() {
                   <li key={g.id}>
                     <Link
                       href={`/groups/${g.id}`}
-                      className="flex items-center gap-3.5 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)] transition active:scale-[0.99]"
+                      className="flex items-center gap-3.5 lift rounded-3xl bg-surface p-4 transition active:scale-[0.99]"
                     >
                       <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[22px]">
                         {g.emoji ?? "👥"}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[16px] font-medium">{g.name}</span>
-                        <span className="block text-[12.5px] text-muted">
-                          {g.members} {g.members === 1 ? "person" : "people"} · code {g.code}
+                        <span className="mt-1 flex items-center gap-2">
+                          <Faces people={g.faces ?? []} total={g.members} />
+                          <span className="truncate text-[12.5px] text-muted">
+                            {g.members} {g.members === 1 ? "person" : "people"} · {g.code}
+                          </span>
                         </span>
                       </span>
                       {open > 0 && (
@@ -636,6 +641,8 @@ function Circle() {
                   share={s}
                   state={states?.get(s.id)}
                   mine={s.author === me}
+                  me={me}
+                  reactions={reactions?.get(s.id) ?? []}
                   today={today}
                   onChanged={refresh}
                 />
@@ -817,7 +824,7 @@ function Circle() {
             : `${removing?.name} will no longer see anything you share, and you will not see theirs.`}
         </p>
       </ConfirmSheet>
-    </>
+    </div>
   );
 }
 
@@ -857,12 +864,16 @@ function SubmissionCard({
   share,
   state,
   mine,
+  me,
+  reactions,
   today,
   onChanged,
 }: {
   share: Share;
   state?: ShareState;
   mine: boolean;
+  me: string | null;
+  reactions: Reaction[];
   today: string;
   onChanged: () => void;
 }) {
@@ -882,7 +893,14 @@ function SubmissionCard({
         submitted ? "bg-surface-2" : "bg-surface",
       )}
     >
-      <ShareRow share={share} state={state} mine={mine} onChanged={onChanged} />
+      <ShareRow
+        share={share}
+        state={state}
+        mine={mine}
+        reactions={reactions}
+        me={me}
+        onChanged={onChanged}
+      />
 
       <div className="flex items-center gap-2 border-t border-line px-3.5 py-2.5">
         <span className="min-w-0 flex-1 text-[12.5px] text-muted">

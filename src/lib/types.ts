@@ -208,6 +208,8 @@ export interface Group {
   code: string;
   owner: string;
   members: number;
+  /** A few of the people in it, for the faces on the card. */
+  faces?: { id: string; name: string; avatar?: string }[];
   updatedAt: number;
 }
 
@@ -229,6 +231,15 @@ export interface ShareFile {
   type: "docx" | "pdf";
   authorName?: string;
   authorRoll?: string;
+}
+
+/** One person's reaction to a shared assignment. */
+export interface Reaction {
+  shareId: string;
+  userId: string;
+  name: string;
+  avatar?: string;
+  emoji: string;
 }
 
 /** An assignment someone posted to a group or sent to you directly. */

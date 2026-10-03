@@ -45,7 +45,7 @@ import {
   weekdayOf,
   WEEKDAYS_LONG,
 } from "@/lib/dates";
-import { computeStreak, describe, fmtPct } from "@/lib/attendance";
+import { computeStreak, describe, fmtPct, weekForm, type DayForm } from "@/lib/attendance";
 import type { Session, SessionStatus, Slot, Subject } from "@/lib/types";
 import {
   EmptyState,
@@ -158,8 +158,10 @@ export default function TodayPage() {
   const overall = data.overall;
   const name = profile.name || "there";
 
+  const week = weekForm(data.sessions, today);
+
   return (
-    <>
+    <div className="page-wash">
       <StickyBar className="px-4 pb-2">
         <div className="flex h-11 items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -205,8 +207,10 @@ export default function TodayPage() {
           them is noise, and the eye had nowhere to land. One surface with three
           columns reads in a glance and leaves the colour to say something: the
           attendance figure, and only that, is tinted by how it is going. */}
+      <WeekStrip week={week} today={today} />
+
       <section
-        className="mx-5 mt-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        className="lift mx-5 mt-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-3xl bg-surface"
         aria-label="At a glance"
       >
         <Glance
@@ -384,7 +388,7 @@ export default function TodayPage() {
       )}
 
       <section className="mt-7 px-5" aria-label="Quick actions">
-        <div className="grid grid-cols-4 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+        <div className="lift grid grid-cols-4 divide-x divide-line overflow-hidden rounded-2xl bg-surface">
           {QUICK.map(({ href, label, icon: Icon }) => (
             <Link
               key={label}
@@ -434,7 +438,7 @@ export default function TodayPage() {
           </ul>
         </section>
       )}
-    </>
+    </div>
   );
 }
 
@@ -574,6 +578,56 @@ function DayHero({
 }
 
 // ---------- tiles and rows ----------
+
+/** Seven squares: how the week actually went, in one line. */
+const FORM_TONE: Record<DayForm, string> = {
+  all: "bg-safe",
+  some: "bg-warn",
+  missed: "bg-danger",
+  holiday: "bg-violet/40",
+  none: "bg-surface-2",
+  future: "bg-surface-2/60",
+};
+
+const FORM_WORD: Record<DayForm, string> = {
+  all: "all present",
+  some: "partly missed",
+  missed: "missed",
+  holiday: "holiday",
+  none: "nothing marked",
+  future: "still to come",
+};
+
+function WeekStrip({ week, today }: { week: { date: string; form: DayForm }[]; today: string }) {
+  const marked = week.filter((d) => d.form === "all" || d.form === "some").length;
+  return (
+    <section className="lift mx-5 mt-5 rounded-3xl bg-surface p-4" aria-label="Your week">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-[13px] font-semibold tracking-wide text-muted uppercase">Your week</h2>
+        <p className="text-[12.5px] text-muted">
+          {marked > 0 ? `${marked} of 7 days attended` : "Nothing marked yet"}
+        </p>
+      </div>
+      <ol className="mt-3 flex gap-1.5">
+        {week.map((d) => (
+          <li key={d.date} className="min-w-0 flex-1 text-center">
+            <span
+              title={`${d.date}: ${FORM_WORD[d.form]}`}
+              className={cx(
+                "block h-9 rounded-xl transition",
+                FORM_TONE[d.form],
+                d.date === today && "ring-2 ring-text/70",
+              )}
+            />
+            <span className="mt-1 block text-[10.5px] text-muted">
+              {WEEKDAYS_LONG[weekdayOf(d.date)].slice(0, 1)}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 
 function Glance({
   href,

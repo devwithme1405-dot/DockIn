@@ -7,6 +7,7 @@ import type {
   Group,
   MerchantRule,
   Profile,
+  Reaction,
   Session,
   Share,
   ShareState,
@@ -37,6 +38,8 @@ export class DockinDB extends Dexie {
   categories!: Table<Category, string>;
   /** Which category a payee's name means, learned the first time you say. */
   merchants!: Table<MerchantRule, string>;
+  /** Reactions on shared assignments: a mirror of the server, like shares. */
+  reactions!: Table<Reaction & { id: string }, string>;
 
   constructor() {
     super("dockin");
@@ -64,6 +67,9 @@ export class DockinDB extends Dexie {
     });
     this.version(6).stores({
       merchants: "id, category",
+    });
+    this.version(7).stores({
+      reactions: "id, shareId",
     });
   }
 }

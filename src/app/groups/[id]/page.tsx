@@ -2,8 +2,15 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, LogOut, Plus, Share2, Users } from "lucide-react";
-import { useFriends, useGroups, useShareState, useShares, useSubjects } from "@/lib/hooks";
+import { Check, Copy, LogOut, Plus, Share2 } from "lucide-react";
+import {
+  useFriends,
+  useGroups,
+  useReactions,
+  useShareState,
+  useShares,
+  useSubjects,
+} from "@/lib/hooks";
 import {
   SocialError,
   groupPeople,
@@ -15,6 +22,7 @@ import { useAuth } from "@/lib/auth";
 import { Avatar, Button, ConfirmSheet, EmptyState, Sheet, useToast } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
+import { Faces } from "@/components/Reactions";
 import { ListSkeleton } from "@/components/Skeleton";
 
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +35,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   const groups = useGroups();
   const shares = useShares();
   const states = useShareState();
+  const reactions = useReactions();
   const subjects = useSubjects();
   const friends = useFriends();
 
@@ -129,7 +138,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
       <BackHeader href="/circle?tab=groups" backLabel="Friends" title={group.name} hideLargeTitle />
 
       <div className="px-5">
-        <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+        <section className="lift rounded-3xl bg-surface p-4">
           <div className="flex items-center gap-3.5">
             <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[26px]">
               {group.emoji ?? "👥"}
@@ -138,9 +147,10 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               <h1 className="truncate text-[21px] font-semibold tracking-tight">{group.name}</h1>
               <button
                 onClick={() => setSheet("members")}
-                className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-muted"
+                className="mt-1 flex items-center gap-2 text-[13px] text-muted"
               >
-                <Users size={14} /> {group.members} {group.members === 1 ? "person" : "people"}
+                <Faces people={group.faces ?? []} total={group.members} size={24} />
+                {group.members} {group.members === 1 ? "person" : "people"}
               </button>
             </div>
           </div>
@@ -183,7 +193,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             body="Post an assignment and everyone in this group gets it on their Tasks screen."
           />
         ) : (
-          <div className="divide-y divide-line overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+          <div className="divide-y divide-line overflow-hidden lift rounded-3xl bg-surface">
             {posts.map((s) => (
               <ShareRow
                 key={s.id}
@@ -191,6 +201,8 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                 state={states?.get(s.id)}
                 showGroup={false}
                 mine={s.author === me}
+                reactions={reactions?.get(s.id) ?? []}
+                me={me}
                 onChanged={load}
               />
             ))}

@@ -9,6 +9,7 @@ import {
   fmtPct,
   ifYouMiss,
   summarize,
+  weekForm,
   weeklyTrend,
   withBase,
 } from "@/lib/attendance";
@@ -281,5 +282,41 @@ describe("what missing the next classes would do", () => {
         { status: "holiday" },
       ]),
     ).toBe(3);
+  });
+});
+
+describe("the last seven days, as squares", () => {
+  const s = (date: string, status: string) => ({ date, status }) as never;
+
+  it("reads a week the way you lived it", () => {
+    const week = weekForm(
+      [
+        s("2026-10-01", "present"),
+        s("2026-10-01", "present"),
+        s("2026-10-02", "absent"),
+        s("2026-10-03", "present"),
+        s("2026-10-03", "absent"),
+        s("2026-10-04", "holiday"),
+      ],
+      "2026-10-04",
+    );
+    const by = Object.fromEntries(week.map((d) => [d.date, d.form]));
+    expect(by["2026-10-01"]).toBe("all");
+    expect(by["2026-10-02"]).toBe("missed");
+    expect(by["2026-10-03"]).toBe("some");
+    expect(by["2026-10-04"]).toBe("holiday");
+    expect(by["2026-09-30"]).toBe("none");
+    expect(week).toHaveLength(7);
+  });
+
+  it("ends on today, oldest first", () => {
+    const week = weekForm([], "2026-10-04");
+    expect(week[0].date).toBe("2026-09-28");
+    expect(week[6].date).toBe("2026-10-04");
+  });
+
+  it("does not call a cancelled class a missed one", () => {
+    const week = weekForm([s("2026-10-04", "cancelled")], "2026-10-04");
+    expect(week[6].form).toBe("none");
   });
 });

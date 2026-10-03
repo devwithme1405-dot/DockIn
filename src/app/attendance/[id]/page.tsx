@@ -154,7 +154,7 @@ export default function SubjectPage() {
 
       {tab === "overview" ? (
         <div className="mt-4 space-y-3 px-5">
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             <div className="flex items-center gap-4">
               <Ring pct={summary.pct} state={summary.state} size={116} stroke={10} target={target}>
                 <p className={cx("text-[22px] font-semibold tabular-nums", STATE_TEXT[summary.state])}>
@@ -179,7 +179,7 @@ export default function SubjectPage() {
             </dl>
           </section>
 
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             <h2 className="mb-3 text-[15px] font-semibold">Mark today&apos;s class</h2>
             {todays.length === 0 ? (
               <p className="text-sm text-muted">No {subject.code || "class"} today.</p>
@@ -201,7 +201,7 @@ export default function SubjectPage() {
             )}
           </section>
 
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">Weekly schedule</h2>
               <Link href="/attendance/timetable" className="text-sm font-medium text-accent">
@@ -211,13 +211,13 @@ export default function SubjectPage() {
             <Schedule slots={slots} />
           </section>
 
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             <h2 className="text-[15px] font-semibold">Attendance trend</h2>
             <p className="mb-2 text-[13px] text-muted">Running percentage at the end of each week</p>
             <TrendChart points={trend} target={target} />
           </section>
 
-          <section className="flex items-center justify-between rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="flex items-center justify-between lift rounded-3xl bg-surface p-4">
             <div>
               <p className="text-[15px] font-semibold">Before DockIn</p>
               <p className="text-[13px] text-muted tabular-nums">
@@ -231,7 +231,7 @@ export default function SubjectPage() {
             </Button>
           </section>
 
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             <div className="mb-1 flex items-center justify-between">
               <h2 className="text-[15px] font-semibold">Recent classes</h2>
               <button onClick={() => setTab("history")} className="text-sm font-medium text-accent">
@@ -248,7 +248,7 @@ export default function SubjectPage() {
               Classes appear here once their day has been opened on the Today screen.
             </p>
           ) : (
-            <div className="rounded-3xl bg-surface px-4 py-1 shadow-[0_0_0_1px_var(--line)]">
+            <div className="lift rounded-3xl bg-surface px-4 py-1">
               <SessionList sessions={sessions} onPick={setEditing} />
             </div>
           )}

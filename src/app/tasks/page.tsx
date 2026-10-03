@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { TasksSkeleton } from "@/components/Skeleton";
 import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2 } from "lucide-react";
-import { useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
+import { useReactions, useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
 import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
 import { isCloudConfigured } from "@/lib/supabase";
@@ -46,6 +46,7 @@ export default function TasksPage() {
   const me = session?.user.id ?? null;
   const shares = useShares();
   const shareStates = useShareState();
+  const reactions = useReactions();
 
   useEffect(() => {
     if (!isCloudConfigured || !me) return;
@@ -112,7 +113,7 @@ export default function TasksPage() {
   const open = (t: Task) => setEditing(t);
 
   return (
-    <>
+    <div className="page-wash">
       <PageHeader
         title="Tasks"
         subtitle={
@@ -228,7 +229,14 @@ export default function TasksPage() {
                 </h2>
                 <div className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
                   {sharedOpen.map((s) => (
-                    <ShareRow key={s.id} share={s} state={shareStates?.get(s.id)} mine={s.author === me} />
+                    <ShareRow
+                      key={s.id}
+                      share={s}
+                      state={shareStates?.get(s.id)}
+                      mine={s.author === me}
+                      reactions={reactions?.get(s.id) ?? []}
+                      me={me}
+                    />
                   ))}
                 </div>
               </section>
@@ -327,7 +335,7 @@ export default function TasksPage() {
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing ? KIND_BY_ID[editing.kind].label : "Task"}>
         {editing && <TaskForm key={editing.id} task={editing} subjects={subjects} onDone={() => setEditing(null)} />}
       </Sheet>
-    </>
+    </div>
   );
 }
 
@@ -359,7 +367,7 @@ function ExamCard({
   return (
     <button
       onClick={onOpen}
-      className="flex w-full items-stretch gap-4 rounded-3xl bg-surface p-4 text-left shadow-[0_0_0_1px_var(--line)] transition active:scale-[0.99]"
+      className="flex w-full items-stretch gap-4 lift rounded-3xl bg-surface p-4 text-left transition active:scale-[0.99]"
     >
       <div
         className={cx(

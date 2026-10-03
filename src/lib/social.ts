@@ -500,6 +500,57 @@ export async function setShareDone(shareId: string, done: boolean): Promise<void
  * have not finished, and making someone tick two boxes for one fact is how a
  * tracker ends up out of step with the truth.
  */
+interface RawReaction {
+  share_id: string;
+  user_id: string;
+  emoji: string;
+}
+
+/** The faces a student actually reaches for. Six is plenty; a palette is noise. */
+export const REACTIONS = ["👍", "🔥", "😂", "🙏", "😭", "🎉"] as const;
+
+/**
+ * React to a shared assignment, or change your mind, or take it back.
+ *
+ * One reaction per person: tapping the same face again removes it, tapping
+ * another replaces it. A post cannot fill up with twenty tiny pictures, which
+ * is the only way this stays readable on a phone.
+ */
+export async function react(shareId: string, emoji: string | null): Promise<void> {
+  const sb = client();
+  const { data: auth } = await sb.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new SocialError("You are not signed in.");
+
+  if (emoji === null) {
+    const { error } = await sb
+      .from("share_reactions")
+      .delete()
+      .eq("share_id", shareId)
+      .eq("user_id", me);
+    if (error) throw new SocialError(readable(error.message));
+    await db.reactions.delete(`${shareId}:${me}`);
+    return;
+  }
+
+  const { error } = await sb
+    .from("share_reactions")
+    .upsert({ share_id: shareId, user_id: me, emoji }, { onConflict: "share_id,user_id" });
+  if (error) throw new SocialError(readable(error.message));
+
+  // Put it on screen now rather than after a round trip: a reaction that waits
+  // half a second to appear feels broken, and the pull will correct it anyway.
+  const mine = await db.profile.get("me");
+  await db.reactions.put({
+    id: `${shareId}:${me}`,
+    shareId,
+    userId: me,
+    name: "You",
+    avatar: mine?.avatar,
+    emoji,
+  });
+}
+
 export async function setShareSubmitted(shareId: string, submitted: boolean): Promise<void> {
   const t = now();
   const existing = await db.shareState.get(shareId);
@@ -557,7 +608,7 @@ async function doPull(): Promise<void> {
   const me = auth.user?.id;
   if (!me) throw new SocialError("You are not signed in.");
 
-  const [people, groupRows, memberRows, profileRows, shareRows] = await Promise.all([
+  const [people, groupRows, memberRows, profileRows, shareRows, reactionRows] = await Promise.all([
     sb.rpc("my_people"),
     sb.from("groups").select("id,name,emoji,code,owner,updated_at").is("deleted_at", null),
     sb.from("group_members").select("group_id,user_id"),
@@ -568,11 +619,15 @@ async function doPull(): Promise<void> {
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(500),
+    sb.from("share_reactions").select("share_id,user_id,emoji"),
   ]);
 
   const firstError =
     people.error || groupRows.error || memberRows.error || profileRows.error || shareRows.error;
   if (firstError) throw new SocialError(readable(firstError.message));
+  // Reactions arrived later than the rest; a project without that table yet
+  // should still show everything else rather than failing outright.
+  const reactionList = reactionRows.error ? [] : ((reactionRows.data ?? []) as RawReaction[]);
 
   // --- friends
   const friends: Friend[] = (
@@ -602,10 +657,24 @@ async function doPull(): Promise<void> {
     updatedAt: now(),
   }));
 
-  // --- groups, with how many people are in each
+  // --- names for whoever posted or joined something
+  const names = new Map<string, { name: string; avatar?: string }>();
+  for (const p of (profileRows.data ?? []) as {
+    user_id: string;
+    name: string | null;
+    avatar: string | null;
+  }[]) {
+    names.set(p.user_id, { name: p.name || "A student", avatar: p.avatar ?? undefined });
+  }
+
+  // --- groups, with how many people are in each and a few of their faces
   const counts = new Map<string, number>();
-  for (const m of (memberRows.data ?? []) as { group_id: string }[]) {
+  const membersOf = new Map<string, string[]>();
+  for (const m of (memberRows.data ?? []) as { group_id: string; user_id: string }[]) {
     counts.set(m.group_id, (counts.get(m.group_id) ?? 0) + 1);
+    const list = membersOf.get(m.group_id) ?? [];
+    if (list.length < 5) list.push(m.user_id);
+    membersOf.set(m.group_id, list);
   }
   const groups: Group[] = (
     (groupRows.data ?? []) as {
@@ -623,18 +692,14 @@ async function doPull(): Promise<void> {
     code: g.code,
     owner: g.owner,
     members: counts.get(g.id) ?? 1,
+    faces: (membersOf.get(g.id) ?? []).map((id) => ({
+      id,
+      name: id === me ? "You" : (names.get(id)?.name ?? "A student"),
+      avatar: names.get(id)?.avatar,
+    })),
     updatedAt: g.updated_at ?? now(),
   }));
 
-  // --- names for whoever posted something
-  const names = new Map<string, { name: string; avatar?: string }>();
-  for (const p of (profileRows.data ?? []) as {
-    user_id: string;
-    name: string | null;
-    avatar: string | null;
-  }[]) {
-    names.set(p.user_id, { name: p.name || "A student", avatar: p.avatar ?? undefined });
-  }
   const groupName = new Map(groups.map((g) => [g.id, g.name]));
 
   const shares: Share[] = (
@@ -669,12 +734,23 @@ async function doPull(): Promise<void> {
     };
   });
 
-  // Replace wholesale: the server is the authority on all three of these, so a
-  // row that is gone from the server should disappear here too.
-  await db.transaction("rw", [db.friends, db.groups, db.shares], async () => {
+  const reactions = reactionList.map((r) => ({
+    id: `${r.share_id}:${r.user_id}`,
+    shareId: r.share_id,
+    userId: r.user_id,
+    name: r.user_id === me ? "You" : (names.get(r.user_id)?.name ?? "A student"),
+    avatar: names.get(r.user_id)?.avatar,
+    emoji: r.emoji,
+  }));
+
+  // Replace wholesale: the server is the authority on all of these, so a row
+  // that is gone from the server should disappear here too.
+  await db.transaction("rw", [db.friends, db.groups, db.shares, db.reactions], async () => {
     await db.friends.clear();
     await db.groups.clear();
     await db.shares.clear();
+    await db.reactions.clear();
+    if (reactions.length) await db.reactions.bulkPut(reactions);
     if (friends.length) await db.friends.bulkPut(friends);
     if (groups.length) await db.groups.bulkPut(groups);
     if (shares.length) await db.shares.bulkPut(shares);

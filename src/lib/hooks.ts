@@ -11,6 +11,7 @@ import type {
   Expense,
   Friend,
   Group,
+  Reaction,
   Session,
   Share,
   ShareState,
@@ -152,6 +153,17 @@ export function useShareState(): Map<string, ShareState> | undefined {
     async () => new Map((await db.shareState.toArray()).map((s) => [s.id, s])),
     [],
   );
+}
+
+/** Reactions on shared items, grouped by the item they belong to. */
+export function useReactions(): Map<string, Reaction[]> | undefined {
+  const rows = useLiveQuery(() => db.reactions.toArray(), []);
+  return useMemo(() => {
+    if (!rows) return undefined;
+    const map = new Map<string, Reaction[]>();
+    for (const r of rows) map.set(r.shareId, [...(map.get(r.shareId) ?? []), r]);
+    return map;
+  }, [rows]);
 }
 
 export function useCategories(): Category[] | undefined {

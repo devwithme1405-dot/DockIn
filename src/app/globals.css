@@ -290,3 +290,62 @@ textarea {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   A page that feels made, not printed.
+
+   The app was a white wall: flat background, white cards, nothing to rest the
+   eye on. These are the two cheapest ways to fix that without turning the
+   screens into a colour chart — a soft wash of brand colour behind the top of a
+   page, and cards that sit on the page rather than being cut out of it. Both
+   are deliberately faint: the job is depth, not decoration.
+--------------------------------------------------------------------------- */
+
+/* Painted as the wrapper's own background, not a pseudo-element: an absolutely
+   positioned layer behind the content ends up behind the page background too,
+   where nobody can see it. */
+.page-wash {
+  background-repeat: no-repeat;
+  background-size: 100% 62vh;
+  background-position: top center;
+  background-image:
+    radial-gradient(85% 26% at 8% 14%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%),
+    radial-gradient(70% 22% at 98% 22%, color-mix(in srgb, var(--violet) 14%, transparent), transparent 74%);
+}
+
+:root[data-theme="dark"] .page-wash {
+  background-image:
+    radial-gradient(85% 28% at 8% 12%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 72%),
+    radial-gradient(70% 24% at 98% 20%, color-mix(in srgb, var(--violet) 28%, transparent), transparent 74%);
+}
+
+/* A card with a little lift. Light mode gets a real shadow; dark mode gets a
+   lighter surface instead, because a shadow on near-black is invisible. */
+.lift {
+  box-shadow:
+    0 1px 2px rgb(16 18 22 / 4%),
+    0 8px 24px -14px rgb(16 18 22 / 22%),
+    0 0 0 1px var(--line);
+}
+
+:root[data-theme="dark"] .lift {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 40%),
+    0 10px 28px -18px rgb(0 0 0 / 70%),
+    0 0 0 1px var(--line);
+}
+
+/* The faint sheen on a hero card, so a flat colour reads as a surface. */
+.sheen {
+  position: relative;
+  isolation: isolate;
+}
+
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(160deg, rgb(255 255 255 / 14%), transparent 46%);
+}

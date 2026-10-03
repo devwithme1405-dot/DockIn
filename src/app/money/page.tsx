@@ -84,7 +84,7 @@ export default function MoneyPage() {
     );
 
   return (
-    <>
+    <div className="page-wash">
       <PageHeader
         title="Money"
         subtitle="Track every rupee"
@@ -190,7 +190,7 @@ export default function MoneyPage() {
 
           <section className="mt-6 px-5" aria-label="Where it went">
             <h2 className="mb-3 text-[17px] font-semibold">Where it went</h2>
-            <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+            <div className="lift rounded-3xl bg-surface p-4">
               <ul className="space-y-3.5">
                 {cats.map((c) => (
                   <li key={c.meta.id}>
@@ -338,7 +338,7 @@ export default function MoneyPage() {
           </Button>
         </div>
       </Sheet>
-    </>
+    </div>
   );
 }
 
@@ -362,7 +362,7 @@ function DailyBars({ values, month, today }: { values: number[]; month: string; 
   const todayIdx = isCurrent ? Number(today.slice(8, 10)) - 1 : -1;
   const peak = values.indexOf(Math.max(...values));
   return (
-    <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+    <div className="lift rounded-3xl bg-surface p-4">
       <div className="flex h-24 items-end gap-[3px]" role="img" aria-label="Spending per day this month">
         {values.map((v, i) => (
           <span

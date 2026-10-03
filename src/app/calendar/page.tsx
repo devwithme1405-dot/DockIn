@@ -118,7 +118,7 @@ export default function CalendarPage() {
         }
       />
 
-      <section className="mx-5 rounded-3xl bg-surface p-3 shadow-[0_0_0_1px_var(--line)]" aria-label="Month">
+      <section className="mx-5 lift rounded-3xl bg-surface p-3" aria-label="Month">
         <div className="mb-2 flex items-center justify-between px-1">
           <button aria-label="Previous month" onClick={() => goMonth(-1)} className="grid size-9 place-items-center rounded-full bg-surface-2">
             <ChevronLeft size={18} />

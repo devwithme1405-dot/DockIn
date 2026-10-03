@@ -17,7 +17,7 @@ function Screen({ children, label = "Loading" }: { children: ReactNode; label?: 
 
 function Rows({ n, className }: { n: number; className?: string }) {
   return (
-    <div className={cx("overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]", className)}>
+    <div className={cx("overflow-hidden lift rounded-3xl bg-surface", className)}>
       {Array.from({ length: n }, (_, i) => (
         <div key={i} className={cx("flex items-center gap-3 p-4", i > 0 && "border-t border-line")}>
           <Bone className="size-11 shrink-0 rounded-2xl" />

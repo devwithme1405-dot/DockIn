@@ -1,3 +1,4 @@
+import { addDays } from "./dates";
 import type { AttendanceSummary, Session, SessionStatus, Subject } from "./types";
 
 /**
@@ -216,4 +217,47 @@ export function ifYouMiss(
 export function countable(sessions: Pick<Session, "status">[]): number {
   return sessions.filter((s) => s.status === "unmarked" || s.status === "present" || s.status === "absent")
     .length;
+}
+
+export type DayForm = "none" | "all" | "some" | "missed" | "holiday" | "future";
+
+/**
+ * The last seven days, as one square each.
+ *
+ * A percentage says where you stand; it says nothing about whether this week
+ * went well. Seven squares do, in the space of a line — and a run of red is a
+ * thing you notice long before a number moves.
+ */
+export function weekForm(
+  sessions: Pick<Session, "date" | "status">[],
+  today: string,
+  days = 7,
+): { date: string; form: DayForm }[] {
+  const byDate = new Map<string, Pick<Session, "date" | "status">[]>();
+  for (const s of sessions) byDate.set(s.date, [...(byDate.get(s.date) ?? []), s]);
+
+  const out: { date: string; form: DayForm }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = addDays(today, -i);
+    const list = byDate.get(date) ?? [];
+    if (date > today) {
+      out.push({ date, form: "future" });
+      continue;
+    }
+    if (list.length > 0 && list.every((s) => s.status === "holiday")) {
+      out.push({ date, form: "holiday" });
+      continue;
+    }
+    const counted = list.filter((s) => s.status === "present" || s.status === "absent");
+    if (counted.length === 0) {
+      out.push({ date, form: "none" });
+      continue;
+    }
+    const absent = counted.filter((s) => s.status === "absent").length;
+    out.push({
+      date,
+      form: absent === 0 ? "all" : absent === counted.length ? "missed" : "some",
+    });
+  }
+  return out;
 }

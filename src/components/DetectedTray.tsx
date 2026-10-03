@@ -101,7 +101,7 @@ export function DetectedTray({ signedIn }: { signedIn: boolean }) {
 
   return (
     <>
-      <section className="mx-5 mt-4 overflow-hidden rounded-3xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+      <section className="mx-5 mt-4 overflow-hidden lift rounded-3xl bg-surface">
         <h2 className="flex items-center gap-1.5 px-4 pt-3.5 pb-1 text-[13px] font-semibold tracking-wide text-muted uppercase">
           <Sparkles size={13} /> {list.length === 1 ? "A payment" : `${list.length} payments`} to add
         </h2>

@@ -219,7 +219,7 @@ export default function ProfilePage() {
 
       <div className="space-y-5 px-5 pt-3">
         {/* identity */}
-        <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+        <section className="lift rounded-3xl bg-surface p-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSheet("avatar")}
@@ -309,7 +309,7 @@ export default function ProfilePage() {
         {/* account, as one line rather than a card: there is nothing to decide
             here, only something to know */}
         {configured && (
-          <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+          <section className="lift rounded-3xl bg-surface p-4">
             {signedIn ? (
               <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
                 <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
@@ -471,7 +471,7 @@ export default function ProfilePage() {
 
 function Card({ title, children, flush }: { title: string; children: ReactNode; flush?: boolean }) {
   return (
-    <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
+    <section className="lift rounded-3xl bg-surface p-4">
       <h2 className="mb-3 text-[13px] font-semibold tracking-wide text-muted uppercase">{title}</h2>
       <div className={cx(flush && "-mx-1 divide-y divide-line")}>{children}</div>
     </section>

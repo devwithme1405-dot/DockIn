@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Check, Clock, MapPin, Send, Undo2, Users } from "lucide-react";
-import type { Group, Priority, Share, ShareState, Subject, TaskKind } from "@/lib/types";
+import type { Group, Priority, Reaction, Share, ShareState, Subject, TaskKind } from "@/lib/types";
 import { KINDS, dueLabel } from "@/lib/tasks";
 import { toDateStr } from "@/lib/dates";
 import {
@@ -17,6 +17,7 @@ import {
 import { Avatar, Button, Chip, Field, cx, inputCls, useToast } from "./ui";
 import { KIND_ICON } from "./TaskParts";
 import { AttachPicker, SharedFileRow, type Attachment } from "./AssignmentFile";
+import { Reactions } from "./Reactions";
 
 /** One shared assignment, with who posted it and where. */
 export function ShareRow({
@@ -24,12 +25,17 @@ export function ShareRow({
   state,
   showGroup = true,
   mine,
+  reactions,
+  me,
   onChanged,
 }: {
   share: Share;
   state?: ShareState;
   showGroup?: boolean;
   mine: boolean;
+  /** Everyone who reacted to this one, when the screen has them to hand. */
+  reactions?: Reaction[];
+  me?: string | null;
   onChanged?: () => void;
 }) {
   const toast = useToast();
@@ -103,6 +109,8 @@ export function ShareRow({
         {share.notes && <p className="mt-1 text-[13px] text-muted">{share.notes}</p>}
 
         {share.file && <SharedFileRow file={share.file} mine={mine} />}
+
+        {reactions && <Reactions shareId={share.id} list={reactions} me={me ?? null} />}
 
         <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted">
           <Avatar name={share.authorName} avatar={share.authorAvatar} size={16} />

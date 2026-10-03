@@ -42,8 +42,14 @@ export function StickyBar({
   return (
     <header
       className={cx(
-        "sticky top-0 z-30 border-b bg-bg/[0.98] backdrop-blur-xl backdrop-saturate-150 transition-colors duration-150",
-        scrolled ? "border-line" : "border-transparent",
+        // At rest the bar is not there at all, so the page's colour runs behind
+        // the title unbroken. Any translucency at the top leaves a seam where
+        // the bar ends — the one thing that makes a screen look assembled from
+        // parts. It becomes frosted only once something has scrolled under it.
+        "sticky top-0 z-30 border-b transition-colors duration-200",
+        scrolled
+          ? "border-line bg-bg/75 backdrop-blur-xl backdrop-saturate-150"
+          : "border-transparent bg-transparent",
         "pt-[max(0.625rem,env(safe-area-inset-top))]",
         className,
       )}

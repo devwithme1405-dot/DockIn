@@ -120,7 +120,7 @@ export default function AttendancePage() {
       : { label: "Can still miss", value: overall.state === "none" ? "--" : Number.isFinite(overall.canMiss) ? String(overall.canMiss) : "Any", unit: "classes", up: false };
 
   return (
-    <>
+    <div className="page-wash">
       <PageHeader
         title="Attendance"
         subtitle="Track your classes and stay above target"
@@ -368,7 +368,7 @@ export default function AttendancePage() {
           ))}
         </div>
       </Sheet>
-    </>
+    </div>
   );
 }
 
