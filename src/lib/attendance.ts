@@ -192,3 +192,28 @@ export function recentForm<T extends { status: SessionStatus; date: string; star
     .sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start))
     .slice(-n);
 }
+
+/**
+ * What missing the next few classes would do to you.
+ *
+ * This is the question the app exists to answer. MyCamu will tell you what your
+ * attendance is; nobody will tell you what it becomes if you skip tomorrow, and
+ * that is the number you actually decide on. Counting is deliberately simple —
+ * every missed class is one more absent — because the honest answer is the
+ * arithmetic, not a model.
+ */
+export function ifYouMiss(
+  attended: number,
+  total: number,
+  missing: number,
+): { pct: number; safe: boolean } | null {
+  if (total <= 0 || missing <= 0) return null;
+  const pct = (attended / (total + missing)) * 100;
+  return { pct, safe: pct >= 0 };
+}
+
+/** How many classes a day's sessions still hold that would count against you. */
+export function countable(sessions: Pick<Session, "status">[]): number {
+  return sessions.filter((s) => s.status === "unmarked" || s.status === "present" || s.status === "absent")
+    .length;
+}

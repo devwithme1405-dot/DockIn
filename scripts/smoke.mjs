@@ -211,6 +211,14 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => problems.push(`uncaught: ${e.message}`));
 
+// Reloading itself is the single most maddening bug a web app can have, and
+// the hardest to describe. Counting loads makes it a test rather than a
+// feeling: after a screen has settled, nothing should load again.
+let loads = 0;
+page.on("load", () => {
+  loads += 1;
+});
+
 // First load creates the database; the second sees the seeded data. The app
 // settles on its own for a moment after loading (it decides where you belong),
 // so seeding is retried rather than raced.
@@ -265,6 +273,10 @@ for (const screen of SCREENS) {
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   );
   if (clipped) problems.push(`${pass.name}/${screen.name}: scrolls sideways`);
+
+  loads = 0;
+  await page.waitForTimeout(3500);
+  if (loads > 0) problems.push(`${pass.name}/${screen.name}: reloaded itself ${loads}x while idle`);
 
   await page.screenshot({ path: `${SHOTS}/${pass.name}-${screen.name}.png`, fullPage: true });
   console.log(

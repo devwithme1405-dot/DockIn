@@ -16,10 +16,10 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
-import { useAttendanceStats, useEvents } from "@/lib/hooks";
+import { useAttendanceStats, useEvents, useSessionsOn } from "@/lib/hooks";
 import { eventsOn, holidayLength, nextHoliday } from "@/lib/calendar";
-import { toDateStr, fmtDay } from "@/lib/dates";
-import { describe, fmtPct, recentForm } from "@/lib/attendance";
+import { addDays, toDateStr, fmtDay } from "@/lib/dates";
+import { countable, describe, fmtPct, ifYouMiss, recentForm } from "@/lib/attendance";
 import type { AttendanceState, SessionStatus } from "@/lib/types";
 import {
   Chip,
@@ -67,6 +67,10 @@ export default function AttendancePage() {
   // Attendance already ignores holidays; this is the screen finally saying so.
   const onHoliday = useMemo(() => eventsOn(events ?? [], today).holidays[0] ?? null, [events, today]);
   const coming = useMemo(() => nextHoliday(events ?? [], today), [events, today]);
+  // The question the record cannot answer: what happens if I skip tomorrow.
+  const tomorrow = addDays(today, 1);
+  const tomorrowSessions = useSessionsOn(tomorrow);
+  const tomorrowCount = countable(tomorrowSessions ?? []);
 
   const counts = useMemo(() => {
     const c = { all: 0, danger: 0, warn: 0, safe: 0 };
@@ -105,6 +109,10 @@ export default function AttendancePage() {
       </>
     );
   const { stats, overall, overallCounts } = data;
+  const bunk =
+    tomorrowCount > 0 && overall.state !== "none"
+      ? ifYouMiss(overall.attended, overall.total, tomorrowCount)
+      : null;
 
   const bunkOrNeed =
     overall.state === "danger"
@@ -236,6 +244,27 @@ export default function AttendancePage() {
           </span>
         </div>
       </section>
+
+      {bunk && (
+        <section className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_var(--line)]">
+          <span
+            className={cx(
+              "grid size-10 shrink-0 place-items-center rounded-xl",
+              bunk.pct >= target ? "bg-safe-soft text-safe" : "bg-warn-soft text-warn",
+            )}
+          >
+            <TrendingDown size={19} />
+          </span>
+          <p className="min-w-0 flex-1 text-[13.5px] leading-snug">
+            Skip {tomorrowCount === 1 ? "tomorrow's class" : `tomorrow's ${tomorrowCount} classes`} and
+            you land at{" "}
+            <b className={cx("tabular-nums", bunk.pct >= target ? "text-safe" : "text-warn")}>
+              {fmtPct(bunk.pct)}
+            </b>
+            {bunk.pct >= target ? " — still above target." : ` — below your ${target}%.`}
+          </p>
+        </section>
+      )}
 
       <div className="mt-5 px-5">
         <label className="flex h-12 items-center gap-2.5 rounded-2xl bg-surface px-4 shadow-[0_0_0_1px_var(--line)] focus-within:shadow-[0_0_0_2px_var(--accent)]">

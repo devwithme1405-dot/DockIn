@@ -4,8 +4,10 @@ import type { EventKind } from "@/lib/types";
 import {
   computeStreak,
   countCancelled,
+  countable,
   describe as describeSummary,
   fmtPct,
+  ifYouMiss,
   summarize,
   weeklyTrend,
   withBase,
@@ -254,5 +256,30 @@ describe("what the academic calendar says about a day", () => {
     ];
     expect(nextHoliday(list, "2026-10-03")?.title).toBe("Diwali");
     expect(nextHoliday(list, "2026-11-20")).toBeNull();
+  });
+});
+
+describe("what missing the next classes would do", () => {
+  it("answers the question the record cannot", () => {
+    // 36 of 40 is 90%; missing two more lands at 36/42
+    const out = ifYouMiss(36, 40, 2);
+    expect(out!.pct).toBeCloseTo(85.71, 1);
+  });
+
+  it("says nothing when there is nothing to go on", () => {
+    expect(ifYouMiss(0, 0, 2)).toBeNull();
+    expect(ifYouMiss(10, 10, 0)).toBeNull();
+  });
+
+  it("counts only the classes that can count against you", () => {
+    expect(
+      countable([
+        { status: "unmarked" },
+        { status: "present" },
+        { status: "absent" },
+        { status: "cancelled" },
+        { status: "holiday" },
+      ]),
+    ).toBe(3);
   });
 });

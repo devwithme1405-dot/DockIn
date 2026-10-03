@@ -29,6 +29,11 @@ public class MainActivity extends LauncherActivity {
         return base.buildUpon()
                 .appendQueryParameter("dev", PayLink.secret(this))
                 .appendQueryParameter("app", version())
+                // Says this build has the notification listener in it. The site
+                // cannot test for that any other way, and without it an old APK
+                // and a working one look identical from a web page — the symptom
+                // being a switch that silently opens nothing.
+                .appendQueryParameter("pay", "1")
                 .build();
     }
 

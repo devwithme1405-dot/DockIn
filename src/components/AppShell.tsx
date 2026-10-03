@@ -116,6 +116,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (appVersion) {
       try {
         localStorage.setItem("dockin-app", appVersion);
+        // The app only sends this once it has the listener in it.
+        localStorage.setItem("dockin-app-pay", q.get("pay") === "1" ? "1" : "0");
       } catch {
         /* private browsing */
       }
@@ -127,6 +129,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         const url = new URL(window.location.href);
         url.searchParams.delete("dev");
         url.searchParams.delete("app");
+        url.searchParams.delete("pay");
         window.history.replaceState(null, "", url.toString());
       });
   }, [userId]);

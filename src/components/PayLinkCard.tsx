@@ -37,6 +37,16 @@ export function PayLinkCard() {
   const paired = (devices ?? []).length > 0;
   const sending = (devices ?? []).some((d) => d.lastSeen);
   const onAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+  /**
+   * Which app this phone is running, if any.
+   *
+   * The app puts its version on the address it opens the site with. Without
+   * that, an old APK and a working one look identical from in here, and the
+   * only symptom is a button that silently does nothing — which is exactly how
+   * this feature wasted an evening.
+   */
+  const app = typeof window === "undefined" ? null : readApp();
+  const tooOld = onAndroid && app !== null && !app.pay;
 
   async function drop(id: string) {
     try {
@@ -92,9 +102,13 @@ export function PayLinkCard() {
       <p className="mt-2 text-center text-[12.5px] text-muted">
         {!onAndroid
           ? "Open DockIn on your Android phone to switch this on."
-          : paired
-            ? "Android asks you to switch DockIn on in its own list. That is the only step."
-            : "Open this in the DockIn app on your phone, signed in, and it pairs itself."}
+          : app === null
+            ? "Open this inside the DockIn app, not the browser."
+            : tooOld
+              ? `Your app (${app.version}) came before this feature. Install the latest DockIn.apk and open it again.`
+              : paired
+                ? `Android asks you to switch DockIn on in its own list. That is the only step. · App ${app.version}`
+                : `Signed in? It pairs itself the next time the app opens. · App ${app.version}`}
       </p>
 
       {paired && (
@@ -124,6 +138,17 @@ export function PayLinkCard() {
         </ul>
       )}
 
+      {tooOld && (
+        <a
+          href="https://github.com/devwithme1405-dot/DockIn/releases/latest"
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 block text-center text-[13px] font-medium text-accent"
+        >
+          Get the latest app
+        </a>
+      )}
+
       <ConfirmSheet
         open={!!dropping}
         title="Stop this phone sending payments?"
@@ -138,4 +163,21 @@ export function PayLinkCard() {
       </ConfirmSheet>
     </section>
   );
+}
+
+/**
+ * What the Android app said about itself when it opened the site.
+ *
+ * `pay` is the app declaring it has the listener, rather than this file
+ * guessing from a version number — a guess that would be wrong the moment the
+ * build numbering changed.
+ */
+function readApp(): { version: string; pay: boolean } | null {
+  try {
+    const version = localStorage.getItem("dockin-app");
+    if (!version) return null;
+    return { version, pay: localStorage.getItem("dockin-app-pay") === "1" };
+  } catch {
+    return null;
+  }
 }
