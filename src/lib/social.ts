@@ -483,10 +483,33 @@ export async function setShareDone(shareId: string, done: boolean): Promise<void
   const t = now();
   const existing = await db.shareState.get(shareId);
   await db.shareState.put({
+    ...(existing ?? { createdAt: t, submitted: false, submittedAt: null }),
     id: shareId,
     done,
     doneAt: done ? t : null,
     hidden: existing?.hidden ?? false,
+    updatedAt: t,
+    deletedAt: null,
+  });
+}
+
+/**
+ * Handed in on the LMS.
+ *
+ * Marking it submitted also marks it done: nobody submits an assignment they
+ * have not finished, and making someone tick two boxes for one fact is how a
+ * tracker ends up out of step with the truth.
+ */
+export async function setShareSubmitted(shareId: string, submitted: boolean): Promise<void> {
+  const t = now();
+  const existing = await db.shareState.get(shareId);
+  await db.shareState.put({
+    id: shareId,
+    done: submitted ? true : (existing?.done ?? false),
+    doneAt: submitted ? (existing?.doneAt ?? t) : (existing?.doneAt ?? null),
+    hidden: existing?.hidden ?? false,
+    submitted,
+    submittedAt: submitted ? t : null,
     createdAt: existing?.createdAt ?? t,
     updatedAt: t,
     deletedAt: null,
@@ -500,6 +523,8 @@ export async function hideShare(shareId: string, hidden = true): Promise<void> {
     id: shareId,
     done: existing?.done ?? false,
     doneAt: existing?.doneAt ?? null,
+    submitted: existing?.submitted ?? false,
+    submittedAt: existing?.submittedAt ?? null,
     hidden,
     createdAt: existing?.createdAt ?? t,
     updatedAt: t,

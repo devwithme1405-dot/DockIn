@@ -2,7 +2,14 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { resetAll } from "@/lib/repo";
-import { MAX_FILE_BYTES, cleanCode, fileKind, hideShare, setShareDone } from "@/lib/social";
+import {
+  MAX_FILE_BYTES,
+  cleanCode,
+  fileKind,
+  hideShare,
+  setShareDone,
+  setShareSubmitted,
+} from "@/lib/social";
 import { DOCX_MIME } from "@/lib/docx";
 import { SYNC_KINDS } from "@/lib/sync";
 
@@ -83,5 +90,36 @@ describe("the file on a shared assignment", () => {
 
   it("holds the bucket's own size limit, so the app refuses before uploading", () => {
     expect(MAX_FILE_BYTES).toBe(10 * 1024 * 1024);
+  });
+});
+
+describe("handing an assignment in", () => {
+  it("is tracked apart from having the file", async () => {
+    await setShareDone("s1", true);
+    expect((await db.shareState.get("s1"))?.submitted).toBeFalsy();
+
+    await setShareSubmitted("s1", true);
+    const after = await db.shareState.get("s1");
+    expect(after).toMatchObject({ done: true, submitted: true });
+    expect(after!.submittedAt).toBeGreaterThan(0);
+  });
+
+  it("marks it done too, because nobody submits what they have not finished", async () => {
+    await setShareSubmitted("s2", true);
+    expect(await db.shareState.get("s2")).toMatchObject({ done: true, submitted: true });
+  });
+
+  it("un-submitting leaves the work itself done", async () => {
+    await setShareSubmitted("s3", true);
+    await setShareSubmitted("s3", false);
+    const row = await db.shareState.get("s3");
+    expect(row).toMatchObject({ submitted: false, done: true });
+    expect(row!.submittedAt).toBeNull();
+  });
+
+  it("survives being hidden and unhidden", async () => {
+    await setShareSubmitted("s4", true);
+    await hideShare("s4");
+    expect(await db.shareState.get("s4")).toMatchObject({ submitted: true, hidden: true });
   });
 });

@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { TasksSkeleton } from "@/components/Skeleton";
-import Link from "next/link";
-import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2, Users } from "lucide-react";
-import { useFriends, useGroups, useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
+import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2, UserRound } from "lucide-react";
+import { useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
 import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
 import { isCloudConfigured } from "@/lib/supabase";
@@ -25,9 +24,9 @@ import { addDays, fmtDay, fmtTime, fromDateStr, toDateStr } from "@/lib/dates";
 import type { Task } from "@/lib/types";
 import { EmptyState, Sheet, SubjectTile, cx, useToast } from "@/components/ui";
 import { TaskForm, TaskRow, KIND_ICON } from "@/components/TaskParts";
-import { ShareForm, ShareRow } from "@/components/ShareParts";
+import { ShareRow } from "@/components/ShareParts";
 
-type Tab = "todo" | "exams" | "groups" | "done";
+type Tab = "todo" | "exams" | "done";
 
 export default function TasksPage() {
   const tasks = useTasks();
@@ -40,14 +39,13 @@ export default function TasksPage() {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1",
   );
   const [editing, setEditing] = useState<Task | null>(null);
-  const [sharing, setSharing] = useState(false);
+  // Ticked a moment ago: kept in place so the list does not jump under a finger.
+  const [justDone, setJustDone] = useState<ReadonlySet<string>>(() => new Set());
 
   const { session } = useAuth();
   const me = session?.user.id ?? null;
   const shares = useShares();
   const shareStates = useShareState();
-  const groupList = useGroups();
-  const friends = useFriends();
 
   useEffect(() => {
     if (!isCloudConfigured || !me) return;
@@ -84,7 +82,7 @@ export default function TasksPage() {
   const pastExams = exams.filter((t) => t.dueDate && t.dueDate < today);
   const nextExam = upcomingExams.find((t) => t.dueDate);
 
-  const groups = useMemo(() => groupPending(list, today), [list, today]);
+  const groups = useMemo(() => groupPending(list, today, justDone), [list, today, justDone]);
   const doneList = useMemo(
     () => list.filter((t) => t.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
     [list],
@@ -192,11 +190,10 @@ export default function TasksPage() {
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-4 gap-1.5 px-5" role="tablist">
+      <div className="mt-4 grid grid-cols-3 gap-1.5 px-5" role="tablist">
         {([
           ["todo", "To do", stats.pending + sharedOpen.length],
           ["exams", "Exams", exams.length],
-          ["groups", "Groups", groupList?.length ?? 0],
           ["done", "Done", doneList.length],
         ] as [Tab, string, number][]).map(([id, label, n]) => (
           <button
@@ -253,7 +250,15 @@ export default function TasksPage() {
                   </h2>
                   <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
                     {g.items.map((t) => (
-                      <TaskRow key={t.id} task={t} today={today} subject={t.subjectId ? subjectById.get(t.subjectId) : undefined} onOpen={() => open(t)} />
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        today={today}
+                        subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
+                        origin={{ label: "Yours", icon: UserRound }}
+                        onOpen={() => open(t)}
+                        onDone={(id) => setJustDone((cur) => new Set(cur).add(id))}
+                      />
                     ))}
                   </ul>
                 </section>
@@ -283,97 +288,6 @@ export default function TasksPage() {
             </div>
           ))}
 
-        {tab === "groups" && (
-          <div className="space-y-4 px-5">
-            {!isCloudConfigured || !me ? (
-              <EmptyState
-                flush
-                icon={Users}
-                title="Sign in to use groups"
-                body="Groups let your class share one assignment with everyone at once."
-                action={
-                  <Link
-                    href="/circle"
-                    className="inline-flex h-10 items-center rounded-xl bg-accent px-4 text-[15px] font-medium text-on-accent"
-                  >
-                    Get started
-                  </Link>
-                }
-              />
-            ) : (
-              <>
-                <div className="flex gap-2.5">
-                  <button
-                    onClick={() => setSharing(true)}
-                    disabled={(groupList?.length ?? 0) === 0 && (friends ?? []).length === 0}
-                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-[15px] font-medium text-on-accent disabled:opacity-40"
-                  >
-                    <Share2 size={16} /> Share something
-                  </button>
-                  <Link
-                    href="/circle?tab=groups"
-                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-surface-2 text-[15px] font-medium"
-                  >
-                    <Users size={16} /> Friends and groups
-                  </Link>
-                </div>
-
-                {(groupList?.length ?? 0) === 0 ? (
-                  <EmptyState
-                    flush
-                    icon={Users}
-                    title="No groups yet"
-                    body="Make one for your section. Whatever anyone posts shows up here for everybody."
-                  />
-                ) : (
-                  <div className="overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
-                    {(groupList ?? []).map((g, i) => {
-                      const open = (shares ?? []).filter(
-                        (s) => s.groupId === g.id && !shareStates?.get(s.id)?.done && !shareStates?.get(s.id)?.hidden,
-                      ).length;
-                      return (
-                        <Link
-                          key={g.id}
-                          href={`/groups/${g.id}`}
-                          className={cx("flex items-center gap-3 p-4", i > 0 && "border-t border-line")}
-                        >
-                          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[20px]">
-                            {g.emoji ?? "\u{1F465}"}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate font-medium">{g.name}</span>
-                            <span className="block text-[12.5px] text-muted">
-                              {g.members} {g.members === 1 ? "person" : "people"}
-                            </span>
-                          </span>
-                          {open > 0 && (
-                            <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-[12px] font-semibold text-accent tabular-nums">
-                              {open} to do
-                            </span>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {sharedOpen.filter((s) => !s.groupId).length > 0 && (
-                  <section>
-                    <h2 className="mb-1.5 text-[13px] font-semibold text-muted">Sent straight to you</h2>
-                    <div className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
-                      {sharedOpen
-                        .filter((s) => !s.groupId)
-                        .map((s) => (
-                          <ShareRow key={s.id} share={s} state={shareStates?.get(s.id)} mine={s.author === me} />
-                        ))}
-                    </div>
-                  </section>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
         {tab === "done" &&
           (doneList.length === 0 ? (
             <EmptyState title="Nothing finished yet" body="Completed tasks show up here." />
@@ -381,7 +295,14 @@ export default function TasksPage() {
             <div className="px-5">
               <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
                 {doneList.map((t) => (
-                  <TaskRow key={t.id} task={t} today={today} subject={t.subjectId ? subjectById.get(t.subjectId) : undefined} onOpen={() => open(t)} />
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    today={today}
+                    subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
+                    origin={{ label: "Yours", icon: UserRound }}
+                    onOpen={() => open(t)}
+                  />
                 ))}
               </ul>
             </div>
@@ -389,23 +310,15 @@ export default function TasksPage() {
       </div>
 
       <button
-        onClick={() => (tab === "groups" ? setSharing(true) : setAdding(true))}
-        aria-label={tab === "groups" ? "Share an assignment" : "Add task"}
+        onClick={() => setAdding(true)}
+        aria-label="Add task"
         className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
       >
-        {tab === "groups" ? <Share2 size={24} /> : <Plus size={26} />}
+        <Plus size={26} />
       </button>
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="New task">
         <TaskForm subjects={subjects} defaultKind={tab === "exams" ? "exam" : "assignment"} onDone={() => setAdding(false)} />
-      </Sheet>
-      <Sheet open={sharing} onClose={() => setSharing(false)} title="Share an assignment">
-        <ShareForm
-          groups={groupList ?? []}
-          subjects={subjects}
-          friends={(friends ?? []).filter((f) => f.status === "accepted")}
-          onDone={() => setSharing(false)}
-        />
       </Sheet>
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing ? KIND_BY_ID[editing.kind].label : "Task"}>
         {editing && <TaskForm key={editing.id} task={editing} subjects={subjects} onDone={() => setEditing(null)} />}

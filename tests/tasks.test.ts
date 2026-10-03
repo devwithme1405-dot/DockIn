@@ -147,3 +147,41 @@ describe("holidays and attendance", () => {
     expect((await db.sessions.get(s.id))?.status).toBe("present");
   });
 });
+
+describe("a task you just ticked", () => {
+  const mk = (id: string, done: boolean, dueDate: string | null) =>
+    ({
+      id,
+      title: id,
+      notes: "",
+      kind: "assignment",
+      subjectId: null,
+      dueDate,
+      dueTime: null,
+      room: "",
+      priority: "med",
+      done,
+      doneAt: done ? 1 : null,
+      subtasks: [],
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    }) as Task;
+
+  it("stays where it was instead of vanishing under your finger", () => {
+    const list = [mk("a", false, "2026-10-03"), mk("b", true, "2026-10-03")];
+    const groups = groupPending(list, "2026-10-03", new Set(["b"]));
+    expect(groups[0].items.map((t) => t.id)).toEqual(["a", "b"]);
+  });
+
+  it("is gone the next time the screen is opened", () => {
+    const list = [mk("a", false, "2026-10-03"), mk("b", true, "2026-10-03")];
+    expect(groupPending(list, "2026-10-03")[0].items.map((t) => t.id)).toEqual(["a"]);
+  });
+
+  it("sinks below whatever is still to do", () => {
+    const list = [mk("done", true, "2026-10-03"), mk("todo", false, "2026-10-03")];
+    const groups = groupPending(list, "2026-10-03", new Set(["done"]));
+    expect(groups[0].items.map((t) => t.id)).toEqual(["todo", "done"]);
+  });
+});

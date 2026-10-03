@@ -257,6 +257,15 @@ export interface ShareState extends Base {
   done: boolean;
   doneAt: number | null;
   hidden: boolean;
+  /**
+   * Handed in on the LMS.
+   *
+   * Taking your copy and submitting it are two different days' work, and the
+   * one that gets forgotten is the second. Tracking them separately is the
+   * difference between "I have the file" and "I am done".
+   */
+  submitted?: boolean;
+  submittedAt?: number | null;
 }
 
 /** Your own row in the campus directory. */

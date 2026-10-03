@@ -61,11 +61,25 @@ export function compareTasks(a: Task, b: Task): number {
   );
 }
 
-export function groupPending(tasks: Task[], today: string): { bucket: Bucket; items: Task[] }[] {
-  const pending = tasks.filter((t) => !t.done).sort(compareTasks);
+/**
+ * The list, grouped by when it is due.
+ *
+ * `keep` is the set of tasks that were ticked a moment ago. A task that
+ * vanishes the instant you tick it takes the proof of what you just did with
+ * it, and leaves you wondering whether the tap registered — so a freshly done
+ * one stays where it was, struck through, until the screen is next opened.
+ */
+export function groupPending(
+  tasks: Task[],
+  today: string,
+  keep?: ReadonlySet<string>,
+): { bucket: Bucket; items: Task[] }[] {
+  const shown = tasks
+    .filter((t) => !t.done || keep?.has(t.id))
+    .sort((a, b) => Number(a.done) - Number(b.done) || compareTasks(a, b));
   return BUCKET_ORDER.map((bucket) => ({
     bucket,
-    items: pending.filter((t) => bucketOf(t, today) === bucket),
+    items: shown.filter((t) => bucketOf(t, today) === bucket),
   })).filter((g) => g.items.length > 0);
 }
 

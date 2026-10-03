@@ -10,6 +10,7 @@ import {
   ListChecks,
   Plus,
   Rocket,
+  Trash2,
   UserRound,
   X,
 } from "lucide-react";
@@ -40,23 +41,64 @@ export function TaskRow({
   task,
   subject,
   today,
+  origin,
   onOpen,
+  onDone,
 }: {
   task: Task;
   subject?: Subject;
   today: string;
+  /** Where this came from — "Personal", a group, a friend. */
+  origin?: { label: string; icon: typeof UserRound };
   onOpen: () => void;
+  onDone?: (id: string) => void;
 }) {
   const toast = useToast();
   const kind = KIND_BY_ID[task.kind];
   const Icon = KIND_ICON[task.kind];
   const prog = subtaskProgress(task);
   const overdue = !task.done && bucketOf(task, today) === "overdue";
+  // Deleting is two steps on purpose: the first strikes the row out and says
+  // what will happen, the second does it. A list where one tap destroys
+  // something is a list people stop trusting, and an undo you have four seconds
+  // to notice is not a real answer.
+  const [removing, setRemoving] = useState(false);
 
   async function toggle() {
     const next = !task.done;
     await setTaskDone(task.id, next);
-    if (next) toast.show("Marked done", () => setTaskDone(task.id, false));
+    if (next) onDone?.(task.id);
+  }
+
+  async function remove() {
+    await deleteTask(task.id);
+    setRemoving(false);
+    toast.show("Deleted", () => restoreTask(task.id));
+  }
+
+  if (removing) {
+    return (
+      <li className="flex items-center gap-3 bg-danger-soft px-3.5 py-3">
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-1 text-[15px] font-medium text-muted line-through">
+            {task.title}
+          </span>
+          <span className="text-[12.5px] text-muted">Delete this?</span>
+        </span>
+        <button
+          onClick={() => setRemoving(false)}
+          className="h-9 shrink-0 rounded-full px-3 text-[13.5px] font-medium"
+        >
+          Keep
+        </button>
+        <button
+          onClick={remove}
+          className="h-9 shrink-0 rounded-full bg-danger px-3.5 text-[13.5px] font-medium text-white"
+        >
+          Delete
+        </button>
+      </li>
+    );
   }
 
   return (
@@ -73,7 +115,12 @@ export function TaskRow({
         <Check size={15} strokeWidth={3} />
       </button>
       <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <span className={cx("grid size-10 shrink-0 place-items-center rounded-xl", kind.tint, kind.ink)}>
+        <span
+          className={cx(
+            "grid size-10 shrink-0 place-items-center rounded-xl",
+            task.done ? "bg-surface-2 text-muted" : cx(kind.tint, kind.ink),
+          )}
+        >
           <Icon size={18} />
         </span>
         <span className="min-w-0 flex-1">
@@ -85,18 +132,29 @@ export function TaskRow({
           >
             {task.title}
           </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-muted">
-            {subject && (
-              <span className="font-medium" style={{ color: subject.color }}>
-                {subject.code || subject.name}
-              </span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-muted">
+            {task.done ? (
+              <span className="font-medium text-safe">Completed</span>
+            ) : (
+              <>
+                {subject && (
+                  <span className="font-medium" style={{ color: subject.color }}>
+                    {subject.code || subject.name}
+                  </span>
+                )}
+                <span className={cx(overdue && "font-medium text-danger")}>
+                  {dueLabel(task, today)}
+                </span>
+                {prog.total > 0 && (
+                  <span className="tabular-nums">
+                    {prog.done}/{prog.total}
+                  </span>
+                )}
+              </>
             )}
-            {!task.done && (
-              <span className={cx(overdue && "font-medium text-danger")}>{dueLabel(task, today)}</span>
-            )}
-            {prog.total > 0 && (
-              <span className="tabular-nums">
-                {prog.done}/{prog.total}
+            {origin && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium">
+                <origin.icon size={11} /> {origin.label}
               </span>
             )}
           </span>
@@ -104,6 +162,13 @@ export function TaskRow({
         {task.priority === "high" && !task.done && (
           <Flame size={16} className="shrink-0 text-danger" aria-label="High priority" />
         )}
+      </button>
+      <button
+        onClick={() => setRemoving(true)}
+        aria-label={`Delete ${task.title}`}
+        className="grid size-8 shrink-0 place-items-center rounded-full text-muted"
+      >
+        <Trash2 size={15} />
       </button>
     </li>
   );
