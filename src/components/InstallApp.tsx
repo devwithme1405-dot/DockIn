@@ -116,9 +116,8 @@ export function InstallApp({ apkHref }: { apkHref: string }) {
       <p className="mt-2 flex gap-2 text-[12.5px] text-muted">
         <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warn" />
         <span>
-          Everything else works without this. If you already have DockIn installed from a file,
-          uninstall it first — Android will not replace it otherwise, and the message it gives you
-          does not say so.
+          Everything else works without this. When it asks, allow your browser to install apps, and
+          tap through Play Protect — it does not recognise a small college app.
         </span>
       </p>
     </>

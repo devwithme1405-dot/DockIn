@@ -17,7 +17,8 @@ export const metadata: Metadata = {
   description: "Put DockIn on your phone.",
 };
 
-const APK = "https://github.com/devwithme1405-dot/DockIn/releases/latest/download/DockIn.apk";
+/** Served from this site, so the phone never leaves it to fetch the app. */
+const APK = "/DockIn.apk";
 
 export default function GetTheApp() {
   return (

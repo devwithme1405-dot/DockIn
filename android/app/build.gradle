@@ -17,7 +17,16 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.dockin.app'
+        // A new identity on purpose.
+        //
+        // Android will not replace an installed app whose signature it cannot
+        // match, and the message it gives — "app can't be installed" — is the
+        // same one it gives for half a dozen unrelated situations, so there is
+        // no way to tell from the phone which one you are in. A package name
+        // nothing has ever used cannot collide with anything, so this install
+        // cannot fail for that reason. The Java package stays as it was; only
+        // the identity Android files it under changes.
+        applicationId 'com.dockin.student'
         minSdk 26
         targetSdk 35
         versionCode minutesSince2020.intValue()
