@@ -375,6 +375,47 @@ await step("the timetable wizard opens and takes a subject", async () => {
   if (!/subject|period|day/i.test(text)) throw new Error("the wizard drew nothing recognisable");
 });
 
+await step("moving between tabs never reloads the page", async () => {
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2000);
+
+  // On a fast machine every navigation is instant and this test proves nothing.
+  // College wifi is not a fast machine, and a navigation that takes a couple of
+  // seconds is exactly what used to be mistaken for a broken one.
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 600,
+    downloadThroughput: (400 * 1024) / 8,
+    uploadThroughput: (200 * 1024) / 8,
+  });
+
+  loads = 0;
+  // Friends is the slow one — it reaches for the network as it opens — so it is
+  // the screen where a navigation fallback would wrongly fire.
+  for (const [label, expect] of [
+    ["Today", "Timetable"],
+    ["Friends", "Friends"],
+    ["Money", "Spent"],
+    ["Friends", "Friends"],
+    ["Tasks", "To do"],
+  ]) {
+    await page.locator("nav[aria-label='Main'] a", { hasText: label }).first().click();
+    await page.waitForFunction((needle) => document.body.innerText.includes(needle), expect, {
+      timeout: 12000,
+    });
+  }
+  await page.waitForTimeout(8000); // longer than the hard fallback would wait
+  await cdp.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+  await cdp.detach();
+  if (loads > 0) throw new Error(`the page reloaded ${loads}x while switching tabs`);
+});
+
 await step("the app opens with no network at all", async () => {
   // The service worker needs one online visit to take hold.
   await page.goto(BASE, { waitUntil: "networkidle" });

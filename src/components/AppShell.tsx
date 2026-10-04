@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarCheck, ListChecks, Sun, Users, Wallet } from "lucide-react";
@@ -202,23 +202,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
-
-  /**
-   * If the router does not get there, the browser will.
-   *
-   * Moving between tabs fetches that screen's script, and a script that will
-   * not load leaves the tap doing nothing at all — the app looks frozen while
-   * everything already on screen keeps working, which is the most baffling way
-   * for it to fail. So a tap that has not changed the page after a moment is
-   * finished the old-fashioned way, with a full page load. Slower, and it
-   * always works.
-   */
-  function insist(href: string) {
-    window.setTimeout(() => {
-      if (window.location.pathname !== href) window.location.assign(href);
-    }, 1800);
-  }
-
   return (
     <nav
       aria-label="Main"
@@ -226,31 +209,24 @@ function TabBar({ pathname }: { pathname: string }) {
     >
       <ul className="grid grid-cols-5">
         {TABS.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
+          const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <li key={href}>
               <Link
                 href={href}
-                onClick={() => !active && insist(href)}
                 aria-current={active ? "page" : undefined}
                 className={cx(
                   "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
                   active ? "text-accent" : "text-muted",
                 )}
               >
-                <span className="relative">
-                  <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
-                  {href === "/tasks" && attention > 0 && (
-                    <span
-                      className="absolute -top-1 -right-2 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums"
-                      aria-label={`${attention} need attention`}
-                    >
-                      {attention > 9 ? "9+" : attention}
-                    </span>
-                  )}
-                </span>
-                {label}
+                <Tab
+                  href={href}
+                  label={label}
+                  icon={Icon}
+                  active={active}
+                  badge={href === "/tasks" ? attention : 0}
+                />
               </Link>
             </li>
           );
@@ -259,3 +235,58 @@ function TabBar({ pathname }: { pathname: string }) {
     </nav>
   );
 }
+
+/**
+ * The inside of a tab, which knows whether its own navigation is still running.
+ *
+ * There used to be a blind timer here: if the page had not changed within a
+ * second and a half, load it the hard way. That was meant for a tab that would
+ * not open at all, but it cannot tell "broken" from "slow" — so on a weak
+ * signal an ordinary tap turned into a full page reload, and the app appeared
+ * to reload itself over and over.
+ *
+ * `useLinkStatus` says whether this link's navigation is actually still
+ * pending. So the tap can show that something is happening, and the hard
+ * fallback waits for a length of time that no working navigation reaches.
+ */
+function Tab({
+  href,
+  label,
+  icon: Icon,
+  active,
+  badge,
+}: {
+  href: string;
+  label: string;
+  icon: typeof Sun;
+  active: boolean;
+  badge: number;
+}) {
+  const { pending } = useLinkStatus();
+
+  useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => {
+      if (window.location.pathname !== href) window.location.assign(href);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [pending, href]);
+
+  return (
+    <>
+      <span className={cx("relative transition-opacity", pending && "opacity-50")}>
+        <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
+        {badge > 0 && (
+          <span
+            className="absolute -top-1 -right-2 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums"
+            aria-label={`${badge} need attention`}
+          >
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
+      </span>
+      {label}
+    </>
+  );
+}
+
