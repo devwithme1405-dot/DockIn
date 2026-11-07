@@ -62,8 +62,8 @@ export function summarize(
 
 export function fmtPct(pct: number | null): string {
   if (pct === null) return "--";
-  const r = Math.round(pct * 10) / 10;
-  return Number.isInteger(r) ? `${r}%` : `${r.toFixed(1)}%`;
+  // Whole numbers, the way Camu shows them — 72%, not 72.1%.
+  return `${Math.round(pct)}%`;
 }
 
 /** One short, plain-language line describing a summary. */

@@ -44,11 +44,16 @@ function camuFixture() {
       p(day(0), "23:57", "23:58", "Full Stack Development ( P-CC-315 )", "CSET218", "x", "P-CC-315"),
       p(day(-1), "09:25", "10:25", "Database Management Systems ( P-LA-203 )", "CSET200", "s-dbms", "P-LA-203"),
     ],
-    holidays: [],
+    holidays: [{ title: "Diwali Holidays", start: day(-5), end: day(-3) }],
     history: {
       "s-dbms": [
         { date: day(-1), from: "09:25", to: "10:25", present: false, leave: "" },
         { date: day(-2), from: "09:25", to: "10:25", present: true, leave: "" },
+        { date: day(-8), from: "09:25", to: "10:25", present: true, leave: "" },
+      ],
+      "s-fsd": [
+        { date: day(-1), from: "11:30", to: "12:30", present: true, leave: "" },
+        { date: day(-2), from: "11:30", to: "12:30", present: true, leave: "" },
       ],
     },
     historyAt: Date.now(),
@@ -378,7 +383,8 @@ await step("connecting Camu turns Attendance into Camu's numbers", async () => {
   await waitFor("From Camu");
   const t = await text();
   if (!t.includes("Database Management Systems")) throw new Error("Camu's subjects are missing");
-  if (!/81\.6%/.test(t)) throw new Error("the overall figure is not Camu's 71 of 87");
+  // 71 of 87 is 81.6%, shown rounded like Camu.
+  if (!/82%/.test(t)) throw new Error("the overall figure is not Camu's 71 of 87 (rounded)");
   if (t.includes("Open timetable")) throw new Error("still asks for a hand-made timetable");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-camu-attendance.png`, fullPage: true });
@@ -392,6 +398,33 @@ await step("a subject opens every class Camu recorded", async () => {
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/native-camu-history.png` });
   await page.keyboard.press("Escape");
+});
+
+await step("the Log lists classes by present/absent across subjects", async () => {
+  await page.goto(`${BASE}/attendance`, { waitUntil: "domcontentloaded" });
+  await waitFor("From Camu");
+  await page.getByRole("tab", { name: "Log" }).click();
+  await waitFor("Database Management Systems");
+  // Filter to just absences, and the present-only class should drop out.
+  await page.getByRole("tab", { name: "absent", exact: true }).click();
+  await page.waitForTimeout(300);
+  const t = await text();
+  if (!/Absent/.test(t)) throw new Error("the absent class is missing from the log");
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/native-camu-log.png`, fullPage: true });
+});
+
+await step("the Calendar marks a day and opens it", async () => {
+  await page.getByRole("tab", { name: "Calendar" }).click();
+  await waitFor("All present");
+  // Yesterday had an absence; tapping a marked day opens its class list.
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  await page.getByRole("button", { name: new RegExp(`${d.getDate()}[^0-9]`) }).first().click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/native-camu-calendar.png`, fullPage: true });
+  await page.getByRole("tab", { name: "Subjects" }).click();
+  await waitFor("Target attendance");
 });
 
 await step("Today shows Camu's classes with the room, and nothing to mark", async () => {
@@ -432,8 +465,9 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
   await waitFor("Wrong username or password");
   await page.getByPlaceholder("LMS password").fill("right");
   await page.getByRole("button", { name: "Sign in to the LMS" }).click();
-  await waitFor("Lab 7: Joins");
+  await waitFor("From your LMS");
   const t = await text();
+  if (!t.includes("Lab 7: Joins")) throw new Error("the LMS assignment is missing");
   if (!t.includes("LMS")) throw new Error("the task does not say it came from the LMS");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-lms-tasks.png`, fullPage: true });

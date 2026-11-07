@@ -91,10 +91,12 @@ describe("summarize", () => {
 });
 
 describe("formatting", () => {
-  it("formats percentages", () => {
+  it("formats percentages as whole numbers, the way Camu shows them", () => {
     expect(fmtPct(null)).toBe("--");
     expect(fmtPct(75)).toBe("75%");
-    expect(fmtPct(66.666)).toBe("66.7%");
+    expect(fmtPct(66.666)).toBe("67%");
+    expect(fmtPct(72.09)).toBe("72%");
+    expect(fmtPct(81.6)).toBe("82%");
   });
 
   it("describes states in plain language", () => {

@@ -20,6 +20,7 @@ import { useEvents, useSessionsOn } from "@/lib/hooks";
 import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
 import { CamuStatus, ConnectCamu } from "@/components/College";
 import { CamuHistorySheet } from "@/components/CamuHistory";
+import { AttendanceCalendar, AttendanceLog, AttendanceViewSwitch } from "@/components/AttendanceViews";
 import { eventsOn, nextHoliday } from "@/lib/calendar";
 import { addDays, toDateStr, fmtDay, daysBetweenDates } from "@/lib/dates";
 import { countable, describe, fmtPct, ifYouMiss, recentForm } from "@/lib/attendance";
@@ -65,6 +66,7 @@ export default function AttendancePage() {
   const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<"subjects" | "log" | "calendar">("subjects");
   const [targetOpen, setTargetOpen] = useState(false);
   const events = useEvents();
   const today = toDateStr();
@@ -121,6 +123,8 @@ export default function AttendancePage() {
       </>
     );
   const { stats, overall, overallCounts } = data;
+  // The Log and Calendar views are Camu-only; without Camu it is always the subject list.
+  const showSubjects = !camu || view === "subjects";
   const bunk =
     tomorrowCount > 0 && overall.state !== "none"
       ? ifYouMiss(overall.attended, overall.total, tomorrowCount)
@@ -220,7 +224,14 @@ export default function AttendancePage() {
         </dl>
       </section>
 
-      {(onHoliday || coming) && (
+      {camu && <AttendanceViewSwitch view={view} onChange={setView} />}
+
+      {camu && view === "log" && <AttendanceLog sessions={data.sessions} subjects={stats.map((s) => s.subject)} />}
+      {camu && view === "calendar" && (
+        <AttendanceCalendar sessions={data.sessions} subjects={stats.map((s) => s.subject)} holidays={camu.holidays ?? []} />
+      )}
+
+      {showSubjects && (onHoliday || coming) && (
         <Link
           href="/calendar"
           className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-violet-soft px-4 py-3 transition active:scale-[0.99]"
@@ -242,6 +253,7 @@ export default function AttendancePage() {
         </Link>
       )}
 
+      {showSubjects && (
       <section className="mt-3 grid grid-cols-2 gap-3 px-5">
         <button
           onClick={() => setTargetOpen(true)}
@@ -270,8 +282,9 @@ export default function AttendancePage() {
           </span>
         </div>
       </section>
+      )}
 
-      {bunk && (
+      {showSubjects && bunk && (
         <section className="mx-5 mt-3 flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_var(--line)]">
           <span
             className={cx(
@@ -292,6 +305,7 @@ export default function AttendancePage() {
         </section>
       )}
 
+      {showSubjects && (
       <div className="mt-5 px-5">
         <label className="flex h-12 items-center gap-2.5 rounded-2xl bg-surface px-4 shadow-[0_0_0_1px_var(--line)] focus-within:shadow-[0_0_0_2px_var(--accent)]">
           <Search size={18} className="shrink-0 text-muted" />
@@ -310,7 +324,9 @@ export default function AttendancePage() {
           <Chip active={filter === "safe"} onClick={() => setFilter("safe")}>Safe {counts.safe}</Chip>
         </div>
       </div>
+      )}
 
+      {showSubjects && (
       <div className="mt-4">
         {stats.length === 0 && camu ? (
           <EmptyState title="Fetching from Camu" body="Your subjects appear here in a moment." />
@@ -381,6 +397,7 @@ export default function AttendancePage() {
           </ul>
         )}
       </div>
+      )}
 
       {camu && (
         <CamuHistorySheet

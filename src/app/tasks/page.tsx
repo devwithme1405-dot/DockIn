@@ -87,7 +87,19 @@ export default function TasksPage() {
   const pastExams = exams.filter((t) => t.dueDate && t.dueDate < today);
   const nextExam = upcomingExams.find((t) => t.dueDate);
 
-  const groups = useMemo(() => groupPending(list, today, justDone), [list, today, justDone]);
+  // Assignments DockIn pulled from the LMS get their own section, so "what is
+  // due on the LMS" is answerable at a glance; the rest group by when as before.
+  const lmsPending = useMemo(
+    () =>
+      list
+        .filter((t) => t.source === "lms" && !t.done)
+        .sort((a, b) => (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99")),
+    [list],
+  );
+  const groups = useMemo(
+    () => groupPending(list.filter((t) => t.source !== "lms"), today, justDone),
+    [list, today, justDone],
+  );
   const doneList = useMemo(
     () => list.filter((t) => t.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
     [list],
@@ -223,6 +235,27 @@ export default function TasksPage() {
       </div>
 
       <div className="mt-4 pb-4">
+        {tab === "todo" && lmsPending.length > 0 && (
+          <section className="mb-5 px-5">
+            <h2 className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold text-accent">
+              <GraduationCap size={14} /> From your LMS
+              <span className="font-normal tabular-nums">{lmsPending.length}</span>
+            </h2>
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              {lmsPending.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  today={today}
+                  subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
+                  onOpen={() => open(t)}
+                  onDone={(id) => setJustDone((cur) => new Set(cur).add(id))}
+                />
+              ))}
+            </ul>
+          </section>
+        )}
+
         {tab === "todo" && (
           <>
             {sharedOpen.length > 0 && (
@@ -250,7 +283,7 @@ export default function TasksPage() {
 
         {tab === "todo" &&
           (groups.length === 0 ? (
-            sharedOpen.length === 0 ? (
+            sharedOpen.length === 0 && lmsPending.length === 0 ? (
               <EmptyState title="All clear" body="Add an assignment, quiz or project and DockIn will keep track." />
             ) : null
           ) : (
