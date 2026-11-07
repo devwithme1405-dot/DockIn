@@ -1,49 +1,66 @@
 @import "tailwindcss";
 
+/*
+ * DockIn — "Paper & Ink", a premium light-first system.
+ *
+ * Warm paper under crisp ink, a deep charcoal hero card the way a premium card
+ * sits on a table, and one disciplined accent (a deep cobalt) for the live
+ * parts — selected, linked, in-progress. Green / amber / red stay strictly
+ * semantic: present / warning / absent, money in / out. Nothing is decorative.
+ */
 :root {
-  --bg: #f6f5f1;
+  --bg: #f3f2ed;
   --surface: #ffffff;
-  --surface-2: #efede8;
-  --text: #15171b;
-  --muted: #6a6f78;
-  --line: #e4e1da;
-  --accent: #1f5fd6;
-  --accent-soft: #e6eefc;
+  --surface-2: #ebe8df;
+  --text: #16171c;
+  --muted: #71747c;
+  --line: #e7e3da;
+  --accent: #2d3bda;
+  --accent-soft: #e7e8fb;
   --on-accent: #ffffff;
-  --safe: #1b7f53;
-  --safe-soft: #e3f3ea;
-  --warn: #b26a00;
-  --warn-soft: #fbefd9;
-  --danger: #c43530;
-  --danger-soft: #fbe6e4;
-  --hero: #16181d;
-  --hero-fg: #f4f5f7;
-  --hero-muted: #9aa1ad;
-  --violet: #5b3fc4;
-  --violet-soft: #ece8fb;
-  --rose: #c2305e;
-  --rose-soft: #fbe5ec;
+  /* Ink: the charcoal used for the hero card and primary buttons. */
+  --ink: #17181d;
+  --ink-2: #26272e;
+  --on-ink: #f6f6f2;
+  --ink-muted: #9b9da6;
+  --safe: #16864f;
+  --safe-soft: #e3f2e9;
+  --warn: #a96a00;
+  --warn-soft: #f8edd8;
+  --danger: #d03a34;
+  --danger-soft: #fae6e4;
+  --hero: #17181d;
+  --hero-fg: #f6f6f2;
+  --hero-muted: #9b9da6;
+  --violet: #6b4ee6;
+  --violet-soft: #ece8fc;
+  --rose: #c43a62;
+  --rose-soft: #fae5ec;
 }
 
 [data-theme="dark"] {
-  --bg: #0e0f11;
-  --surface: #17191c;
-  --surface-2: #1f2226;
-  --text: #f0f1f3;
-  --muted: #9096a0;
-  --line: #2a2d32;
-  --accent: #5b92ff;
-  --accent-soft: #1b2740;
+  --bg: #0d0e11;
+  --surface: #17181c;
+  --surface-2: #202127;
+  --text: #f1f1f4;
+  --muted: #9195a0;
+  --line: #2a2c33;
+  --accent: #7e86ff;
+  --accent-soft: #1e2142;
   --on-accent: #0b1020;
+  --ink: #1b1d23;
+  --ink-2: #292b33;
+  --on-ink: #f3f3f6;
+  --ink-muted: #9a9ca7;
   --safe: #3fbb85;
   --safe-soft: #12291f;
   --warn: #eba234;
   --warn-soft: #33260f;
   --danger: #ff726a;
   --danger-soft: #371816;
-  --hero: #1d2431;
-  --hero-fg: #f4f5f7;
-  --hero-muted: #98a2b3;
+  --hero: #1b1d23;
+  --hero-fg: #f3f3f6;
+  --hero-muted: #9a9ca7;
   --violet: #a590f0;
   --violet-soft: #231d3f;
   --rose: #ff7fa3;
@@ -73,8 +90,13 @@
   --color-violet-soft: var(--violet-soft);
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-on-ink: var(--on-ink);
+  --color-ink-muted: var(--ink-muted);
+  --font-sans: "Hanken Grotesk Variable", system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Hanken Grotesk Variable", system-ui, sans-serif;
+  --font-mono: "Space Grotesk Variable", ui-monospace, monospace;
 }
 
 html {
@@ -91,9 +113,23 @@ body {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.45;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
+}
+
+/* Display face for headings and figures, with tabular, slashed-zero numerals. */
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: "tnum" 1, "zero" 1, "ss01" 1;
+  letter-spacing: -0.02em;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 button,
@@ -174,7 +210,7 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #1f5fd6;
+  background: radial-gradient(120% 80% at 50% 36%, #22232b 0%, #141519 70%);
   color: #fff;
   --boot-hole: 0px;
   -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
@@ -214,10 +250,11 @@ textarea {
   margin-top: -4vh;
 }
 .boot-word {
-  margin-top: 14px;
-  font-size: 24px;
+  margin-top: 16px;
+  font-family: var(--font-display);
+  font-size: 25px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   animation: boot-rise 600ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .boot-msg {
@@ -383,28 +420,20 @@ textarea {
 /* Painted as the wrapper's own background, not a pseudo-element: an absolutely
    positioned layer behind the content ends up behind the page background too,
    where nobody can see it. */
+/* Flat premium paper — no coloured glow. The ink hero cards carry the drama;
+   the background stays quiet so figures and type do the talking. */
 .page-wash {
-  background-repeat: no-repeat;
-  background-size: 100% 62vh;
-  background-position: top center;
-  background-image:
-    radial-gradient(85% 26% at 8% 14%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%),
-    radial-gradient(70% 22% at 98% 22%, color-mix(in srgb, var(--violet) 14%, transparent), transparent 74%);
+  background: var(--bg);
 }
 
-:root[data-theme="dark"] .page-wash {
-  background-image:
-    radial-gradient(85% 28% at 8% 12%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 72%),
-    radial-gradient(70% 24% at 98% 20%, color-mix(in srgb, var(--violet) 28%, transparent), transparent 74%);
-}
-
-/* A card with a little lift. Light mode gets a real shadow; dark mode gets a
-   lighter surface instead, because a shadow on near-black is invisible. */
+/* A card that rests on the paper: a hairline plus one soft, tight shadow —
+   premium, not the big blurry pastel halo. Dark mode lifts the surface a touch
+   instead, because a shadow on near-black is invisible. */
 .lift {
   box-shadow:
-    0 1px 2px rgb(16 18 22 / 4%),
-    0 8px 24px -14px rgb(16 18 22 / 22%),
-    0 0 0 1px var(--line);
+    0 1px 1px rgb(16 18 22 / 3%),
+    0 6px 16px -10px rgb(16 18 22 / 14%),
+    0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
 }
 
 :root[data-theme="dark"] .lift {
@@ -412,6 +441,28 @@ textarea {
     0 1px 2px rgb(0 0 0 / 40%),
     0 10px 28px -18px rgb(0 0 0 / 70%),
     0 0 0 1px var(--line);
+}
+
+/* The ink hero card: a deep charcoal slab with a faint top sheen, the premium
+   "black card on the table" moment, used for the Today greeting and Money. */
+.ink-card {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(120% 90% at 88% -10%, color-mix(in srgb, var(--accent) 26%, var(--ink)) 0%, transparent 46%),
+    linear-gradient(160deg, var(--ink-2), var(--ink) 62%);
+  color: var(--on-ink);
+  box-shadow:
+    0 1px 1px rgb(16 18 22 / 6%),
+    0 18px 40px -22px rgb(16 18 22 / 55%);
+}
+.ink-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
+  pointer-events: none;
 }
 
 /* The faint sheen on a hero card, so a flat colour reads as a surface. */

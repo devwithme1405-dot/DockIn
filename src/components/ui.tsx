@@ -42,7 +42,7 @@ export const STATE_SOFT: Record<AttendanceState, string> = {
 // ---------- button ----------
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "accent" | "secondary" | "ghost" | "danger";
   size?: "md" | "sm";
 };
 
@@ -56,12 +56,14 @@ export function Button({
     <button
       {...props}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100",
-        size === "md" ? "h-12 px-5 text-[15px]" : "h-9 px-3.5 text-sm",
-        variant === "primary" && "bg-accent text-on-accent",
+        "inline-flex items-center justify-center gap-2 rounded-2xl font-medium tracking-[-0.01em] transition active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100",
+        size === "md" ? "h-12 px-5 text-[15px]" : "h-9 px-3.5 text-[13.5px]",
+        // Primary is ink — the premium, confident default action.
+        variant === "primary" && "bg-ink text-on-ink shadow-[0_6px_18px_-8px_rgba(16,18,22,0.5)]",
+        variant === "accent" && "bg-accent text-on-accent shadow-[0_6px_18px_-8px_color-mix(in_srgb,var(--accent)_60%,transparent)]",
         variant === "secondary" && "bg-surface-2 text-text",
         variant === "ghost" && "text-accent",
-        variant === "danger" && "bg-danger-soft text-danger",
+        variant === "danger" && "bg-danger text-white",
         className,
       )}
     />

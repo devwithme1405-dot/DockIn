@@ -25,8 +25,6 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { skyAt, skyIcon } from "@/lib/sky";
-import { SkyScene } from "@/components/SkyScene";
 import { StickyBar } from "@/components/PageHeader";
 import { Logo } from "@/components/Logo";
 import { TodaySkeleton } from "@/components/Skeleton";
@@ -183,9 +181,9 @@ export default function TodayPage() {
       <StickyBar className="px-4 pb-2">
         <div className="flex h-11 items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Logo size={30} />
+            <Logo size={32} />
             <div className="leading-tight">
-              <p className="text-[15px] font-semibold tracking-tight">DockIn</p>
+              <p className="font-display text-[16px] font-semibold tracking-[-0.02em]">DockIn</p>
               <p className="text-[12px] text-muted">{fmtDayLong(today)}</p>
             </div>
           </div>
@@ -298,8 +296,8 @@ export default function TodayPage() {
         </button>
       )}
 
-      <div className="mt-6 flex items-center justify-between px-5">
-        <h2 className="text-[17px] font-semibold">
+      <div className="mt-7 flex items-center justify-between px-5">
+        <h2 className="font-display text-[18px] font-semibold tracking-[-0.02em]">
           {relativeDayLabel(date, today)}
           {date !== today && (
             <span className="ml-2 text-sm font-normal text-muted">{fmtDayLong(date)}</span>
@@ -501,8 +499,6 @@ function cleanTitle(name: string): string {
   return name.replace(/\s*\(\s*[^)]*\)?\s*$/, "").trim();
 }
 
-const SKY_ICON = { sunrise: Sunrise, sun: Sun, sunset: Sunset, moon: Moon };
-
 // ---------- hero card ----------
 
 const DOT: Record<SessionStatus, string> = {
@@ -591,44 +587,33 @@ function DayHero({
     }
   }
 
-  const sky = skyAt(hour);
-  const SkyIcon = SKY_ICON[skyIcon(hour)];
+  const greet =
+    hour < 5 ? "Burning the midnight oil" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
+  const GIcon = hour < 6 || hour >= 20 ? Moon : hour < 11 ? Sunrise : hour < 17 ? Sun : Sunset;
 
   return (
-    <section
-      className="relative isolate mx-4 mt-3 min-h-[15.5rem] overflow-hidden rounded-[28px] text-white"
-      aria-label="Today at a glance"
-    >
-      <SkyScene sky={sky} />
-      <div aria-hidden className="absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-[#0a1230]/30 to-transparent" />
-      <div aria-hidden className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-[#070b1c]/75 via-[#070b1c]/35 to-transparent" />
-      <div className="relative flex min-h-[15.5rem] flex-col justify-between p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[14px] font-medium text-white/90 drop-shadow">
-              <SkyIcon size={16} /> {sky.greeting}
-            </p>
-            <h1 className="mt-0.5 truncate text-[28px] font-semibold leading-tight tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.35)]">
-              {name}
-            </h1>
-            <p className="mt-0.5 text-[13px] text-white/85 drop-shadow">{sky.line}</p>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <p className="text-[12px] font-medium uppercase tracking-wide text-white/70">
-            {eyebrow} · {fmtDayLong(today)}
+    <section className="ink-card relative mx-4 mt-3 overflow-hidden rounded-[28px]" aria-label="Today at a glance">
+      <div className="relative p-5">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted">
+            <GIcon size={15} /> {greet}
           </p>
-          <p className="mt-1 line-clamp-2 text-[20px] font-semibold leading-snug tracking-tight">{title}</p>
-          <p className="text-[14px] text-white/80">{sub}</p>
+          <p className="text-[12px] font-medium text-ink-muted tnum">{fmtDayLong(today)}</p>
+        </div>
+        <h1 className="font-display mt-1 truncate text-[30px] leading-tight font-semibold text-on-ink">{name}</h1>
+
+        <div className="mt-5 rounded-2xl bg-white/[0.045] p-4 ring-1 ring-white/[0.06]">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-ink-muted uppercase">{eyebrow}</p>
+          <p className="mt-1.5 line-clamp-2 text-[18.5px] font-semibold leading-snug text-on-ink">{title}</p>
+          <p className="mt-0.5 text-[13.5px] text-ink-muted">{sub}</p>
           {list.length > 0 && (
-            <div className="mt-3">
+            <div className="mt-3.5">
               <div className="flex gap-1.5" role="img" aria-label={`${marked} of ${list.length} classes marked`}>
                 {list.map((s) => (
                   <span key={s.id} className={cx("h-1.5 flex-1 rounded-full", DOT[s.status])} />
                 ))}
               </div>
-              <p className="mt-1.5 text-xs text-white/70 tabular-nums">
+              <p className="mt-2 text-[11.5px] text-ink-muted tnum">
                 {marked} of {list.length} classes marked{fromCamu ? " on Camu" : ""}
               </p>
             </div>
@@ -707,12 +692,12 @@ function Glance({
   ink?: string;
 }) {
   return (
-    <Link href={href} className="min-w-0 px-3 py-3.5 text-center transition active:scale-[0.97]">
-      <Icon size={16} className="mx-auto text-muted" />
-      <p className={cx("mt-2 truncate text-[20px] font-semibold leading-none tabular-nums", ink)}>
+    <Link href={href} className="min-w-0 px-3 py-4 text-center transition active:scale-[0.97]">
+      <Icon size={15} className="mx-auto text-muted" />
+      <p className={cx("font-display mt-2.5 truncate text-[23px] leading-none font-semibold tnum", ink ?? "text-text")}>
         {value}
       </p>
-      <p className="mt-1.5 truncate text-[12px] font-medium">{label}</p>
+      <p className="mt-2 truncate text-[12px] font-medium">{label}</p>
       <p className="truncate text-[11px] text-muted">{hint}</p>
     </Link>
   );

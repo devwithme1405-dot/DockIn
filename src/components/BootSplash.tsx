@@ -30,11 +30,16 @@ export function BootSplash({ show, message }: { show: boolean; message?: string 
       <div className="boot-center">
         <span className="relative">
         <span className="boot-glow" aria-hidden />
-        <svg className="boot-mark relative" width="84" height="84" viewBox="0 0 64 64" aria-hidden>
-          <circle className="boot-dot" cx="32" cy="17.5" r="6.2" fill="#fff" />
+        <svg className="boot-mark relative" width="78" height="78" viewBox="0 0 64 64" aria-hidden>
+          <circle className="boot-dot" cx="32" cy="18" r="6.4" fill="#2d3bda" />
           <g className="boot-tray">
-            <rect x="12" y="29" width="40" height="22" rx="8" fill="#fff" />
-            <rect x="17.5" y="22.5" width="29" height="23" rx="5.5" fill="#1f5fd6" />
+            <path
+              d="M16 28 V39 a9 9 0 0 0 9 9 h14 a9 9 0 0 0 9 -9 V28"
+              fill="none"
+              stroke="#f6f6f2"
+              strokeWidth="5.5"
+              strokeLinecap="round"
+            />
           </g>
         </svg>
         </span>

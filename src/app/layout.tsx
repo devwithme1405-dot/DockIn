@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+// Self-hosted so the build needs no network and the app keeps its type offline.
+// Text face: a clean, warm grotesk with excellent numerals — the everyday voice.
+import "@fontsource-variable/hanken-grotesk";
+// Display face: headings and the big numbers, so figures read as designed.
+import "@fontsource-variable/space-grotesk";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 
@@ -21,8 +24,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#1f5fd6" },
-    { media: "(prefers-color-scheme: dark)", color: "#1f5fd6" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f2ed" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d0e11" },
   ],
 };
 
@@ -80,11 +83,7 @@ window.addEventListener('unhandledrejection',function(e){
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: healScript }} />
