@@ -1,71 +1,73 @@
 @import "tailwindcss";
 
 /*
- * DockIn — a modern, friendly-premium light system built on violet.
+ * DockIn — "Ivory & Evergreen", a premium editorial system.
  *
- * A soft lavender-white page under near-black headings, white cards, and one
- * confident violet accent for anything live or primary. Green / amber / red
- * stay strictly semantic: present / warning / absent, money in / out.
+ * Warm ivory paper under a near-black ink, white cards with a whisper of
+ * shadow, and a deep emerald as the one brand colour — money, growth, "above
+ * target". Primary actions are ink, not a colour fill, the way a considered app
+ * keeps its surface calm. Emerald also carries "present / safe / money in";
+ * red is absent / over / money out; amber is the warning in between.
  */
 :root {
-  --bg: #f7f6fb;
+  --bg: #f4f2ea;
   --surface: #ffffff;
-  --surface-2: #f0eef7;
-  --text: #1a1726;
-  --muted: #6e6b7e;
-  --line: #ece9f4;
-  --accent: #6d3beb;
-  --accent-2: #7e4ff0;
-  --accent-soft: #ede8fd;
+  --surface-2: #ebe8dd;
+  --text: #17180f;
+  --muted: #6f7064;
+  --line: #e6e2d4;
+  --accent: #0e6e50;
+  --accent-2: #12815e;
+  --accent-soft: #e0efe7;
   --on-accent: #ffffff;
-  /* Kept for components that still ask for an "ink" surface; now the accent. */
-  --ink: #6d3beb;
-  --ink-2: #7e4ff0;
-  --on-ink: #ffffff;
-  --ink-muted: #d9ccfb;
-  --safe: #16a34a;
-  --safe-soft: #e3f6ea;
-  --warn: #d9821a;
-  --warn-soft: #fbeedb;
-  --danger: #e5484d;
-  --danger-soft: #fce7e8;
-  --hero: #6d3beb;
+  /* Ink: the warm near-black used for primary buttons and the dark card. */
+  --ink: #1a1b14;
+  --ink-2: #2a2b22;
+  --on-ink: #f4f2ea;
+  --ink-muted: #a9ab9c;
+  --safe: #0e7a53;
+  --safe-soft: #e0efe7;
+  --warn: #b07d12;
+  --warn-soft: #f4ead0;
+  --danger: #c5463b;
+  --danger-soft: #f6e5e0;
+  --hero: #0e6e50;
   --hero-fg: #ffffff;
-  --hero-muted: #d9ccfb;
-  --violet: #6d3beb;
-  --violet-soft: #ede8fd;
-  --rose: #e5486f;
-  --rose-soft: #fce6ec;
+  --hero-muted: #bcd9cc;
+  --violet: #3f6a78;
+  --violet-soft: #e1edf0;
+  --rose: #b23a5b;
+  --rose-soft: #f6e4ea;
 }
 
 [data-theme="dark"] {
-  --bg: #0e0d14;
-  --surface: #181721;
-  --surface-2: #211f2d;
-  --text: #f2f1f7;
-  --muted: #9b98ab;
-  --line: #2a2838;
-  --accent: #9a6bff;
-  --accent-2: #a884ff;
-  --accent-soft: #241d3d;
-  --on-accent: #ffffff;
-  --ink: #6d3beb;
-  --ink-2: #7e4ff0;
-  --on-ink: #ffffff;
-  --ink-muted: #cbbdf7;
-  --safe: #3fbb85;
-  --safe-soft: #122a1f;
-  --warn: #eba234;
-  --warn-soft: #33260f;
-  --danger: #ff6b70;
-  --danger-soft: #38191b;
-  --hero: #6d3beb;
+  --bg: #0d100c;
+  --surface: #171a14;
+  --surface-2: #20231d;
+  --text: #f1f2ea;
+  --muted: #9a9c8e;
+  --line: #2a2e25;
+  --accent: #35b183;
+  --accent-2: #45c091;
+  --accent-soft: #112a20;
+  --on-accent: #05140d;
+  --ink: #f1f2ea;
+  --ink-2: #e6e7dd;
+  --on-ink: #16180f;
+  --ink-muted: #8a8c7e;
+  --safe: #35b183;
+  --safe-soft: #112a20;
+  --warn: #e0a534;
+  --warn-soft: #302612;
+  --danger: #ef6a5f;
+  --danger-soft: #331a17;
+  --hero: #0e6e50;
   --hero-fg: #ffffff;
-  --hero-muted: #cbbdf7;
-  --violet: #a884ff;
-  --violet-soft: #241d3d;
-  --rose: #ff85a6;
-  --rose-soft: #37202a;
+  --hero-muted: #bcd9cc;
+  --violet: #78a6b4;
+  --violet-soft: #16272c;
+  --rose: #e68aa3;
+  --rose-soft: #2e1a21;
 }
 
 @theme inline {
@@ -212,7 +214,7 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(130% 80% at 50% 32%, #7e4ff0 0%, #6d3beb 55%, #5a2fd4 100%);
+  background: radial-gradient(130% 80% at 50% 30%, #12815e 0%, #0e6e50 55%, #0a5a41 100%);
   color: #fff;
   --boot-hole: 0px;
   -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
@@ -428,14 +430,14 @@ textarea {
   background: var(--bg);
 }
 
-/* A card that rests on the paper: a hairline plus one soft, tight shadow —
+/* A card that rests on the paper: a warm hairline plus one soft, tight shadow —
    premium, not the big blurry pastel halo. Dark mode lifts the surface a touch
    instead, because a shadow on near-black is invisible. */
 .lift {
   box-shadow:
-    0 1px 1px rgb(16 18 22 / 3%),
-    0 6px 16px -10px rgb(16 18 22 / 14%),
-    0 0 0 1px color-mix(in srgb, var(--line) 80%, transparent);
+    0 1px 1px rgb(40 34 20 / 3%),
+    0 5px 14px -8px rgb(40 34 20 / 12%),
+    0 0 0 1px color-mix(in srgb, var(--line) 75%, transparent);
 }
 
 :root[data-theme="dark"] .lift {

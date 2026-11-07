@@ -27,8 +27,8 @@ export function Logo({
       {tile && (
         <defs>
           <linearGradient id="dockin-tile" x1="0" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#7e4ff0" />
-            <stop offset="1" stopColor="#6d3beb" />
+            <stop offset="0" stopColor="#12835f" />
+            <stop offset="1" stopColor="#0d6a4d" />
           </linearGradient>
         </defs>
       )}
