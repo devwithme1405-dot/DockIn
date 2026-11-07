@@ -134,6 +134,8 @@ interface DockInPlugin {
   ack(options: { ids: string[] }): Promise<void>;
   college(): Promise<CollegeState>;
   connectCamu(): Promise<CollegeState>;
+  /** Quietly renew an expired Camu session, showing the page only if a tap is needed. */
+  renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;

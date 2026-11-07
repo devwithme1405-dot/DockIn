@@ -237,9 +237,28 @@ public class DockInPlugin extends Plugin {
     /** Opens Camu's sign-in inside the app; answers with the first sync once signed in. */
     @PluginMethod
     public void connectCamu(PluginCall call) {
+        openCamuSignIn(call, false);
+    }
+
+    /**
+     * Quietly renews an expired Camu session. Shows a "Reconnecting…" screen and
+     * rides the sign-in Microsoft already remembers; only if that needs a tap does
+     * the page appear. Does nothing (and is cheap to call) when Camu is not set up.
+     */
+    @PluginMethod
+    public void renewCamu(PluginCall call) {
+        if (!Camu.connected(getContext())) {
+            call.reject("Camu is not connected.");
+            return;
+        }
+        openCamuSignIn(call, true);
+    }
+
+    private void openCamuSignIn(PluginCall call, boolean silent) {
         if (pendingCamu != null) pendingCamu.reject("Started again.");
         pendingCamu = call;
-        Intent i = new Intent(getContext(), CamuLoginActivity.class);
+        Intent i = new Intent(getContext(), CamuLoginActivity.class)
+                .putExtra(CamuLoginActivity.EXTRA_SILENT, silent);
         try {
             getActivity().startActivity(i);
         } catch (ActivityNotFoundException e) {

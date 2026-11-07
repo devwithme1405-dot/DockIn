@@ -40,8 +40,22 @@ import java.util.List;
  *
  * Microsoft's sign-in opens as a pop-up, so pop-up windows are given a WebView
  * of their own on top, and removed when Microsoft closes them.
+ *
+ * Silent renewal. Camu ends the session every so often; signing in again is the
+ * same Microsoft flow, and Microsoft remembers this phone once he has ticked
+ * "Stay signed in" the first time, so it usually completes with nothing typed.
+ * {@link #EXTRA_SILENT} covers the page with a "Reconnecting…" screen and lets
+ * that happen out of sight. Only if it is still not in after a few seconds —
+ * Microsoft wants him to pick his account or approve — does the page show, so
+ * he taps once. No password is ever stored or filled in; this only rides the
+ * sign-in Microsoft is already holding.
  */
 public class CamuLoginActivity extends Activity {
+
+    /** Renew quietly: keep the page hidden behind "Reconnecting…", reveal only if a tap is needed. */
+    static final String EXTRA_SILENT = "silent";
+    /** How long to let the remembered sign-in finish before showing the page. */
+    private static final long REVEAL_AFTER_MS = 12_000;
 
     /** Reads the student's ids out of Camu's own saved state, or "" before sign-in. */
     private static final String READ_IDS =
@@ -58,6 +72,9 @@ public class CamuLoginActivity extends Activity {
     private FrameLayout root;
     private WebView web;
     private TextView note;
+    private View cover;
+    private boolean silent = false;
+    private boolean revealed = false;
     private boolean done = false;
     private boolean checking = false;
 
@@ -69,9 +86,24 @@ public class CamuLoginActivity extends Activity {
         }
     };
 
+    /** The remembered sign-in did not finish on its own; let him see the page and tap. */
+    private final Runnable reveal = new Runnable() {
+        @Override
+        public void run() {
+            if (done || revealed) return;
+            revealed = true;
+            if (cover != null) {
+                cover.setVisibility(View.GONE);
+                root.removeView(cover);
+                cover = null;
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        silent = getIntent() != null && getIntent().getBooleanExtra(EXTRA_SILENT, false);
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
@@ -129,11 +161,49 @@ public class CamuLoginActivity extends Activity {
             }
         });
 
+        // Renewing: hide the whole thing behind a calm "Reconnecting…" screen, and
+        // only reveal the page if the remembered sign-in has not finished in time.
+        if (silent) {
+            title.setText("Reconnecting to Camu");
+            note.setText("Just a moment — keeping your attendance up to date.");
+            cover = reconnectingScreen();
+            root.addView(cover, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            handler.postDelayed(reveal, REVEAL_AFTER_MS);
+        }
+
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
         web.loadUrl(Camu.BASE + "/");
         handler.postDelayed(poll, 2000);
+    }
+
+    /** A full-screen brand panel shown over the WebView while the sign-in renews itself. */
+    private View reconnectingScreen() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER);
+        panel.setBackgroundColor(0xFF1F5FD6);
+        panel.setClickable(true);
+
+        TextView mark = new TextView(this);
+        mark.setText("DockIn");
+        mark.setTextColor(Color.WHITE);
+        mark.setTextSize(TypedValue.COMPLEX_UNIT_SP, 26);
+        mark.setTypeface(Typeface.DEFAULT_BOLD);
+        mark.setGravity(Gravity.CENTER);
+
+        TextView line = new TextView(this);
+        line.setText("Reconnecting to Camu…");
+        line.setTextColor(0xE6FFFFFF);
+        line.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        line.setGravity(Gravity.CENTER);
+        line.setPadding(0, dp(8), 0, 0);
+
+        panel.addView(mark);
+        panel.addView(line);
+        return panel;
     }
 
     private void setUp(WebView w) {
@@ -160,6 +230,9 @@ public class CamuLoginActivity extends Activity {
                 root.addView(child, new FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
                 popups.add(child);
+                // While renewing, keep Microsoft's pop-up behind the "Reconnecting…" cover
+                // too, so nothing flickers unless we decide to show the page.
+                if (cover != null && !revealed) cover.bringToFront();
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 transport.setWebView(child);
                 resultMsg.sendToTarget();
@@ -256,6 +329,7 @@ public class CamuLoginActivity extends Activity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacks(poll);
+        handler.removeCallbacks(reveal);
         if (!done) DockInPlugin.camuFinished(false, null);
         for (WebView w : new ArrayList<>(popups)) closePopup(w);
         if (web != null) {

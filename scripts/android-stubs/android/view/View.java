@@ -1,5 +1,8 @@
 package android.view;
 public class View {
+  public static final int GONE = 8;
+  public static final int VISIBLE = 0;
+  public static final int INVISIBLE = 4;
   public View(android.content.Context c) {}
   public interface OnClickListener { void onClick(View v); }
   public interface OnApplyWindowInsetsListener { WindowInsets onApplyWindowInsets(View v, WindowInsets insets); }
@@ -7,4 +10,7 @@ public class View {
   public void setOnApplyWindowInsetsListener(OnApplyWindowInsetsListener l) {}
   public void setPadding(int l, int t, int r, int b) {}
   public void setBackgroundColor(int c) {}
+  public void setVisibility(int v) {}
+  public void setClickable(boolean c) {}
+  public void bringToFront() {}
 }

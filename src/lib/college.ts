@@ -257,12 +257,39 @@ const listeners = new Set<() => void>();
 /** A sync is worth starting when the last one is older than this. */
 const STALE_MS = 15 * 60 * 1000;
 let syncing: Promise<void> | null = null;
+/** At most one silent Camu renewal per app open, so a stubborn expiry never loops. */
+let renewing = false;
+let renewTried = false;
 
 function set(next: CollegeState) {
   current = next ?? EMPTY;
   loaded = true;
   listeners.forEach((l) => l());
   void importLms(current);
+  maybeRenewCamu();
+}
+
+/**
+ * Camu ends the session every so often. When the phone reports it expired, try
+ * to get it back without bothering him: the renewal rides the sign-in Microsoft
+ * already remembers and stays behind a "Reconnecting…" screen, only showing the
+ * page if a tap is truly needed. Done once per app open; the phone's own
+ * notification covers the case where even that needs him.
+ */
+function maybeRenewCamu() {
+  if (!isNativeApp() || renewing) return;
+  // A healthy session clears the latch, so a fresh expiry later can renew again.
+  if (current.camu?.connected && !current.camu?.expired) renewTried = false;
+  if (renewTried) return;
+  if (!(current.camu?.connected && current.camu?.expired)) return;
+  renewing = true;
+  renewTried = true;
+  void DockIn.renewCamu()
+    .then(set)
+    .catch(() => {})
+    .finally(() => {
+      renewing = false;
+    });
 }
 
 export const collegeNow = () => current;

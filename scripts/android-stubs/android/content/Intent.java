@@ -9,6 +9,8 @@ public class Intent {
   public Intent(Context c, Class<?> cls) {}
   public Intent addFlags(int f) { return this; }
   public Intent putExtra(String k, String v) { return this; }
+  public Intent putExtra(String k, boolean v) { return this; }
+  public boolean getBooleanExtra(String k, boolean d) { return d; }
   public String getStringExtra(String k) { return null; }
   public void removeExtra(String k) {}
 }

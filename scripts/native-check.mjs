@@ -115,6 +115,12 @@ await page.addInitScript(
         phone.college = { ...phone.college, camu: { ...phone.camuReady, connected: true, syncedAt: Date.now() } };
         return phone.college;
       },
+      renewCamu: () => {
+        phone.renewCalls = (phone.renewCalls ?? 0) + 1;
+        // The remembered Microsoft sign-in comes back without a prompt.
+        phone.college = { ...phone.college, camu: { ...phone.camuReady, connected: true, expired: false, syncedAt: Date.now() } };
+        return phone.college;
+      },
       connectLms: ({ username, password }) => {
         if (password !== "right") throw new Error("Wrong username or password.");
         phone.college = { ...phone.college, lms: { ...phone.lmsReady, connected: true, name: username, syncedAt: Date.now() } };
@@ -397,6 +403,23 @@ await step("Today shows Camu's classes with the room, and nothing to mark", asyn
   if (await page.getByRole("button", { name: "Present" }).count()) throw new Error("there are marking buttons on a Camu class");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-camu-today.png`, fullPage: true });
+});
+
+await step("an expired Camu session renews itself without being asked", async () => {
+  // The phone reports the session ended and pushes that to the open app.
+  await page.evaluate(() => {
+    const c = window.__phone.get().college;
+    const expired = { ...c, camu: { ...c.camu, connected: true, expired: true } };
+    window.__phone.set({ college: expired, renewCalls: 0 });
+    window.__phone.fire("college", expired);
+  });
+  // The app asks the phone to renew once, and attendance comes back by itself.
+  await page.waitForFunction(() => window.__phone.get().renewCalls === 1, null, { timeout: 8000 });
+  await waitFor("From Camu");
+  const calls = await page.evaluate(() => window.__phone.get().renewCalls);
+  if (calls !== 1) throw new Error(`renew was asked ${calls} times, not once`);
+  const expired = await page.evaluate(() => !!window.__phone.get().college.camu.expired);
+  if (expired) throw new Error("still expired after renewing");
 });
 
 await step("the LMS refuses a wrong password, then fills Tasks", async () => {

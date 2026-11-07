@@ -6,6 +6,7 @@ public class LinearLayout extends ViewGroup {
   public LinearLayout(android.content.Context c) { super(c); }
   public void setOrientation(int o) {}
   public void setGravity(int g) {}
+  public void setClickable(boolean c) {}
   public static class LayoutParams extends ViewGroup.LayoutParams {
     public LayoutParams(int w, int h) { super(w, h); }
     public LayoutParams(int w, int h, float weight) { super(w, h); }
