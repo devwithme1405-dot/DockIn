@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { FRIENDS } from "./src/lib/features";
 
 /**
  * A stamp that changes with every deploy.
@@ -21,6 +22,26 @@ const nextConfig: NextConfig = {
   // Tree-shake icon imports instead of shipping the whole icon set.
   experimental: { optimizePackageImports: ["lucide-react"] },
 
+  async redirects() {
+    return [
+      // The Android app, straight from the release CI publishes. A redirect
+      // and not a proxy: the file is bigger than a serverless response may be,
+      // and Chrome downloads a direct GitHub file link without any detour.
+      {
+        source: "/DockIn.apk",
+        destination: "https://github.com/devwithme1405-dot/DockIn/releases/latest/download/DockIn.apk",
+        permanent: false,
+      },
+      // Friends are switched off: an old bookmark lands on Today instead of a
+      // screen that no longer leads anywhere.
+      ...(FRIENDS
+        ? []
+        : [
+            { source: "/circle", destination: "/", permanent: false },
+            { source: "/groups/:id", destination: "/", permanent: false },
+          ]),
+    ];
+  },
 };
 
 export default nextConfig;

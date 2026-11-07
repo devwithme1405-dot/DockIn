@@ -6,10 +6,9 @@ import { InstallApp } from "@/components/InstallApp";
 /**
  * One address for getting DockIn onto a phone: dock-in.vercel.app/app
  *
- * It leads with installing the site itself, because that is the route that
- * cannot fail: nothing to download, nothing Android can refuse, and it updates
- * on its own. The Android file is underneath, for the one thing a web page
- * cannot do — read the notifications your payment apps post.
+ * It leads with the Android app, which is the site plus what a site cannot
+ * do: read the notifications your payment apps post and ask where the money
+ * went. Installing the site from the browser stays underneath as the fallback.
  */
 
 export const metadata: Metadata = {
@@ -17,7 +16,7 @@ export const metadata: Metadata = {
   description: "Put DockIn on your phone.",
 };
 
-/** Served from this site, so the phone never leaves it to fetch the app. */
+/** Redirects to the file CI publishes (see next.config.ts). */
 const APK = "/DockIn.apk";
 
 export default function GetTheApp() {
@@ -49,12 +48,13 @@ export default function GetTheApp() {
               percentage — what it becomes if you skip tomorrow.
             </li>
             <li>
-              <span className="text-text">One assignment, the whole class.</span> Share the Word
-              file once; everyone gets it back with their own name and roll already in it.
+              <span className="text-text">Money without typing.</span> Pay with GPay or PhonePe and
+              DockIn asks what it was for, right then. One tap, and a budget that tells you what you
+              can spend a day.
             </li>
             <li>
-              <span className="text-text">Money without typing.</span> The places you eat at, one tap
-              each, and a monthly budget that tells you what you can spend a day.
+              <span className="text-text">Nothing due sneaks up.</span> Assignments, quizzes and exams
+              with a countdown, sorted by what is closest.
             </li>
           </ul>
         </section>
@@ -64,10 +64,10 @@ export default function GetTheApp() {
             <ShieldCheck size={17} className="text-safe" /> What it can see
           </h2>
           <p className="mt-2 text-[14px] text-muted">
-            Your data lives on your phone and in your own account. If you switch payment detection
-            on, DockIn reads what GPay, PhonePe, Paytm and your bank put in your notification bar —
-            those apps and nothing else. Account and card numbers are removed on the phone before
-            anything is sent, and no payment is added to your spending until you tap it.
+            Your data lives on your phone and in your own account. If you switch payment reading on,
+            DockIn reads what GPay, PhonePe, Paytm and your bank put in your notification bar — those
+            apps and nothing else — and keeps it on the phone. Account and card numbers are removed
+            the moment it is read, and no payment is added to your spending until you tap it.
           </p>
         </section>
 

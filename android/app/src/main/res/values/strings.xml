@@ -1,8 +1,10 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">DockIn</string>
-    <string name="asset_statements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://dock-in.vercel.app\" } }]</string>
+    <string name="title_activity_main">DockIn</string>
+    <string name="package_name">com.dockin.student</string>
+    <string name="custom_url_scheme">com.dockin.student</string>
     <string name="pay_watch_label">DockIn payment detection</string>
-    <string name="pay_turn_on">Switch DockIn on in this list to spot payments.</string>
-    <string name="pay_turn_on_manual">Open Settings, search for notification access, and switch DockIn on.</string>
+    <string name="channel_payments">Payments</string>
+    <string name="channel_payments_about">Asks where the money went, right after you pay.</string>
 </resources>

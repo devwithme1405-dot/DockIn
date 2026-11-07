@@ -11,11 +11,12 @@ import {
   PaymentError,
   clearNotices,
   detectedFrom,
-  inbox,
   merchantKey,
+  phoneInbox,
   strayIds,
   type Detected,
 } from "@/lib/payments";
+import { onPhone } from "@/lib/native";
 import type { ExpenseCategory } from "@/lib/types";
 import { Sheet, cx, useToast } from "./ui";
 
@@ -31,7 +32,7 @@ import { Sheet, cx, useToast } from "./ui";
  * A payee you have placed once is never asked about again: the second ₹60 at
  * 24/7 Kathi is a single tap with no sheet at all.
  */
-export function DetectedTray({ signedIn }: { signedIn: boolean }) {
+export function DetectedTray() {
   const toast = useToast();
   const cats = useCategories();
   const rules = useLiveQuery(() => merchantRules(), []);
@@ -40,9 +41,8 @@ export function DetectedTray({ signedIn }: { signedIn: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!signedIn) return;
     try {
-      const notices = await inbox();
+      const notices = await phoneInbox();
       setList(detectedFrom(notices));
       // Adverts and balance alerts come in with everything else; they are not
       // shown and they are not kept.
@@ -53,13 +53,21 @@ export function DetectedTray({ signedIn }: { signedIn: boolean }) {
       // fails to draw. Offline, or not set up, simply means no tray.
       setList([]);
     }
-  }, [signedIn]);
+  }, []);
 
   useEffect(() => {
     void Promise.resolve().then(load);
+    // A payment made while this screen is open shows up without a refresh, and
+    // so does everything that arrived while DockIn was in the background.
+    const offNotice = onPhone("notice", () => void load());
+    const offResume = onPhone("resume", () => void load());
+    return () => {
+      offNotice();
+      offResume();
+    };
   }, [load]);
 
-  if (!signedIn || !list || list.length === 0) return null;
+  if (!list || list.length === 0) return null;
 
   const known = (d: Detected): ExpenseCategory | null => {
     if (!d.merchant) return null;

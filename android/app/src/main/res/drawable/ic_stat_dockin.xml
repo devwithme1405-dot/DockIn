@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The small white mark in the status bar. Android tints it; only its shape counts. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M25.8,17.5 A6.2,6.2 0 1 1 38.2,17.5 A6.2,6.2 0 1 1 25.8,17.5 Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M20,29 H44 A8,8 0 0 1 52,37 V43 A8,8 0 0 1 44,51 H20 A8,8 0 0 1 12,43 V37 A8,8 0 0 1 20,29 Z M20,34 A3,3 0 0 0 17,37 V43 A3,3 0 0 0 20,46 H44 A3,3 0 0 0 47,43 V37 A3,3 0 0 0 44,34 Z" />
+</vector>

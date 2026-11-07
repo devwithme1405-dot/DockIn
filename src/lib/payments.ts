@@ -7,17 +7,18 @@
  *
  * Two decisions shape this file:
  *
- *  * **The parsing happens here, not on the phone.** Indian banks and UPI apps
- *    word these messages a dozen different ways and keep changing them. Keeping
- *    the rules in the web app means a wrong one is fixed by a deploy that
- *    everybody already gets, instead of an APK everybody has to reinstall.
+ *  * **The full reading happens here, in the web app.** Indian banks and UPI
+ *    apps word these messages a dozen different ways and keep changing them.
+ *    The Android app opens the live site, so a wrong rule here is fixed by a
+ *    deploy, not by a new APK. (The phone keeps a small copy of the debit rules
+ *    only to ask "where did it go?" the moment you pay.)
  *  * **Nothing is ever added behind your back.** A parsed payment goes into a
  *    tray you confirm with one tap. An expense tracker that silently records the
  *    wrong amount is worse than one that records nothing, because you stop
  *    trusting the total — and the total is the whole product.
  */
 
-import { getSupabase } from "./supabase";
+import { DockIn, isNativeApp } from "./native";
 
 export interface Notice {
   /** Android package that posted it, e.g. "com.google.android.apps.nbu.paisa.user". */
@@ -45,6 +46,7 @@ export const PAY_APPS: Record<string, string> = {
   "in.org.npci.upiapp": "BHIM",
   "com.amazon.mShop.android.shopping": "Amazon Pay",
   "com.dreamplug.androidapp": "CRED",
+  "com.mobikwik_new": "MobiKwik",
   "com.google.android.apps.messaging": "Messages",
   "com.samsung.android.messaging": "Messages",
   "com.android.mms": "Messages",
@@ -173,13 +175,12 @@ export function dedupe(list: Payment[], windowMs = 150_000): Payment[] {
 }
 
 // ---------------------------------------------------------------------------
-// Talking to the server
+// The phone's inbox
 // ---------------------------------------------------------------------------
-
 
 export class PaymentError extends Error {}
 
-/** One notification as the phone forwarded it. */
+/** One notification as the phone kept it. */
 export interface StoredNotice {
   id: string;
   app: string;
@@ -188,69 +189,29 @@ export interface StoredNotice {
   posted_at: number;
 }
 
-function sb() {
-  const client = getSupabase();
-  if (!client) throw new PaymentError("Cloud sync is not set up.");
-  return client;
-}
-
-function plain(message: string): string {
-  if (/not signed in/i.test(message)) return "Sign in first.";
-  if (/unknown_device/i.test(message)) return "This phone is not linked any more.";
-  if (/function .* does not exist|schema cache/i.test(message)) {
-    return "Payment detection is not set up on the server yet.";
-  }
-  if (/Failed to fetch|NetworkError/i.test(message)) return "No internet right now.";
-  return message;
-}
-
 /**
- * Says that the phone carrying this secret belongs to whoever is signed in.
+ * Everything the phone has seen and nobody has dealt with yet.
  *
- * The Android app makes its own secret and passes it on the address it opens
- * this site with, so pairing costs nobody a tap. Running it again with the same
- * secret changes nothing, which is just as well: the app passes it every launch.
+ * It lives on the phone itself now, written by the Android app's listener
+ * whether DockIn is open or not. Nothing about a payment goes to any server
+ * until it is confirmed and becomes an ordinary expense.
  */
-export async function claimDevice(secret: string): Promise<void> {
-  const { error } = await sb().rpc("claim_device", { secret, device_label: "This phone" });
-  if (error) throw new PaymentError(plain(error.message));
-}
-
-/** Every phone currently allowed to forward notifications here. */
-export async function linkedDevices(): Promise<
-  { id: string; label: string | null; lastSeen: string | null }[]
-> {
-  const { data, error } = await sb()
-    .from("pay_devices")
-    .select("id,label,last_seen_at")
-    .order("created_at", { ascending: false });
-  if (error) throw new PaymentError(plain(error.message));
-  return ((data ?? []) as { id: string; label: string | null; last_seen_at: string | null }[]).map(
-    (d) => ({ id: d.id, label: d.label, lastSeen: d.last_seen_at }),
-  );
-}
-
-export async function unlinkDevice(id: string): Promise<void> {
-  const { error } = await sb().from("pay_devices").delete().eq("id", id);
-  if (error) throw new PaymentError(plain(error.message));
-}
-
-/** Everything the phone has forwarded and nobody has dealt with yet. */
-export async function inbox(): Promise<StoredNotice[]> {
-  const { data, error } = await sb()
-    .from("pay_notices")
-    .select("id,app,title,body,posted_at")
-    .order("posted_at", { ascending: false })
-    .limit(60);
-  if (error) throw new PaymentError(plain(error.message));
-  return (data ?? []) as StoredNotice[];
+export async function phoneInbox(): Promise<StoredNotice[]> {
+  if (!isNativeApp()) return [];
+  const { notices } = await DockIn.pending();
+  return (notices ?? []).map((n) => ({
+    id: n.id,
+    app: n.app,
+    title: n.title,
+    body: n.body,
+    posted_at: n.at,
+  }));
 }
 
 /** Added or dismissed — either way it leaves the inbox. */
 export async function clearNotices(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const { error } = await sb().from("pay_notices").delete().in("id", ids);
-  if (error) throw new PaymentError(plain(error.message));
+  if (ids.length === 0 || !isNativeApp()) return;
+  await DockIn.ack({ ids });
 }
 
 /** A parsed payment, with the notice it came from so it can be cleared. */
@@ -290,11 +251,4 @@ export function strayIds(notices: StoredNotice[]): string[] {
   return notices
     .filter((n) => !parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at }))
     .map((n) => n.id);
-}
-
-/** How many notifications this phone has sent lately, payment or not. */
-export async function noticeCount(hours = 24): Promise<number> {
-  const { data, error } = await sb().rpc("notice_count", { since_hours: hours });
-  if (error) throw new PaymentError(plain(error.message));
-  return Number(data ?? 0);
 }

@@ -9,6 +9,7 @@ import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
 import { isCloudConfigured } from "@/lib/supabase";
 import { addTask } from "@/lib/repo";
+import { FRIENDS } from "@/lib/features";
 import {
   BUCKET_LABEL,
   KIND_BY_ID,
@@ -49,12 +50,13 @@ export default function TasksPage() {
   const reactions = useReactions();
 
   useEffect(() => {
-    if (!isCloudConfigured || !me) return;
+    if (!FRIENDS || !isCloudConfigured || !me) return;
     void Promise.resolve().then(() => pullSocial().catch(() => {}));
   }, [me]);
 
   /** Shared with you and still open, soonest first. */
   const sharedOpen = useMemo(() => {
+    if (!FRIENDS) return [];
     const st = shareStates;
     return (shares ?? [])
       .filter((s) => !st?.get(s.id)?.hidden && !st?.get(s.id)?.done)

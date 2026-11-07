@@ -56,8 +56,8 @@ export default function OnboardingPage() {
               Sign in to back things up
             </h1>
             <p className="mt-3 text-muted">
-              Your classes, expenses and tasks follow you to any phone, and you can share
-              assignments with your friends. You can skip this and do it later.
+              Your classes, expenses and tasks are backed up and come back on a new phone.
+              You can skip this and do it later.
             </p>
             <div className="mt-8">
               {session ? (

@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - "android/**"
+      - "capacitor/**"
+      - "capacitor.config.ts"
+      - "package-lock.json"
+      - "scripts/android-*"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -18,18 +22,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Capacitor's Android library ships inside its npm package, and `cap sync`
+      # writes the config and plugin list the app reads at start.
+      - name: Install and sync Capacitor
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync android
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
 
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-35 build-tools;35.0.0"
+          packages: "platforms;android-36 build-tools;35.0.0"
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.11.1"
+      - name: Check the Java against stubs and the payment rules
+        run: bash scripts/android-compile.sh
 
       - name: Restore signing key
         env:
@@ -45,16 +60,21 @@ jobs:
           DOCKIN_KEYSTORE_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
           DOCKIN_KEY_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
           DOCKIN_KEY_ALIAS: dockin
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Check the signature
+      - name: Check the signature and what is inside
         run: |
           APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
           cp "$APK" DockIn.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs DockIn.apk
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump badging DockIn.apk | head -5
-          echo "--- launch configuration"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree --file AndroidManifest.xml DockIn.apk | grep -A2 -iE "trusted|activity|provider" | head -60
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/apksigner" verify --print-certs DockIn.apk
+          "$BT/aapt2" dump badging DockIn.apk | head -5
+          echo "--- the listener and the plugin made it in"
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml DockIn.apk | grep -E "PayWatchService|POST_NOTIFICATIONS|MainActivity"
+          unzip -p DockIn.apk assets/capacitor.config.json
+          unzip -l DockIn.apk | grep -E "assets/public/offline.html"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -68,5 +88,5 @@ jobs:
           gh release delete apk-latest --cleanup-tag -y || true
           gh release create apk-latest DockIn.apk \
             --title "DockIn for Android" \
-            --notes "Signed Android app. Install DockIn.apk on your phone. The app loads dock-in.vercel.app, so website updates reach it without a new APK." \
+            --notes "Signed Android app (Capacitor). Install DockIn.apk over the old one. It opens dock-in.vercel.app, so screen updates arrive without a new APK; this file changes only when the phone-side part does." \
             --latest

@@ -185,13 +185,14 @@ const SCREENS = [
   { path: "/attendance/timetable", name: "timetable", expect: "" },
   { path: "/money", name: "money", expect: "Spent this month" },
   { path: "/tasks", name: "tasks", expect: "To do" },
-  { path: "/circle", name: "friends", expect: "Friends" },
   { path: "/settings", name: "profile", expect: "Text size" },
   { path: "/calendar", name: "calendar", expect: "" },
   { path: "/add", name: "quick-add", expect: "" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
   { path: "/privacy", name: "privacy", expect: "Payment detection" },
+  // Friends is switched off: the old address lands on Today instead.
+  { path: "/circle", name: "friends-off", expect: "Timetable" },
 ];
 
 const problems = [];
@@ -376,7 +377,7 @@ await step("the timetable wizard opens and takes a subject", async () => {
 });
 
 await step("moving between tabs never reloads the page", async () => {
-  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
   await page.waitForTimeout(2000);
 
   // On a fast machine every navigation is instant and this test proves nothing.
@@ -391,13 +392,11 @@ await step("moving between tabs never reloads the page", async () => {
   });
 
   loads = 0;
-  // Friends is the slow one — it reaches for the network as it opens — so it is
-  // the screen where a navigation fallback would wrongly fire.
   for (const [label, expect] of [
     ["Today", "Timetable"],
-    ["Friends", "Friends"],
+    ["Attendance", "Overall attendance"],
     ["Money", "Spent"],
-    ["Friends", "Friends"],
+    ["Attendance", "Overall attendance"],
     ["Tasks", "To do"],
   ]) {
     await page.locator("nav[aria-label='Main'] a", { hasText: label }).first().click();

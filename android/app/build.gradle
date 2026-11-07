@@ -1,6 +1,4 @@
-plugins {
-    id 'com.android.application'
-}
+apply plugin: 'com.android.application'
 
 def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
 
@@ -13,24 +11,21 @@ def minutesSince2020 = (long) ((System.currentTimeMillis() - 1577836800000L) / 6
 def keystorePath = System.getenv("DOCKIN_KEYSTORE")
 
 android {
-    namespace 'com.dockin.app'
-    compileSdk 35
-
+    namespace = "com.dockin.student"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        // A new identity on purpose.
-        //
-        // Android will not replace an installed app whose signature it cannot
-        // match, and the message it gives — "app can't be installed" — is the
-        // same one it gives for half a dozen unrelated situations, so there is
-        // no way to tell from the phone which one you are in. A package name
-        // nothing has ever used cannot collide with anything, so this install
-        // cannot fail for that reason. The Java package stays as it was; only
-        // the identity Android files it under changes.
-        applicationId 'com.dockin.student'
-        minSdk 26
-        targetSdk 35
+        // The same identity and signing key as the app already on the phone,
+        // so this installs over it as an update instead of beside it.
+        applicationId "com.dockin.student"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode minutesSince2020.intValue()
-        versionName "1.0.${runNumber}"
+        versionName "2.0.${runNumber}"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
     }
 
     signingConfigs {
@@ -41,11 +36,8 @@ android {
                 keyAlias System.getenv("DOCKIN_KEY_ALIAS") ?: "dockin"
                 keyPassword System.getenv("DOCKIN_KEY_PASSWORD")
             }
-            // Sign it every way there is. Android itself is happy with v2 alone
-            // at this minimum version, but the installers some phones ship
-            // instead — MIUI's and ColorOS's among them — do their own checks,
-            // and a missing signature block is one of the things they refuse
-            // over while saying only "app can't be installed".
+            // Every signature scheme: some phones' own installers (MIUI,
+            // ColorOS) refuse an APK missing one, saying only "can't install".
             v1SigningEnabled true
             v2SigningEnabled true
             enableV3Signing true
@@ -55,18 +47,28 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             if (keystorePath) {
                 signingConfig signingConfigs.release
             }
         }
     }
+}
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
 
 dependencies {
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation project(':capacitor-cordova-android-plugins')
 }
+
+apply from: 'capacitor.build.gradle'

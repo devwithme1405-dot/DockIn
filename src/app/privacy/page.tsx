@@ -53,20 +53,19 @@ export default function Privacy() {
           </p>
           <ul className="mt-2 list-disc space-y-1.5 pl-5">
             <li>
-              Only payment apps are looked at — Google Pay, PhonePe, Paytm, BHIM, CRED and your
-              bank&rsquo;s messages. Nothing else on your phone is read.
+              Only payment apps are looked at — Google Pay, PhonePe, Paytm, BHIM, CRED, MobiKwik and
+              your bank&rsquo;s messages. Nothing else on your phone is read.
             </li>
             <li>
-              A notification is only sent on if it mentions an amount and a payment. Ordinary
-              messages never leave the phone.
+              A notification is only kept if it mentions an amount and a payment, and it is kept on
+              your phone — it is not sent anywhere.
             </li>
             <li>
-              Account and card numbers are stripped on the phone before anything is sent, and again
-              when it arrives.
+              Account and card numbers are stripped the moment it is read.
             </li>
             <li>
-              What is sent is kept for a fortnight at most, and is deleted as soon as you add or
-              dismiss the payment.
+              It is deleted from the phone as soon as you add or dismiss the payment. Only a payment
+              you add becomes part of your backed-up spending.
             </li>
             <li>
               Nothing is ever added to your spending on its own. Every payment waits for you to tap
@@ -84,8 +83,8 @@ export default function Privacy() {
 
         <Section title="Getting rid of it">
           <p>
-            Log out and the copy on that phone goes. Unlink a phone in Profile and it stops sending
-            payments at once. To have your account and everything in it deleted, write to{" "}
+            Log out and the copy on that phone goes. Switch off notification access in Android and
+            payment reading stops at once. To have your account and everything in it deleted, write to{" "}
             <a href="mailto:motionsachin1@gmail.com" className="font-medium text-accent">
               motionsachin1@gmail.com
             </a>{" "}

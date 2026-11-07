@@ -5,13 +5,14 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarCheck, ListChecks, Sun, Users, Wallet } from "lucide-react";
+import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
-import { claimDevice } from "@/lib/payments";
+import { onPhone } from "@/lib/native";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 
@@ -27,6 +28,7 @@ function useNeedsAttention(): number {
       const mine = await db.tasks
         .filter((t) => !t.deletedAt && !t.done && !!t.dueDate && t.dueDate <= today)
         .count();
+      if (!FRIENDS) return mine;
       const states = new Map((await db.shareState.toArray()).map((s) => [s.id, s]));
       const shared = (await db.shares.toArray()).filter((s) => {
         const st = states.get(s.id);
@@ -43,8 +45,8 @@ const TABS = [
   { href: "/attendance", label: "Attendance", icon: CalendarCheck },
   { href: "/money", label: "Money", icon: Wallet },
   { href: "/tasks", label: "Tasks", icon: ListChecks },
-  { href: "/circle", label: "Friends", icon: Users },
-] as const;
+  ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: Users }] : []),
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -106,50 +108,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * Pairing the phone, without asking anyone to pair anything.
-   *
-   * The Android app opens this site with its own secret on the address. If
-   * somebody is signed in, that is all the server needs to know whose phone it
-   * is — so the feature sets itself up the first time the app is opened, and
-   * the address is tidied straight afterwards so the secret is not left sitting
-   * in the bar or in history.
-   *
-   * It runs on every launch because the first one usually happens before anyone
-   * has signed in, and because claiming twice costs nothing.
+   * DockIn's own notifications say which screen to open ("Spent ₹250 at
+   * Zomato" opens Money). The phone holds on to the request until this
+   * listener exists, so it works from a cold start as well as from the
+   * background.
    */
-  useEffect(() => {
-    if (!userId) return;
-    const q = new URLSearchParams(window.location.search);
-    const dev = q.get("dev");
-    // The app also tells us its version. Remembering it is what lets a screen
-    // say "you are on an older app" instead of a button that does nothing.
-    const appVersion = q.get("app");
-    if (appVersion) {
-      try {
-        localStorage.setItem("dockin-app", appVersion);
-        // The app only sends this once it has the listener in it.
-        localStorage.setItem("dockin-app-pay", q.get("pay") === "1" ? "1" : "0");
-        // Whether Android has actually granted the listener. Only the app can
-        // know this, so only the app can tell us.
-        if (q.get("notif") !== null) {
-          localStorage.setItem("dockin-app-notif", q.get("notif") === "1" ? "1" : "0");
-        }
-      } catch {
-        /* private browsing */
-      }
-    }
-    if (!dev) return;
-    void claimDevice(dev)
-      .catch(() => {})
-      .finally(() => {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("dev");
-        url.searchParams.delete("app");
-        url.searchParams.delete("pay");
-        url.searchParams.delete("notif");
-        window.history.replaceState(null, "", url.toString());
-      });
-  }, [userId]);
+  useEffect(() => onPhone("open", ({ path }) => router.push(path)), [router]);
 
   useEffect(() => {
     if (
@@ -207,7 +171,7 @@ function TabBar({ pathname }: { pathname: string }) {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-5">
+      <ul className={cx("grid", TABS.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="brand">#1F5FD6</color>
-    <color name="status_bar">#F6F5F1</color>
+    <!-- The page colour, so nothing white flashes between the splash and the first screen. -->
+    <color name="page">#F6F5F1</color>
+    <color name="colorPrimary">#1F5FD6</color>
+    <color name="colorPrimaryDark">#1F5FD6</color>
+    <color name="colorAccent">#1F5FD6</color>
 </resources>

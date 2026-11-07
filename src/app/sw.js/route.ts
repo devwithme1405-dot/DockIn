@@ -10,10 +10,12 @@
  * updates on its own, and the old cache goes with it.
  */
 
+import { FRIENDS } from "@/lib/features";
+
 const BUILD = process.env.NEXT_PUBLIC_BUILD ?? "dev";
 
 /** Pages worth having before they are asked for, so a cold start never waits. */
-const SHELL = ["/", "/attendance", "/money", "/tasks", "/circle", "/settings"];
+const SHELL = ["/", "/attendance", "/money", "/tasks", ...(FRIENDS ? ["/circle"] : []), "/settings"];
 
 const source = `
 const BUILD = ${JSON.stringify(BUILD)};

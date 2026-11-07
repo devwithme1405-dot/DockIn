@@ -1,7 +1,8 @@
 # DockIn
 
 One app for a Bennett student's college day: attendance, money, tasks and exams, calendar and
-holidays. It is a PWA, so it installs on iPhone and Android without an app store.
+holidays. It runs as a website (and installs as a PWA), and as an Android app that adds what a
+website cannot do: reading payment notifications and asking where the money went.
 
 Data is stored on the phone first (IndexedDB), so everything works offline. Signed-in Bennett
 students are also backed up and synced through Supabase. See `docs/supabase-setup.md` for the one-time
@@ -28,13 +29,29 @@ load a sample timetable.
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | Lint |
 | `npm run build` then `npm start` | Production build. The service worker (offline mode) only runs here |
+| `npm run smoke` | Every screen in a real browser, plus the app driving a pretend phone (needs `npm start` running) |
+| `npm run android:check` | Compiles the Android Java against stubs and checks its payment rules match the web's |
+| `npm run verify` | All of the above that need no server |
 
 ## What is inside
 
 - `src/lib/attendance.ts` attendance maths: percentage, classes you can still miss, classes you must attend
 - `src/lib/db.ts`, `src/lib/repo.ts` local database. Screens only use `repo.ts`, so swapping to Supabase later touches one place
 - `src/app` screens: Today, Attendance, subject detail, timetable, Money, Tasks, Calendar, Friends and groups, group detail, onboarding, profile (avatar, text size, theme, backup and restore, log out)
-- `public/sw.js` service worker, `src/app/manifest.ts` install manifest and Android shortcuts
+- `src/app/sw.js/route.ts` service worker, `src/app/manifest.ts` install manifest and Android shortcuts
+- `src/lib/features.ts` switches for whole features (friends and groups are off for now)
+
+## The Android app
+
+`android/` is a Capacitor project. The app opens the live site (`capacitor.config.ts`), so screen
+changes ship with a Vercel deploy and need no new APK; the APK changes only when the Java does.
+
+- `DockInPlugin.java` is everything the site can ask the phone (`src/lib/native.ts` is the other side)
+- `PayWatchService.java` reads payment notifications into `PayInbox` on the phone
+- `PayNotifier.java` asks "what was it for?" right after a spend
+
+CI (`.github/workflows/android.yml`) builds and signs the APK on every push that touches it and
+publishes it as the `apk-latest` release; `/DockIn.apk` on the site points there.
 - `tests` unit tests
 
 ## Notes

@@ -24,13 +24,26 @@ if [ "$code" -ne 0 ]; then
   exit 1
 fi
 
-# Every string the Java refers to must actually exist in strings.xml. The stub R
-# would otherwise happily typecheck a name nobody ever defined.
-strings="$here/../android/app/src/main/res/values/strings.xml"
+# Every string and drawable the Java refers to must actually exist in res/. The
+# stub R would otherwise happily typecheck a name nobody ever defined.
+res="$here/../android/app/src/main/res"
+java="$here/../android/app/src/main/java"
 missing=0
-for name in $(grep -oE 'R\.string\.[a-z_]+' -r "$here/../android/app/src/main/java" | sed 's/.*R\.string\.//' | sort -u); do
-  grep -q "name=\"$name\"" "$strings" || { echo "android: strings.xml has no $name" >&2; missing=1; }
+for name in $(grep -ohE 'R\.string\.[a-z_]+' -r "$java" | sed 's/.*R\.string\.//' | sort -u); do
+  grep -q "name=\"$name\"" "$res/values/strings.xml" || { echo "android: strings.xml has no $name" >&2; missing=1; }
+done
+for name in $(grep -ohE 'R\.drawable\.[a-z_]+' -r "$java" | sed 's/.*R\.drawable\.//' | sort -u); do
+  ls "$res"/drawable*/"$name".* >/dev/null 2>&1 || { echo "android: no drawable called $name" >&2; missing=1; }
 done
 [ "$missing" -eq 0 ] || exit 1
 
-echo "android: javac is happy, and every string exists"
+# The plugin is only reachable if MainActivity registers it.
+grep -q 'registerPlugin(DockInPlugin.class)' "$java/com/dockin/student/MainActivity.java" \
+  || { echo "android: MainActivity does not register DockInPlugin" >&2; exit 1; }
+
+# The phone's copy of the debit rules must agree with the web app's.
+javac -nowarn -d "$out" -cp "$out" "$here/android-checks/com/dockin/student/PayChecks.java" >"$log" 2>&1 \
+  || { cat "$log" >&2; echo "android: the payment checks do not compile" >&2; exit 1; }
+java -cp "$out" com.dockin.student.PayChecks 2>/dev/null || { echo "android: the phone reads payments differently from the app" >&2; exit 1; }
+
+echo "android: javac is happy, every resource exists, and payments read the same as on the web"

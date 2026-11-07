@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand">#1F5FD6</color>
-    <color name="status_bar">#0E0F11</color>
+    <color name="page">#0E0F11</color>
 </resources>

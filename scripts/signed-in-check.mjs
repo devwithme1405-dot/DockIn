@@ -94,10 +94,8 @@ await page.evaluate(async () => {
 });
 
 for (const [path, name, must] of [
-  ["/circle", "signed-friends", ["Friends", "Groups", "Shared work"]],
-  ["/circle?tab=groups", "signed-groups", ["New group", "Join with code"]],
-  ["/circle?tab=work", "signed-work", ["Nothing shared yet"]],
-  ["/settings", "signed-profile", ["payments from your phone"]],
+  // Friends are switched off (src/lib/features.ts); their screens are not checked.
+  ["/settings", "signed-profile", ["payments from your phone", "Payments are read by the Android app"]],
 ]) {
   await page.goto(BASE + path, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);

@@ -30,12 +30,11 @@ import { Button, Chip, EmptyState, Sheet, cx, useToast } from "@/components/ui";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { MoneyHero } from "@/components/MoneyHero";
 import { DetectedTray } from "@/components/DetectedTray";
-import { useAuth } from "@/lib/auth";
+import { PhoneSetupNudge } from "@/components/PhoneSetup";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const toast = useToast();
-  const { session } = useAuth();
   const all = useExpenses();
   const today = toDateStr();
   const [month, setMonth] = useState(monthKey(today));
@@ -127,7 +126,8 @@ export default function MoneyPage() {
         }}
       />
 
-      <DetectedTray signedIn={!!session} />
+      <PhoneSetupNudge />
+      <DetectedTray />
 
       {/* One surface, three numbers. Three different pastel panels made these
           look like three unrelated things; they are three views of the same

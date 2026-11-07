@@ -9,11 +9,13 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs",
+    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs && node scripts/native-check.mjs",
     "android:check": "bash scripts/android-compile.sh",
     "verify": "npm run typecheck && npm run lint && npm test && npm run android:check && npm run build"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
     "@supabase/supabase-js": "^2.117.2",
     "@types/qrcode": "^1.5.6",
     "dexie": "^4.4.6",
@@ -28,6 +30,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.20.4",
     "@types/react": "^19",

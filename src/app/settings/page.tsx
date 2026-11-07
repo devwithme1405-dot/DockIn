@@ -41,13 +41,14 @@ import {
   inputCls,
 } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
-import { PayLinkCard } from "@/components/PayLinkCard";
+import { PhoneSetup } from "@/components/PhoneSetup";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
+import { FRIENDS } from "@/lib/features";
 
 type SheetName = "details" | "avatar" | "signin" | "logout" | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
@@ -82,7 +83,7 @@ export default function ProfilePage() {
 
   const signedInNow = !!session;
   useEffect(() => {
-    if (!configured || !signedInNow) return;
+    if (!FRIENDS || !configured || !signedInNow) return;
     // Make sure the directory row exists and find out what it currently shares.
     void Promise.resolve().then(async () => {
       try {
@@ -147,7 +148,7 @@ export default function ProfilePage() {
     });
     setSheet(null);
     setDetails(null);
-    if (session) {
+    if (FRIENDS && session) {
       const fresh = await getProfile();
       if (fresh) void publishProfile(fresh, shareAttendance ?? false).catch(() => {});
     }
@@ -333,8 +334,8 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {/* payments */}
-        {configured && signedIn && <PayLinkCard />}
+        {/* the phone's switches: payment reading and notifications */}
+        <PhoneSetup />
 
         <Button variant="secondary" className="w-full" onClick={openLogout}>
           <LogOut size={18} /> Log out
@@ -397,7 +398,7 @@ export default function ProfilePage() {
                 maxLength={30}
               />
               <span className="mt-1.5 block text-[12.5px] text-muted">
-                Only used to put your own name and roll on a copy of a friend&rsquo;s assignment.
+                Used to put your own name and roll on assignment files.
               </span>
             </Field>
             <Field label="About you">

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DockIn</title>
+<style>
+  :root { --bg:#f6f5f1; --text:#15171b; --muted:#6a6f78; --accent:#1f5fd6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e0f11; --text:#f0f1f3; --muted:#9096a0; --accent:#5b92ff; } }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 24px; text-align:center; gap: 14px; }
+  .mark { width:64px; height:64px; border-radius:18px; background:var(--accent); display:grid; place-items:center; }
+  h1 { margin:6px 0 0; font-size:22px; letter-spacing:-0.01em; }
+  p { margin:0; color:var(--muted); max-width:300px; }
+  button { margin-top:10px; height:46px; padding:0 22px; border:0; border-radius:999px; background:var(--accent);
+    color:#fff; font:inherit; font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark" aria-hidden="true">
+    <svg width="34" height="34" viewBox="0 0 64 64"><circle cx="32" cy="17.5" r="6.2" fill="#fff"/><rect x="14" y="30" width="36" height="22" rx="7" fill="#fff"/></svg>
+  </div>
+  <h1>No internet yet</h1>
+  <p>DockIn opens instantly once it has loaded one time. Connect to Wi-Fi or data and try again.</p>
+  <button onclick="location.replace('https://dock-in.vercel.app/')">Try again</button>
+</main>
+<script>
+  // Comes back by itself the moment the phone is online.
+  window.addEventListener('online', function () { location.replace('https://dock-in.vercel.app/'); });
+</script>
+</body>
+</html>
