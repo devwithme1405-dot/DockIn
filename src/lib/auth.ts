@@ -83,34 +83,99 @@ export async function signInWithGoogle(): Promise<string | null> {
 export const matchesAllowedDomain = (email: string) =>
   !ALLOWED_DOMAIN || email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 
-export async function sendEmailCode(email: string): Promise<string | null> {
+const clean = (email: string) => email.trim().toLowerCase();
+const network = (m: string) => /Failed to fetch|NetworkError|fetch failed/i.test(m);
+
+/** Signs in with an email and password. Returns an error to show, or null on success. */
+export async function signInWithPassword(email: string, password: string): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return "Cloud sync is not set up.";
-  const { error } = await sb.auth.signInWithOtp({
-    email: email.trim().toLowerCase(),
-    options: { shouldCreateUser: true },
-  });
+  const { error } = await sb.auth.signInWithPassword({ email: clean(email), password });
   if (!error) return null;
-  if (!matchesAllowedDomain(email)) return `Use your college email (@${ALLOWED_DOMAIN}).`;
-  if (/rate limit|too many/i.test(error.message))
-    return "Too many codes requested. Wait a few minutes and try again.";
-  if (/database error|P0001/i.test(error.message))
-    return ALLOWED_DOMAIN
-      ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn.`
-      : "That email address cannot sign up.";
-  if (/Failed to fetch|NetworkError/i.test(error.message)) return "No internet right now.";
+  if (network(error.message)) return "No internet right now.";
+  if (/Invalid login credentials/i.test(error.message))
+    return "Wrong email or password. Forgot it? Tap below.";
+  if (/Email not confirmed/i.test(error.message))
+    return "Check your inbox and confirm your email first, then sign in.";
   return error.message;
 }
 
-export async function verifyEmailCode(email: string, token: string): Promise<string | null> {
+export interface SignUpResult {
+  error: string | null;
+  /** True when the account was made but needs an email confirmation before it can sign in. */
+  needsConfirm: boolean;
+}
+
+/** Makes a new account with a password. Logs straight in unless the project asks for email confirmation. */
+export async function signUpWithPassword(email: string, password: string): Promise<SignUpResult> {
+  const sb = getSupabase();
+  if (!sb) return { error: "Cloud sync is not set up.", needsConfirm: false };
+  if (password.length < 6) return { error: "Use at least 6 characters for the password.", needsConfirm: false };
+  const { data, error } = await sb.auth.signUp({
+    email: clean(email),
+    password,
+    options: { emailRedirectTo: `${window.location.origin}/` },
+  });
+  if (error) {
+    if (network(error.message)) return { error: "No internet right now.", needsConfirm: false };
+    if (!matchesAllowedDomain(email)) return { error: `Use your college email (@${ALLOWED_DOMAIN}).`, needsConfirm: false };
+    if (/already registered|already been registered/i.test(error.message))
+      return { error: "That email already has an account. Sign in, or tap “Forgot password”.", needsConfirm: false };
+    if (/database error|P0001/i.test(error.message))
+      return {
+        error: ALLOWED_DOMAIN ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn.` : "That email cannot sign up.",
+        needsConfirm: false,
+      };
+    return { error: error.message, needsConfirm: false };
+  }
+  // A session means they are in now; no session but a user means confirmation is on.
+  return { error: null, needsConfirm: !data.session };
+}
+
+/** Sends the "set a new password" email. The link opens /reset in the browser. */
+export async function sendPasswordReset(email: string): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return "Cloud sync is not set up.";
-  const { error } = await sb.auth.verifyOtp({
-    email: email.trim().toLowerCase(),
-    token: token.trim(),
-    type: "email",
+  const { error } = await sb.auth.resetPasswordForEmail(clean(email), {
+    redirectTo: `${window.location.origin}/reset`,
   });
-  return error ? "That code did not work. Check it and try again." : null;
+  if (!error) return null;
+  if (network(error.message)) return "No internet right now.";
+  if (/rate limit|too many/i.test(error.message)) return "Too many tries. Wait a few minutes.";
+  return error.message;
+}
+
+/** Sets a new password for whoever is signed in right now (the reset link, or Settings). */
+export async function updatePassword(password: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  if (password.length < 6) return "Use at least 6 characters.";
+  const { error } = await sb.auth.updateUser({ password });
+  if (!error) return null;
+  if (network(error.message)) return "No internet right now.";
+  if (/should be different|same.*password/i.test(error.message))
+    return "That is the same as your old password. Pick a new one.";
+  if (/Auth session missing|not authenticated/i.test(error.message))
+    return "This reset link has expired. Ask for a new one.";
+  return error.message;
+}
+
+/**
+ * Whether Supabase is mid password-reset: the email link lands with a recovery
+ * session and fires PASSWORD_RECOVERY. The /reset page waits on this before it
+ * lets a new password be set, so a normal visit to /reset cannot change one.
+ */
+export function onPasswordRecovery(fn: () => void): () => void {
+  const sb = getSupabase();
+  if (!sb) return () => {};
+  // If the link was already parsed before this mounted, the hash still says so.
+  if (typeof window !== "undefined" && /type=recovery/.test(window.location.hash)) {
+    queueMicrotask(fn);
+  }
+  const { data } = sb.auth.onAuthStateChange((event) => {
+    if (event === "PASSWORD_RECOVERY") fn();
+  });
+  return () => data.subscription.unsubscribe();
 }
 
 export async function signOutCloud(): Promise<void> {

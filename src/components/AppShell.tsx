@@ -49,9 +49,17 @@ const TABS = [
   ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: Users }] : []),
 ];
 
+/**
+ * Pages that stand on their own, outside the app's tabs and its sign-in gate:
+ * the privacy page Google Play needs, and the password-reset link, which a
+ * phone that has never run DockIn must be able to open.
+ */
+const BARE = new Set(["/privacy", "/reset"]);
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const bare = BARE.has(pathname);
   // undefined = still loading, null = no profile yet
   const profile = useLiveQuery(() => getProfile(), []);
 
@@ -97,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const restoring = authLoading || (!!userId && profile === null && !sync.ready && !gaveUp);
 
   useEffect(() => {
+    if (bare) return;
     if (profile === undefined) return;
     if (profile === null && (authLoading || (userId && !sync.ready && !gaveUp))) return;
     const onboarded = !!profile?.onboarded;
@@ -105,7 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     // In the app, the one-time setup (Camu, LMS, permissions) comes straight
     // after onboarding — and once for anyone who had the app before it existed.
     if (onboarded && pathname !== "/setup" && isNativeApp() && !setupSeen()) router.replace("/setup");
-  }, [profile, pathname, router, authLoading, userId, sync.ready, gaveUp]);
+  }, [bare, profile, pathname, router, authLoading, userId, sync.ready, gaveUp]);
 
   useEffect(() => {
     void ensureCategories();
@@ -157,6 +166,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     const t = setTimeout(() => setMinShown(true), Math.max(0, 260 - performance.now()));
     return () => clearTimeout(t);
   }, []);
+
+  // A bare page (privacy, password reset) draws on its own, with no tabs, no
+  // launch screen and no sign-in gate — it may be the first DockIn page a phone
+  // ever opens.
+  if (bare) {
+    return (
+      <ToastProvider>
+        <div className="mx-auto min-h-dvh w-full max-w-md bg-bg">{children}</div>
+      </ToastProvider>
+    );
+  }
 
   const onboarding = pathname === "/onboarding" || pathname === "/setup";
   const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);

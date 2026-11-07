@@ -8,6 +8,9 @@ import {
   Check,
   Cloud,
   Download,
+  Eye,
+  EyeOff,
+  KeyRound,
   LogOut,
   Monitor,
   Moon,
@@ -46,13 +49,13 @@ import { ConnectCamu, ConnectLms } from "@/components/College";
 import { useAttendanceData, useCollege } from "@/lib/college";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
-import { signOutCloud, useAuth } from "@/lib/auth";
+import { signOutCloud, updatePassword, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
 import { FRIENDS } from "@/lib/features";
 
-type SheetName = "details" | "avatar" | "signin" | "logout" | null;
+type SheetName = "details" | "avatar" | "signin" | "password" | "logout" | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
 
 const THEMES: { id: ThemePref; label: string; icon: typeof Sun }[] = [
@@ -314,15 +317,23 @@ export default function ProfilePage() {
         {configured && (
           <section className="lift rounded-3xl bg-surface p-4">
             {signedIn ? (
-              <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
-                <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{session.user.email}</span>
-                  <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
-                    {syncLine}
+              <>
+                <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
+                  <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{session.user.email}</span>
+                    <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
+                      {syncLine}
+                    </span>
                   </span>
-                </span>
-              </p>
+                </p>
+                <button
+                  onClick={() => setSheet("password")}
+                  className="mt-3 flex w-full items-center gap-2.5 border-t border-line pt-3 text-[14px] text-accent"
+                >
+                  <KeyRound size={16} /> Set or change password
+                </button>
+              </>
             ) : (
               <>
                 <p className="text-[14px] text-muted">
@@ -430,6 +441,10 @@ export default function ProfilePage() {
         <SignIn />
       </Sheet>
 
+      <Sheet open={sheet === "password"} onClose={close} title="Password">
+        <SetPassword onDone={close} />
+      </Sheet>
+
       <ConfirmSheet
         open={sheet === "logout"}
         title="Log out of DockIn?"
@@ -472,6 +487,76 @@ export default function ProfilePage() {
       </ConfirmSheet>
 
     </>
+  );
+}
+
+/**
+ * Set a password without leaving the app — the easy path for an account that
+ * only ever signed in with a code before. He is already signed in here, so this
+ * just writes the new password onto the same account; nothing by email.
+ */
+function SetPassword({ onDone }: { onDone: () => void }) {
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    const err = await updatePassword(password);
+    setBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setDone(true);
+    setTimeout(onDone, 1100);
+  }
+
+  if (done) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl bg-safe-soft px-3.5 py-3 text-[14px] font-medium text-safe">
+        <Check size={18} strokeWidth={3} /> Password saved. Use it to sign in next time.
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <p className="mb-3 text-[13.5px] text-muted">
+        Set a password so you can sign in with just your email and password — no code to wait for.
+      </p>
+      <div className="relative">
+        <input
+          className={cx(inputCls, "pr-11")}
+          type={show ? "text" : "password"}
+          autoComplete="new-password"
+          placeholder="At least 6 characters"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && password.length >= 6 && void save()}
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          aria-label={show ? "Hide password" : "Show password"}
+          className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted"
+        >
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      <Button className="mt-4 w-full" onClick={save} disabled={busy || password.length < 6}>
+        <KeyRound size={17} /> Save password
+      </Button>
+      {error && (
+        <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13.5px] text-danger">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

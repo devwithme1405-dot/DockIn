@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { ALLOWED_DOMAIN } from "@/lib/supabase";
 import {
   fetchProviders,
   readAuthRedirectError,
-  sendEmailCode,
+  sendPasswordReset,
+  signInWithPassword,
+  signUpWithPassword,
   signInWithAzure,
   signInWithGoogle,
-  verifyEmailCode,
   type Providers,
 } from "@/lib/auth";
 import { isNativeApp } from "@/lib/native";
@@ -37,21 +38,25 @@ function MicrosoftSquares() {
   );
 }
 
+type Mode = "in" | "up" | "forgot";
+
 /**
- * Signing in with your college email.
+ * Signing in with an email and a password you set once.
  *
- * The code goes to whatever address you type, so a college Outlook inbox works
- * exactly like any other. One-tap buttons are drawn only for the providers this
- * Supabase project actually has switched on, so the screen never offers a button
- * that is going to fail.
+ * No codes to wait for: after the first time it is just email and password,
+ * and "Forgot password" mails a reset link. The same email keeps the same
+ * account, so an older code-based account picks up its data again once a
+ * password is set on it (via the reset link, or Settings while signed in).
  */
 export function SignIn({ dark = false }: { dark?: boolean }) {
+  const [mode, setMode] = useState<Mode>("in");
   const [redirectError] = useState(readAuthRedirectError);
   const [error, setError] = useState<string | null>(redirectError);
+  const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [providers, setProviders] = useState<Providers | null>(null);
 
   useEffect(() => {
@@ -62,93 +67,123 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
     };
   }, []);
 
-  async function oauth(go: () => Promise<string | null>) {
+  function go(next: Mode) {
+    setMode(next);
+    setError(null);
+    setNote(null);
+  }
+
+  async function oauth(run: () => Promise<string | null>) {
     setBusy(true);
-    setError(await go());
+    setError(await run());
     setBusy(false);
   }
-  async function send() {
+
+  async function submit() {
     setBusy(true);
     setError(null);
-    const err = await sendEmailCode(email);
-    if (err) setError(err);
-    else setSent(true);
-    setBusy(false);
-  }
-  async function verify() {
-    setBusy(true);
-    const err = await verifyEmailCode(email, code);
-    if (err) setError(err);
+    setNote(null);
+    if (mode === "in") {
+      setError(await signInWithPassword(email, password));
+    } else if (mode === "up") {
+      const r = await signUpWithPassword(email, password);
+      setError(r.error);
+      if (!r.error && r.needsConfirm) {
+        setNote("Account made. Check your inbox to confirm the email, then sign in.");
+        setMode("in");
+      }
+    } else {
+      const err = await sendPasswordReset(email);
+      setError(err);
+      if (!err) setNote("If that email has an account, a reset link is on its way. Open it to set a new password.");
+    }
     setBusy(false);
   }
 
   const field =
     "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
   const muted = dark ? "text-white/70" : "text-muted";
-  // Google refuses to sign in inside an app's WebView, so inside DockIn's
-  // Android app the email code is the way in; it works with any inbox.
+  const strong = dark ? "text-white" : "text-text";
+  // Google and Outlook refuse to sign in inside an app's WebView, so inside the
+  // Android app only email and password is offered.
   const oneTap = !isNativeApp() && (providers?.google || providers?.azure);
+  const canSubmit = email.includes("@") && (mode === "forgot" || password.length >= 6);
+
+  const cta =
+    mode === "in" ? "Sign in" : mode === "up" ? "Create account" : "Email me a reset link";
 
   return (
     <div>
-      {!sent ? (
+      <label className={cx("mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-email">
+        Email
+      </label>
+      <input
+        id="dockin-email"
+        className={field}
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        placeholder={ALLOWED_DOMAIN ? `name@${ALLOWED_DOMAIN}` : "you@example.com"}
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+
+      {mode !== "forgot" && (
         <>
-          <label className={cx("mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-email">
-            Your email
+          <label className={cx("mt-3 mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-pass">
+            Password
           </label>
-          <input
-            id="dockin-email"
-            className={field}
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder={ALLOWED_DOMAIN ? `name@${ALLOWED_DOMAIN}` : "you@example.com"}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && email.includes("@") && void send()}
-          />
-          <p className={cx("mt-2 text-[12.5px]", muted)}>
-            We send a six-digit code to your inbox. Works with Outlook, no app needed.
-          </p>
-          <Button className="mt-4 w-full" onClick={send} disabled={busy || !email.includes("@")}>
-            <Mail size={17} /> Send me a code <ArrowRight size={17} />
-          </Button>
-        </>
-      ) : (
-        <>
-          <p className={cx("mb-3 text-[14px]", muted)}>
-            Code sent to <span className={dark ? "text-white" : "text-text"}>{email}</span>. Check your
-            inbox, and the junk folder too.
-          </p>
-          <input
-            className={cx(field, "text-center text-[22px] tracking-[0.35em] tabular-nums")}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="000000"
-            maxLength={8}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            onKeyDown={(e) => e.key === "Enter" && code.length >= 6 && void verify()}
-            aria-label="Code from your email"
-            autoFocus
-          />
-          <Button className="mt-3 w-full" onClick={verify} disabled={busy || code.length < 6}>
-            Verify and sign in
-          </Button>
-          <button
-            onClick={() => {
-              setSent(false);
-              setCode("");
-              setError(null);
-            }}
-            className={cx("mx-auto mt-3 block text-[13px]", muted)}
-          >
-            Use a different email
-          </button>
+          <div className="relative">
+            <input
+              id="dockin-pass"
+              className={cx(field, "pr-11")}
+              type={show ? "text" : "password"}
+              autoComplete={mode === "up" ? "new-password" : "current-password"}
+              placeholder={mode === "up" ? "At least 6 characters" : "Your password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && canSubmit && void submit()}
+            />
+            <button
+              type="button"
+              onClick={() => setShow((s) => !s)}
+              aria-label={show ? "Hide password" : "Show password"}
+              className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted"
+            >
+              {show ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </>
       )}
 
-      {!sent && oneTap && (
+      {mode === "forgot" && (
+        <p className={cx("mt-2 text-[12.5px]", muted)}>
+          We email you a link. Open it to set a new password — your classes, money and tasks stay put.
+        </p>
+      )}
+
+      <Button className="mt-4 w-full" onClick={submit} disabled={busy || !canSubmit}>
+        {mode === "forgot" ? <Mail size={17} /> : <Lock size={17} />} {cta} <ArrowRight size={17} />
+      </Button>
+
+      <div className="mt-3 flex items-center justify-between text-[13px]">
+        {mode === "in" ? (
+          <>
+            <button onClick={() => go("up")} className={cx("font-medium", strong)}>
+              Create account
+            </button>
+            <button onClick={() => go("forgot")} className={muted}>
+              Forgot password?
+            </button>
+          </>
+        ) : (
+          <button onClick={() => go("in")} className={cx("font-medium", strong)}>
+            ← Back to sign in
+          </button>
+        )}
+      </div>
+
+      {oneTap && mode === "in" && (
         <>
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-line" />
@@ -182,6 +217,9 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
         </>
       )}
 
+      {note && (
+        <p className="mt-4 rounded-xl bg-safe-soft px-3.5 py-2.5 text-[13.5px] text-safe">{note}</p>
+      )}
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13.5px] text-danger">
           {error}
