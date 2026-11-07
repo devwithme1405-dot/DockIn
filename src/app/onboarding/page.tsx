@@ -3,19 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
-import { saveProfile, seedSampleTimetable } from "@/lib/repo";
+import { saveProfile } from "@/lib/repo";
 import { Button, Chip, Field, cx, inputCls } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { SignIn } from "@/components/SignIn";
 import { useAuth } from "@/lib/auth";
 
-type Start = "sample" | "empty";
-
+/**
+ * Three screens: the welcome, signing in (skippable), and your name with the
+ * attendance you need. Subjects and classes are not asked for — Camu has them,
+ * and in a browser they are added on the Attendance screen when wanted.
+ */
 export default function OnboardingPage() {
   const router = useRouter();
   const { session } = useAuth();
   const [stepRaw, setStep] = useState<number | null>(null);
-  // Someone who is already signed in (e.g. just back from Google) skips the welcome and sign-in steps.
+  // Someone who is already signed in (e.g. just back from a sign-in link) skips straight to their name.
   const step = stepRaw ?? (session ? 2 : 0);
   const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "")
     .trim()
@@ -23,13 +26,11 @@ export default function OnboardingPage() {
   const [nameRaw, setName] = useState<string | null>(null);
   const name = nameRaw ?? metaName;
   const [target, setTarget] = useState(75);
-  const [start, setStart] = useState<Start>("sample");
   const [busy, setBusy] = useState(false);
 
   async function finish() {
     setBusy(true);
     await saveProfile({ name: name.trim(), target, onboarded: true });
-    if (start === "sample") await seedSampleTimetable();
     router.replace("/");
   }
 
@@ -37,8 +38,8 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-dvh flex-col px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 4`}>
-        {[1, 2, 3, 4].map((i) => (
+      <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 2`}>
+        {[1, 2].map((i) => (
           <span
             key={i}
             className={cx(
@@ -56,8 +57,8 @@ export default function OnboardingPage() {
               Sign in to back things up
             </h1>
             <p className="mt-3 text-muted">
-              Your classes, expenses and tasks are backed up and come back on a new phone.
-              You can skip this and do it later.
+              Your money, tasks and settings come back on a new phone. You can skip this and do it
+              later.
             </p>
             <div className="mt-8">
               {session ? (
@@ -74,63 +75,26 @@ export default function OnboardingPage() {
 
         {step === 2 && (
           <>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              What should we call you?
-            </h1>
-            <p className="mt-3 text-muted">Your name shows up in the greeting on the Today screen.</p>
+            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">About you</h1>
+            <p className="mt-3 text-muted">Two quick things, both changeable later.</p>
             <div className="mt-8">
-              <Field label="First name">
+              <Field label="What should we call you?">
                 <input
                   className={inputCls}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Sachin"
                   autoComplete="given-name"
-                  autoFocus
                 />
               </Field>
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              Required attendance
-            </h1>
-            <p className="mt-3 text-muted">
-              Most colleges ask for 75%. DockIn will tell you how many classes you can still miss
-              against this number.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-2.5">
-              {[75, 70, 65, 80, 85].map((t) => (
-                <Chip key={t} active={target === t} onClick={() => setTarget(t)}>
-                  {t}%
-                </Chip>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              Set up your timetable
-            </h1>
-            <p className="mt-3 text-muted">You can change every subject and class later.</p>
-            <div className="mt-8 space-y-3">
-              <Choice
-                selected={start === "sample"}
-                onClick={() => setStart("sample")}
-                title="Start with a sample"
-                body="5 subjects and a Mon to Fri week. Edit the times to match yours."
-              />
-              <Choice
-                selected={start === "empty"}
-                onClick={() => setStart("empty")}
-                title="Start empty"
-                body="I will add my own subjects and classes."
-              />
+              <p className="mb-2.5 text-[13px] font-medium text-muted">Attendance your college asks for</p>
+              <div className="flex flex-wrap gap-2.5">
+                {[75, 70, 65, 80, 85].map((t) => (
+                  <Chip key={t} active={target === t} onClick={() => setTarget(t)}>
+                    {t}%
+                  </Chip>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -140,17 +104,13 @@ export default function OnboardingPage() {
         <Button variant="secondary" onClick={() => setStep(step - 1)} disabled={busy}>
           Back
         </Button>
-        {step < 4 ? (
-          <Button
-            className="flex-1"
-            variant={step === 1 && !session ? "secondary" : "primary"}
-            onClick={() => setStep(step + 1)}
-          >
-            {step === 1 && !session ? "Skip for now" : "Continue"}
+        {step < 2 ? (
+          <Button className="flex-1" variant={!session ? "secondary" : "primary"} onClick={() => setStep(step + 1)}>
+            {!session ? "Skip for now" : "Continue"}
           </Button>
         ) : (
           <Button className="flex-1" onClick={finish} disabled={busy}>
-            {busy ? "Setting up…" : "Start using DockIn"}
+            {busy ? "Setting up…" : "Continue"}
           </Button>
         )}
       </div>
@@ -209,32 +169,5 @@ function Welcome({ onStart }: { onStart: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function Choice({
-  selected,
-  onClick,
-  title,
-  body,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  title: string;
-  body: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cx(
-        "w-full rounded-2xl border-2 p-4 text-left transition",
-        selected ? "border-accent bg-accent-soft" : "border-line bg-surface",
-      )}
-    >
-      <p className="font-medium">{title}</p>
-      <p className="mt-0.5 text-sm text-muted">{body}</p>
-    </button>
   );
 }

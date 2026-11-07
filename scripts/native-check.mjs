@@ -22,6 +22,39 @@ const GPAY = "com.google.android.apps.nbu.paisa.user";
 const SMS = "com.google.android.apps.messaging";
 const now = Date.now();
 
+/** Camu as the phone stores it, with classes today and a record behind them. */
+function camuFixture() {
+  const pad = (n) => String(n).padStart(2, "0");
+  const day = (offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+  const p = (date, from, to, name, code, subId, room) => ({
+    date, from, to, name, code, subId, room, teacher: "Divya Singh", kind: "LECTURE", status: "A",
+  });
+  return {
+    overall: { pct: 72, present: 71, total: 87 },
+    subjects: [
+      { id: "s-dbms", code: "2025CSET200", name: "Database Management Systems", present: 31, total: 43, absent: 12, leave: 0, duty: 0, pct: 72.09 },
+      { id: "s-fsd", code: "2025CSET218", name: "Full Stack Development", present: 40, total: 44, absent: 4, leave: 0, duty: 0, pct: 90.9 },
+    ],
+    periods: [
+      p(day(0), "00:01", "00:02", "Database Management Systems ( P-LA-203 )", "CSET200", "s-dbms", "P-LA-203"),
+      p(day(0), "23:57", "23:58", "Full Stack Development ( P-CC-315 )", "CSET218", "x", "P-CC-315"),
+      p(day(-1), "09:25", "10:25", "Database Management Systems ( P-LA-203 )", "CSET200", "s-dbms", "P-LA-203"),
+    ],
+    holidays: [],
+    history: {
+      "s-dbms": [
+        { date: day(-1), from: "09:25", to: "10:25", present: false, leave: "" },
+        { date: day(-2), from: "09:25", to: "10:25", present: true, leave: "" },
+      ],
+    },
+    historyAt: Date.now(),
+  };
+}
+
 const problems = [];
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -34,12 +67,12 @@ page.on("console", (m) => {
 });
 
 await page.addInitScript(
-  ({ inbox }) => {
+  ({ inbox, camuReady, lmsReady }) => {
     // What the phone knows. Persisted per tab so a reload keeps it.
     const saved = sessionStorage.getItem("fake-phone");
     const phone = saved
       ? JSON.parse(saved)
-      : { listening: false, notifications: "prompt", inbox, calls: [] };
+      : { listening: false, notifications: "prompt", inbox, calls: [], college: { camu: { connected: false }, lms: { connected: false } }, camuReady, lmsReady };
     const save = () => sessionStorage.setItem("fake-phone", JSON.stringify(phone));
     const listeners = {};
     let nextId = 1;
@@ -73,6 +106,24 @@ await page.addInitScript(
         return { notifications: "granted" };
       },
       testPrompt: () => ({ notifications: phone.notifications }),
+      college: () => phone.college,
+      syncCollege: () => {
+        phone.college = { ...phone.college, syncedAt: Date.now() };
+        return phone.college;
+      },
+      connectCamu: () => {
+        phone.college = { ...phone.college, camu: { ...phone.camuReady, connected: true, syncedAt: Date.now() } };
+        return phone.college;
+      },
+      connectLms: ({ username, password }) => {
+        if (password !== "right") throw new Error("Wrong username or password.");
+        phone.college = { ...phone.college, lms: { ...phone.lmsReady, connected: true, name: username, syncedAt: Date.now() } };
+        return phone.college;
+      },
+      disconnectCollege: ({ which }) => {
+        phone.college = { ...phone.college, [which]: { connected: false } };
+        return phone.college;
+      },
       pending: () => ({ notices: phone.inbox }),
       ack: ({ ids }) => {
         phone.inbox = phone.inbox.filter((n) => !ids.includes(n.id));
@@ -101,9 +152,13 @@ await page.addInitScript(
         }
         const fn = methods[method];
         if (!fn) return Promise.reject(new Error(`${plugin}.${method} is not on this pretend phone`));
-        const out = fn(options ?? {});
-        save();
-        return Promise.resolve(out);
+        try {
+          const out = fn(options ?? {});
+          save();
+          return Promise.resolve(out);
+        } catch (e) {
+          return Promise.reject(e);
+        }
       },
       nativeCallback(plugin, method, options, callback) {
         const id = String(nextId++);
@@ -113,8 +168,24 @@ await page.addInitScript(
     };
   },
   {
+    camuReady: camuFixture(),
+    lmsReady: {
+      items: [
+        {
+          id: 70,
+          instance: 7,
+          module: "assign",
+          name: "Lab 7: Joins",
+          course: "Database Management Systems (CSET200)",
+          due: Math.floor(now / 1000) + 2 * 86400,
+          url: "https://lms.bennett.edu.in/mod/assign/view.php?id=7",
+          overdue: false,
+          action: "Add submission",
+        },
+      ],
+    },
     inbox: [
-      // One spend reported twice (bank SMS, then GPay), an advert, and a refund.
+      // One spend reported twice (bank SMS, then GPay), an advert, and money in.
       { id: "n1", app: SMS, title: "HDFCBK", body: "Rs.60 debited from account to VPA kathi@okaxis", at: now - 60_000 },
       { id: "n2", app: GPAY, title: "You paid ₹60.00", body: "to 24/7 Kathi", at: now - 58_000 },
       { id: "n3", app: GPAY, title: "Offer", body: "Get cashback up to ₹100 when you pay", at: now - 50_000 },
@@ -165,12 +236,30 @@ await page.evaluate(async () => {
   });
 });
 
+await step("setup comes up once, straight after opening the app", async () => {
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await page.waitForURL(/\/setup$/, { timeout: 8000 });
+  await waitFor("Set up DockIn once");
+  const t = await text();
+  for (const want of ["Connect Camu", "Connect the LMS", "Read payment notifications"]) {
+    if (!t.includes(want)) throw new Error(`setup is missing "${want}"`);
+  }
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${SHOTS}/native-setup-screen.png`, fullPage: true });
+  await page.getByRole("button", { name: "Skip the rest for now" }).click();
+  await page.waitForURL((u) => u.pathname === "/", { timeout: 8000 });
+  await page.goto(`${BASE}/tasks`, { waitUntil: "domcontentloaded" });
+  await waitFor("Tasks");
+  if (page.url().endsWith("/setup")) throw new Error("setup was forced a second time");
+});
+
 await step("the app knows it is inside the phone", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
   await waitFor("Read payment notifications");
   const t = await text();
   if (/Payments are read by the Android app/i.test(t)) throw new Error("shows the browser version of the card");
   if (!/App 2\.0\.1 · Android 14/.test(t)) throw new Error("does not show the app and Android version");
+  if (!t.includes("Connect Camu")) throw new Error("Profile has no Camu switch");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-setup-off.png`, fullPage: true });
 });
@@ -197,11 +286,12 @@ await step("Allow asks for notifications, and the card goes green", async () => 
   await page.screenshot({ path: `${SHOTS}/native-setup-on.png`, fullPage: true });
 });
 
-await step("Money shows the bank's and GPay's copy as one payment", async () => {
+await step("Money shows the bank's and GPay's copy as one payment, and money in apart", async () => {
   await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("A payment to add");
+  await waitFor("to place");
   const t = await text();
   if (!t.includes("24/7 Kathi")) throw new Error("the payee from GPay is missing");
+  if (!/\+₹250\s*from Rahul/.test(t)) throw new Error("the money from Rahul is not shown as money in");
   if (/turn on payment reading/i.test(t)) throw new Error("the setup nudge shows although everything is on");
   // the advert was never shown and has left the phone's inbox
   const left = await page.evaluate(() => window.__phone.get().inbox.map((n) => n.id));
@@ -226,6 +316,42 @@ await step("a payment arriving while Money is open shows up by itself", async ()
   await waitFor("Monginis");
 });
 
+await step("a payment for a friend goes to lena-dena, not spending", async () => {
+  const row = page.locator("div.flex.items-center.gap-3", { hasText: "Monginis" }).last();
+  await row.getByRole("button", { name: "Place" }).click();
+  await page.getByRole("tab", { name: "For someone" }).click();
+  await page.getByPlaceholder("Who? (Rahul)").fill("Rahul");
+  await page.getByRole("button", { name: "Add to lena-dena" }).click();
+  await waitFor("owes you");
+  const t = await text();
+  if (!/Lena hai\s*₹149/.test(t)) throw new Error("lena-dena does not show ₹149 to get back");
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/native-money-udhaar.png`, fullPage: true });
+});
+
+await step("money in from someone who owes you ticks them off in one tap", async () => {
+  await waitFor("Rahul owes you ₹149");
+  await page.getByRole("button", { name: "Paid back" }).click();
+  await waitFor("Money in");
+  const t = await text();
+  if (!/Lena hai\s*₹0/.test(t)) throw new Error("Rahul still shows as owing");
+  if (!t.includes("+₹101")) throw new Error("the extra ₹101 was not noted as money in");
+});
+
+await step("a payment notification's For someone button opens that payment, ready", async () => {
+  const at = Date.now();
+  await page.evaluate((at) => {
+    const n = { id: "n10", app: "com.google.android.apps.nbu.paisa.user", title: "You paid ₹99", body: "to Chai Point", at };
+    window.__phone.set({ inbox: [...window.__phone.get().inbox, n] });
+    window.__phone.fire("notice", n);
+    window.__phone.fire("open", { path: `/money?pay=99&at=${at}&who=other` });
+  }, at);
+  await page.getByRole("tab", { name: "For someone", selected: true }).waitFor({ timeout: 8000 });
+  const t = await text();
+  if (!t.includes("₹99 at Chai Point")) throw new Error("the sheet is not about the ₹99 payment");
+  await page.keyboard.press("Escape");
+});
+
 await step("tapping the payment notification opens Money", async () => {
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
   await waitFor("Timetable");
@@ -237,6 +363,57 @@ await step("Money nudges while payment reading is off", async () => {
   await page.evaluate(() => window.__phone.set({ listening: false }));
   await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
   await waitFor("Turn on payment reading");
+});
+
+await step("connecting Camu turns Attendance into Camu's numbers", async () => {
+  await page.goto(`${BASE}/attendance`, { waitUntil: "domcontentloaded" });
+  await waitFor("Connect Camu");
+  await page.getByRole("button", { name: "Connect", exact: true }).first().click();
+  await waitFor("From Camu");
+  const t = await text();
+  if (!t.includes("Database Management Systems")) throw new Error("Camu's subjects are missing");
+  if (!/81\.6%/.test(t)) throw new Error("the overall figure is not Camu's 71 of 87");
+  if (t.includes("Open timetable")) throw new Error("still asks for a hand-made timetable");
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${SHOTS}/native-camu-attendance.png`, fullPage: true });
+});
+
+await step("a subject opens every class Camu recorded", async () => {
+  await page.getByRole("button", { name: /Database Management Systems/ }).first().click();
+  await waitFor("Missed 1 class");
+  const t = await text();
+  if (!t.includes("Absent") || !t.includes("Present")) throw new Error("the class list is missing");
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/native-camu-history.png` });
+  await page.keyboard.press("Escape");
+});
+
+await step("Today shows Camu's classes with the room, and nothing to mark", async () => {
+  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+  await waitFor("From Camu");
+  const t = await text();
+  if (!t.includes("P-CC-315")) throw new Error("the room is missing");
+  if (!t.includes("Full Stack Development")) throw new Error("today's class is missing");
+  if (await page.getByRole("button", { name: "Present" }).count()) throw new Error("there are marking buttons on a Camu class");
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${SHOTS}/native-camu-today.png`, fullPage: true });
+});
+
+await step("the LMS refuses a wrong password, then fills Tasks", async () => {
+  await page.goto(`${BASE}/tasks`, { waitUntil: "domcontentloaded" });
+  await waitFor("Connect the LMS");
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  await page.getByPlaceholder("LMS username").fill("e23cseu0001");
+  await page.getByPlaceholder("LMS password").fill("wrong");
+  await page.getByRole("button", { name: "Sign in to the LMS" }).click();
+  await waitFor("Wrong username or password");
+  await page.getByPlaceholder("LMS password").fill("right");
+  await page.getByRole("button", { name: "Sign in to the LMS" }).click();
+  await waitFor("Lab 7: Joins");
+  const t = await text();
+  if (!t.includes("LMS")) throw new Error("the task does not say it came from the LMS");
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${SHOTS}/native-lms-tasks.png`, fullPage: true });
 });
 
 await browser.close();

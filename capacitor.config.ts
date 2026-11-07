@@ -21,6 +21,11 @@ const config: CapacitorConfig = {
     url: "https://dock-in.vercel.app",
     errorPath: "offline.html",
   },
+  android: {
+    // What shows in the instant between Android's animated splash and the
+    // site's first paint: the same blue, so the opening reads as one motion.
+    backgroundColor: "#1F5FD6",
+  },
 };
 
 export default config;

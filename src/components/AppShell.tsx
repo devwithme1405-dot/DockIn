@@ -12,7 +12,8 @@ import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
 import { useAuth } from "@/lib/auth";
-import { onPhone } from "@/lib/native";
+import { isNativeApp, onPhone } from "@/lib/native";
+import { setupSeen } from "@/lib/setup";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 
@@ -101,6 +102,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     const onboarded = !!profile?.onboarded;
     if (!onboarded && pathname !== "/onboarding") router.replace("/onboarding");
     if (onboarded && pathname === "/onboarding") router.replace("/");
+    // In the app, the one-time setup (Camu, LMS, permissions) comes straight
+    // after onboarding — and once for anyone who had the app before it existed.
+    if (onboarded && pathname !== "/setup" && isNativeApp() && !setupSeen()) router.replace("/setup");
   }, [profile, pathname, router, authLoading, userId, sync.ready, gaveUp]);
 
   useEffect(() => {
@@ -113,7 +117,15 @@ export function AppShell({ children }: { children: ReactNode }) {
    * listener exists, so it works from a cold start as well as from the
    * background.
    */
-  useEffect(() => onPhone("open", ({ path }) => router.push(path)), [router]);
+  useEffect(
+    () =>
+      onPhone("open", ({ path }) => {
+        router.push(path);
+        // A screen already open (Money) still hears which payment to show.
+        window.dispatchEvent(new CustomEvent("dockin-open", { detail: path }));
+      }),
+    [router],
+  );
 
   useEffect(() => {
     if (
@@ -146,7 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
-  const onboarding = pathname === "/onboarding";
+  const onboarding = pathname === "/onboarding" || pathname === "/setup";
   const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
 
   return (

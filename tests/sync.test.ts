@@ -168,3 +168,30 @@ describe("sync", () => {
     expect(await db.tasks.count()).toBe(1);
   });
 });
+
+describe("a server that does not know a new kind yet", () => {
+  /** Refuses dues, like a database the udhaar migration has not run on. */
+  class OldServer extends FakeRemote {
+    async push(rows: RemoteRow[]) {
+      if (rows.some((r) => r.kind === "dues")) throw new Error('violates check constraint "sync_records_kind_check"');
+      return super.push(rows);
+    }
+  }
+
+  it("still backs up everything else, and tries the new kind again later", async () => {
+    const { addDue } = await import("@/lib/repo");
+    const { getSyncStatus } = await import("@/lib/sync");
+    const old = new OldServer();
+    await addExpense({ amount: 60, category: "food", date: "2026-11-07" });
+    await addDue({ person: "Rahul", amount: 100, dir: "owed", date: "2026-11-07" });
+    await syncOnce(old, "u1");
+    expect(getSyncStatus().state).toBe("idle");
+    expect([...old.rows.values()].some((r) => r.kind === "expenses")).toBe(true);
+
+    // The migration runs; the next sync sends the udhaar that was held back.
+    const upgraded = new FakeRemote();
+    upgraded.rows = old.rows;
+    await syncOnce(upgraded, "u1");
+    expect([...upgraded.rows.values()].some((r) => r.kind === "dues")).toBe(true);
+  });
+});

@@ -36,6 +36,8 @@ export interface Profile {
    * rather than during sign-up.
    */
   roll?: string;
+  /** Your UPI id, put in udhaar reminders as a pay link. */
+  upi?: string;
   /** The shape of a college day; see lib/periods.ts. */
   grid?: { start: string; length: number; gap: number; count: number };
   createdAt: number;
@@ -137,6 +139,32 @@ export interface Expense extends Base {
   date: string; // "YYYY-MM-DD" local date
 }
 
+/**
+ * Udhaar: money between you and one person.
+ *
+ * "owed" is lena — you paid for them, they owe you. "owe" is dena — they paid
+ * for you. `paid` grows as it comes back (in parts, if that is how it comes);
+ * the entry is settled when it reaches the amount.
+ */
+export interface Due extends Base {
+  person: string;
+  amount: number;
+  dir: "owed" | "owe";
+  note: string;
+  date: string; // "YYYY-MM-DD"
+  paid: number;
+  settledAt: number | null;
+}
+
+/** Money that came to you and was not someone settling up: from home, a refund, a stipend. */
+export interface Income extends Base {
+  amount: number;
+  /** Who or where it came from, as written. */
+  from: string;
+  note: string;
+  date: string;
+}
+
 export type TaskKind = "assignment" | "exam" | "project" | "quiz" | "personal";
 export type Priority = "low" | "med" | "high";
 
@@ -162,6 +190,10 @@ export interface Task extends Base {
   doneAt: number | null;
   /** Checklist items (for exams: syllabus topics). */
   subtasks: Subtask[];
+  /** Set on tasks DockIn copied from the LMS; they keep themselves up to date. */
+  source?: "lms";
+  /** Where to open it on the LMS. */
+  url?: string;
 }
 
 export type EventKind = "holiday" | "event";

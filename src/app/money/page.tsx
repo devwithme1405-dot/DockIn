@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { MoneySkeleton } from "@/components/Skeleton";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { addExpense, deleteExpense, getProfile, saveProfile } from "@/lib/repo";
-import { useCategories, useExpenses } from "@/lib/hooks";
+import { ArrowDownLeft, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { addExpense, deleteExpense, deleteIncome, getProfile, restoreIncome, saveProfile } from "@/lib/repo";
+import { useCategories, useExpenses, useIncomes } from "@/lib/hooks";
 import {
   metaFor,
   budgetStatus,
@@ -31,11 +31,13 @@ import { ExpenseForm } from "@/components/ExpenseForm";
 import { MoneyHero } from "@/components/MoneyHero";
 import { DetectedTray } from "@/components/DetectedTray";
 import { PhoneSetupNudge } from "@/components/PhoneSetup";
+import { UdhaarCard } from "@/components/Udhaar";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const toast = useToast();
   const all = useExpenses();
+  const incomes = useIncomes();
   const today = toDateStr();
   const [month, setMonth] = useState(monthKey(today));
   const [adding, setAdding] = useState(false);
@@ -69,6 +71,8 @@ export default function MoneyPage() {
   const weekSpent = sum((all ?? []).filter((e) => e.date >= weekStart(today) && e.date <= today));
   const daysSoFar = isCurrent ? Number(today.slice(8, 10)) : daysInMonth(month);
   const avg = spent / Math.max(daysSoFar, 1);
+  const cameIn = (incomes ?? []).filter((i) => monthKey(i.date) === month);
+  const inTotal = cameIn.reduce((n, i) => n + i.amount, 0);
 
   const shown = catFilter === "all" ? list : list.filter((e) => e.category === catFilter);
   const groups = groupByDay(shown);
@@ -86,7 +90,7 @@ export default function MoneyPage() {
     <div className="page-wash">
       <PageHeader
         title="Money"
-        subtitle="Track every rupee"
+        subtitle="Every rupee, in and out"
         right={
           <>
           <button
@@ -138,7 +142,11 @@ export default function MoneyPage() {
       >
         <Stat label="Today" value={fmtMoney(todaySpent)} />
         <Stat label="This week" value={fmtMoney(weekSpent)} />
-        <Stat label="Avg / day" value={fmtMoney(Math.round(avg))} />
+        {inTotal > 0 ? (
+          <Stat label="Came in" value={fmtMoney(inTotal)} tone="text-safe" />
+        ) : (
+          <Stat label="Avg / day" value={fmtMoney(Math.round(avg))} />
+        )}
       </section>
 
       {paceNow && (
@@ -156,6 +164,8 @@ export default function MoneyPage() {
           )}
         </p>
       )}
+
+      <UdhaarCard />
 
       {repeats.length > 0 && isCurrent && (
         <section className="mt-4" aria-label="Add again">
@@ -277,6 +287,36 @@ export default function MoneyPage() {
         )}
       </section>
 
+      {cameIn.length > 0 && (
+        <section className="mt-6 px-5" aria-label="Money in">
+          <h2 className="mb-3 text-[17px] font-semibold">Money in</h2>
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+            {cameIn.map((i) => (
+              <li key={i.id} className="flex items-center gap-3 px-3.5 py-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-safe-soft text-safe">
+                  <ArrowDownLeft size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">{i.from || i.note || "Money in"}</span>
+                  <span className="block text-xs text-muted">{fmtDay(i.date)}</span>
+                </span>
+                <span className="shrink-0 text-[15px] font-semibold tabular-nums text-safe">+{fmtMoney(i.amount)}</span>
+                <button
+                  onClick={async () => {
+                    await deleteIncome(i.id);
+                    toast.show("Removed", () => void restoreIncome(i.id));
+                  }}
+                  aria-label="Remove"
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-muted"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <button
         onClick={() => setAdding(true)}
         aria-label="Add expense"
@@ -347,10 +387,10 @@ function ordinal(n: number): string {
   return ["th", "st", "nd", "rd"][n % 10] ?? "th";
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="min-w-0 px-3 py-3 text-center">
-      <p className="truncate text-[17px] font-semibold tabular-nums">{value}</p>
+      <p className={cx("truncate text-[17px] font-semibold tabular-nums", tone)}>{value}</p>
       <p className="mt-0.5 text-[12px] text-muted">{label}</p>
     </div>
   );

@@ -4,6 +4,7 @@ import android.content.Context;
 import java.util.Set;
 public final class NotificationManagerCompat {
   public static final int IMPORTANCE_HIGH = 4;
+  public static final int IMPORTANCE_DEFAULT = 3;
   public static NotificationManagerCompat from(Context c) { return null; }
   public static Set<String> getEnabledListenerPackages(Context c) { return null; }
   public boolean areNotificationsEnabled() { return false; }

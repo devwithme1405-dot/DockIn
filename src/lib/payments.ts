@@ -31,11 +31,16 @@ export interface Notice {
 
 export interface Payment {
   amount: number;
-  /** Where the money went, as written, or null when the message does not say. */
+  /**
+   * Who was paid (money out) or who paid you (money in), as written, or null
+   * when the message does not say.
+   */
   merchant: string | null;
   /** The app that reported it, in words. */
   source: string;
   at: number;
+  /** "out" is a spend; "in" is money that came to you. */
+  dir: "out" | "in";
 }
 
 /** The apps worth listening to. Anything else the phone never forwards. */
@@ -52,9 +57,13 @@ export const PAY_APPS: Record<string, string> = {
   "com.android.mms": "Messages",
 };
 
-/** Money leaving. "Credited" and "received" are someone paying you, not spending. */
-const DEBIT = /\b(paid|debited|debit|sent|spent|withdrawn|deducted|payment of|transferred)\b/i;
-const CREDIT = /\b(credited|received|refund(?:ed)?|cashback|added to)\b/i;
+/** Money leaving, said outright. "Rahul paid you" is not one of these; see TO_YOU. */
+const DEBIT = /\b(paid|debited|debit|sent|spent|withdrawn|deducted)\b/i;
+/** Words used both ways ("payment of ₹500 received"); a spend only when nothing says money came in. */
+const NEUTRAL = /\b(payment of|transferred)\b/i;
+/** Money coming in. */
+const CREDIT = /\b(credited|received|refund(?:ed)?|cashback|added to|paid you|sent you)\b/i;
+const TO_YOU = /\b(?:paid|sent) you\b/gi;
 /** Messages that mention money but are not a payment. */
 const NOISE =
   /\b(otp|one[- ]time|code|balance is|avl bal|available balance|due|reminder|offer|cashback up to|win|request(?:ed|s)? (?:money|payment)|will be|failed|declined|requesting)\b/i;
@@ -77,22 +86,52 @@ export function redact(text: string): string {
 }
 
 const CLEAN_TAIL =
-  /\s+(?:on|using|via|from|through|at|by|ref|upi ref|txn|utr|a\/c|account|bank|successfully|success|is successful|has been|dated)\b.*$/i;
+  /\s+(?:on|using|via|from|through|at|by|ref|upi ref|txn|utr|a\/c|account|bank|successfully|success|is successful|has been|dated|to)\b.*$/i;
+const NOT_A_NAME =
+  /^(?:upi|neft|imps|rtgs|ach|nach|account|your account|your a\/c|bank|a\/c|cash|cash deposit|atm|card|number)$/i;
+
+/** A usable name out of a raw capture, or null for a handle's plumbing, a bank word or a number. */
+function clean(raw: string): string | null {
+  let name = raw.trim();
+  // A UPI handle is a name with plumbing attached: 247kathi@okaxis is 247kathi.
+  const at = name.indexOf("@");
+  if (at > 0) name = name.slice(0, at);
+  name = name.replace(/[^\p{L}\p{N}&'/ .-]+/gu, " ").replace(/\s{2,}/g, " ").trim();
+  // A bare reference number is not a name.
+  if (name.length < 2 || !/\p{L}/u.test(name)) return null;
+  if (NOT_A_NAME.test(name)) return null;
+  return name.slice(0, 40).trim();
+}
 
 /** Pulls the payee out of "… to VPA kathi@okaxis on 03-10-26. Ref 1234". */
 function merchantOf(text: string): string | null {
   const to =
     /\b(?:to|towards|at|in favour of)\s+(?:vpa\s+|upi\/|upi id\s+)?([^.,;\n]{2,60})/i.exec(text);
   if (!to) return null;
+  const name = clean(to[1].replace(CLEAN_TAIL, ""));
+  return name ? title(name) : null;
+}
 
-  let name = to[1].replace(CLEAN_TAIL, "").trim();
-  // A UPI handle is a name with plumbing attached: 247kathi@okaxis is 247kathi.
-  const at = name.indexOf("@");
-  if (at > 0) name = name.slice(0, at);
-  name = name.replace(/[^\p{L}\p{N}&'/ .-]+/gu, " ").replace(/\s{2,}/g, " ").trim();
-  // A bare reference number is not a name.
-  if (!name || !/\p{L}/u.test(name) || name.length < 2) return null;
-  return title(name.slice(0, 40));
+/** "Rahul paid you", "… from VPA rahul@okicici", "credited by Rahul Kumar" → the person. */
+function payerOf(text: string): string | null {
+  const named = /((?:\p{Lu}[\p{L}.']*\s?){1,3})\s+(?:paid|sent) you\b/u.exec(text);
+  if (named) {
+    const n = clean(named[1]);
+    if (n) return title(n);
+  }
+  // "by UPI from rahul@okicici": the first "by" names no one, so keep looking
+  // from just after it rather than after the whole capture.
+  const scan = /\b(?:from|by)\s+(?:vpa\s+|upi\/|upi id\s+)?([^.,;\n]{2,60})/gi;
+  let pos = 0;
+  while (pos < text.length) {
+    scan.lastIndex = pos;
+    const m = scan.exec(text);
+    if (!m) break;
+    const n = clean(m[1].replace(CLEAN_TAIL, ""));
+    if (n) return title(n);
+    pos = m.index + m[0].length - m[1].length;
+  }
+  return null;
 }
 
 /** SHOUTED merchant names are the norm on UPI; nobody wants a feed of those. */
@@ -107,9 +146,11 @@ function title(s: string): string {
 /**
  * One notification in, one payment or nothing out.
  *
- * It only says yes when the message has an amount, says money left, and does
- * not look like an OTP, a balance or an offer. False silence costs one manual
- * entry; a false yes costs trust in the number on the Money screen.
+ * It only says yes when the message has an amount, is clear about which way
+ * the money went, and does not look like an OTP, a balance or an offer. A
+ * message that says both ("₹500 credited, ₹60 debited") is skipped: guessing
+ * which half is yours is how a tracker ends up lying to you. False silence
+ * costs one manual entry; a false yes costs trust in the number on the Money screen.
  */
 export function parseNotice(n: Notice): Payment | null {
   const source = PAY_APPS[n.app];
@@ -118,18 +159,18 @@ export function parseNotice(n: Notice): Payment | null {
   const body = redact(`${n.title ?? ""} ${n.text ?? ""}`.replace(/\s+/g, " ").trim());
   if (!body) return null;
   if (NOISE.test(body)) return null;
-  if (!DEBIT.test(body)) return null;
-  // "₹500 credited" and "₹60 debited" can share a message; the credit wins and
-  // the whole thing is skipped, because guessing which half is the spend is how
-  // a tracker ends up lying to you.
-  if (CREDIT.test(body)) return null;
+  const mine = body.replace(TO_YOU, " ");
+  const credit = CREDIT.test(body);
+  const debit = DEBIT.test(mine) || (!credit && NEUTRAL.test(mine));
+  if (credit === debit) return null;
 
   const m = AMOUNT.exec(body);
   if (!m) return null;
   const amount = Number((m[1] ?? m[2]).replace(/,/g, ""));
   if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return null;
 
-  return { amount, merchant: merchantOf(body), source, at: n.at };
+  const dir = credit ? "in" : "out";
+  return { amount, merchant: dir === "in" ? payerOf(body) : merchantOf(body), source, at: n.at, dir };
 }
 
 /** The key a merchant is remembered under, so spelling and case cannot split it. */
@@ -160,7 +201,7 @@ export function dedupe(list: Payment[], windowMs = 150_000): Payment[] {
   const byTime = [...list].sort((a, b) => a.at - b.at);
   const out: Payment[] = [];
   for (const p of byTime) {
-    const twin = out.find((q) => q.amount === p.amount && Math.abs(q.at - p.at) <= windowMs);
+    const twin = out.find((q) => q.amount === p.amount && q.dir === p.dir && Math.abs(q.at - p.at) <= windowMs);
     if (!twin) {
       out.push(p);
       continue;
@@ -231,7 +272,9 @@ export function detectedFrom(notices: StoredNotice[]): Detected[] {
   }
   const merged: Detected[] = [];
   for (const p of parsed.sort((a, b) => a.at - b.at)) {
-    const twin = merged.find((q) => q.amount === p.amount && Math.abs(q.at - p.at) <= 150_000);
+    const twin = merged.find(
+      (q) => q.amount === p.amount && q.dir === p.dir && Math.abs(q.at - p.at) <= 150_000,
+    );
     if (!twin) {
       merged.push({ ...p });
       continue;

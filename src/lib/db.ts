@@ -2,9 +2,11 @@ import Dexie, { type Table } from "dexie";
 import type {
   CalEvent,
   Category,
+  Due,
   Expense,
   Friend,
   Group,
+  Income,
   MerchantRule,
   Profile,
   Reaction,
@@ -40,6 +42,10 @@ export class DockinDB extends Dexie {
   merchants!: Table<MerchantRule, string>;
   /** Reactions on shared assignments: a mirror of the server, like shares. */
   reactions!: Table<Reaction & { id: string }, string>;
+  /** Udhaar: who owes you, and whom you owe. */
+  dues!: Table<Due, string>;
+  /** Money in that was not a friend paying back. */
+  incomes!: Table<Income, string>;
 
   constructor() {
     super("dockin");
@@ -70,6 +76,10 @@ export class DockinDB extends Dexie {
     });
     this.version(7).stores({
       reactions: "id, shareId",
+    });
+    this.version(8).stores({
+      dues: "id, person, dir",
+      incomes: "id, date",
     });
   }
 }

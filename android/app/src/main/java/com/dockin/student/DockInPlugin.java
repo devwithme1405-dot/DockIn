@@ -49,9 +49,14 @@ public class DockInPlugin extends Plugin {
     /** The running copy, so the listener can hand over a payment the moment it sees one. */
     private static WeakReference<DockInPlugin> live = new WeakReference<>(null);
 
+    /** The "Connect Camu" call, answered once the sign-in screen closes. */
+    private PluginCall pendingCamu;
+
     @Override
     public void load() {
         live = new WeakReference<>(this);
+        // An update or a reboot can drop the hourly check; putting it back is free.
+        CollegeJob.schedule(getContext());
     }
 
     /** Called by the listener. Does nothing when the app is closed; the inbox has it. */
@@ -63,6 +68,37 @@ public class DockInPlugin extends Plugin {
         } catch (JSONException ignored) {
             // The app will still find it in the inbox.
         }
+    }
+
+    /** Called after every college sync, so open screens update by themselves. */
+    static void deliverCollege(JSONObject state) {
+        DockInPlugin p = live.get();
+        if (p == null) return;
+        try {
+            p.notifyListeners("college", JSObject.fromJSONObject(state));
+        } catch (JSONException ignored) {
+            // The next college() call returns the same thing.
+        }
+    }
+
+    /** The Camu sign-in screen closed: signed in, or not. */
+    static void camuFinished(final boolean ok, String name) {
+        final DockInPlugin p = live.get();
+        if (p == null || p.pendingCamu == null) return;
+        final PluginCall call = p.pendingCamu;
+        p.pendingCamu = null;
+        if (!ok) {
+            call.reject("Camu was not connected.");
+            return;
+        }
+        final Context c = p.getContext();
+        CollegeJob.schedule(c);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                p.resolveState(call, College.sync(c, true));
+            }
+        }, "dockin-camu-first").start();
     }
 
     // -------------------------------------------------------------------------
@@ -188,6 +224,94 @@ public class DockInPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
         call.resolve(r);
+    }
+
+    // -------------------------------------------------------------------------
+    // College: Camu and the LMS
+
+    @PluginMethod
+    public void college(PluginCall call) {
+        resolveState(call, College.state(getContext()));
+    }
+
+    /** Opens Camu's sign-in inside the app; answers with the first sync once signed in. */
+    @PluginMethod
+    public void connectCamu(PluginCall call) {
+        if (pendingCamu != null) pendingCamu.reject("Started again.");
+        pendingCamu = call;
+        Intent i = new Intent(getContext(), CamuLoginActivity.class);
+        try {
+            getActivity().startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            pendingCamu = null;
+            call.reject("Could not open the Camu sign-in.");
+        }
+    }
+
+    @PluginMethod
+    public void connectLms(final PluginCall call) {
+        final String user = call.getString("username");
+        final String pass = call.getString("password");
+        if (user == null || user.trim().isEmpty() || pass == null || pass.isEmpty()) {
+            call.reject("Enter your LMS username and password.");
+            return;
+        }
+        final Context c = getContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Lms.connect(c, user, pass);
+                } catch (Lms.Refused e) {
+                    call.reject(e.getMessage());
+                    return;
+                } catch (Exception e) {
+                    call.reject("Could not reach the LMS. Check the internet and try again.");
+                    return;
+                }
+                CollegeJob.schedule(c);
+                resolveState(call, College.sync(c, false));
+            }
+        }, "dockin-lms-connect").start();
+    }
+
+    @PluginMethod
+    public void disconnectCollege(PluginCall call) {
+        String which = call.getString("which");
+        Context c = getContext();
+        if ("camu".equals(which)) {
+            Camu.forget(c);
+            College.clear(c, "camu");
+        } else if ("lms".equals(which)) {
+            Lms.forget(c);
+            College.clear(c, "lms");
+        } else {
+            call.reject("Say which: camu or lms.");
+            return;
+        }
+        CollegeJob.schedule(c);
+        resolveState(call, College.state(c));
+    }
+
+    /** Fetches now. `full` also re-reads every class of every subject. */
+    @PluginMethod
+    public void syncCollege(final PluginCall call) {
+        final boolean full = Boolean.TRUE.equals(call.getBoolean("full", false));
+        final Context c = getContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                resolveState(call, College.sync(c, full));
+            }
+        }, "dockin-college-now").start();
+    }
+
+    private void resolveState(PluginCall call, JSONObject state) {
+        try {
+            call.resolve(JSObject.fromJSONObject(state));
+        } catch (JSONException e) {
+            call.reject("Could not read what was saved.");
+        }
     }
 
     // -------------------------------------------------------------------------

@@ -33,7 +33,7 @@ describe("reading a payment out of a notification", () => {
     });
     expect(
       parseNotice(note("net.one97.paytm", "Paytm", "Paid Rs.40 to Tuck Shop successfully")),
-    ).toMatchObject({ amount: 40, merchant: "Tuck Shop" });
+    ).toMatchObject({ dir: "out", amount: 40, merchant: "Tuck Shop" });
   });
 
   it("reads a bank message and keeps the amount exact", () => {
@@ -52,8 +52,10 @@ describe("reading a payment out of a notification", () => {
   });
 
   it("says nothing rather than guessing", () => {
-    // money coming in is not a spend
-    expect(parseNotice(note(SMS, "SBIINB", "Rs.5000 credited to your account"))).toBeNull();
+    // a message that says money went both ways is not guessed at
+    expect(
+      parseNotice(note(SMS, "BANK", "Rs.500 credited and Rs.60 debited from account")),
+    ).toBeNull();
     // an OTP mentions an amount but is not a payment
     expect(
       parseNotice(note(SMS, "HDFCBK", "OTP 452109 for a payment of Rs.60. Do not share.")),
@@ -78,11 +80,53 @@ describe("reading a payment out of a notification", () => {
 
   it("keeps the payment even when the payee is not named", () => {
     const p = parseNotice(note(GPAY, "You paid ₹60.00", "Payment successful"));
-    expect(p).toMatchObject({ amount: 60, merchant: null });
+    expect(p).toMatchObject({ dir: "out", amount: 60, merchant: null });
   });
 
   it("does not take a reference number for a name", () => {
     expect(parseNotice(note(SMS, "BANK", "Rs.60 debited to 553201"))?.merchant).toBeNull();
+  });
+});
+
+describe("money coming in", () => {
+  it("reads it as money in, with who sent it", () => {
+    expect(parseNotice(note(GPAY, "₹250 received", "Rahul paid you ₹250"))).toMatchObject({
+      dir: "in",
+      amount: 250,
+      merchant: "Rahul",
+    });
+    expect(parseNotice(note(GPAY, "Rahul Kumar sent you ₹500", "Received in your bank account"))).toMatchObject({
+      dir: "in",
+      amount: 500,
+      merchant: "Rahul Kumar",
+    });
+    expect(
+      parseNotice(note(SMS, "HDFCBK", "Rs.300 credited to A/c XX4521 by UPI from VPA priya.s@okicici on 03-10-26")),
+    ).toMatchObject({ dir: "in", amount: 300, merchant: "Priya" });
+    expect(parseNotice(note(PHONEPE, "Received", "You received ₹120 from AMAN GUPTA"))).toMatchObject({
+      dir: "in",
+      merchant: "Aman Gupta",
+    });
+  });
+
+  it("keeps a credit even when the sender is not named", () => {
+    expect(parseNotice(note(SMS, "SBIINB", "Rs.5000 credited to your account"))).toMatchObject({
+      dir: "in",
+      amount: 5000,
+      merchant: null,
+    });
+  });
+
+  it("calls a spend a spend", () => {
+    expect(parseNotice(note(GPAY, "You paid ₹60.00", "to 24/7 Kathi"))?.dir).toBe("out");
+  });
+
+  it("never folds money in and money out of the same amount together", () => {
+    const list = detectedFrom([
+      { id: "a", app: GPAY, title: "You paid ₹100", body: "to Canteen", posted_at: 1000 },
+      { id: "b", app: GPAY, title: "₹100 received", body: "Rahul paid you ₹100", posted_at: 2000 },
+    ]);
+    expect(list).toHaveLength(2);
   });
 });
 
@@ -103,8 +147,8 @@ describe("what never leaves the phone", () => {
 describe("the same payment arriving twice", () => {
   it("counts a UPI app and the bank as one spend", () => {
     const both = dedupe([
-      { amount: 60, merchant: null, source: "HDFC", at: 1000 },
-      { amount: 60, merchant: "24/7 Kathi", source: "Google Pay", at: 4000 },
+      { dir: "out", amount: 60, merchant: null, source: "HDFC", at: 1000 },
+      { dir: "out", amount: 60, merchant: "24/7 Kathi", source: "Google Pay", at: 4000 },
     ]);
     expect(both).toHaveLength(1);
     // and keeps the half that knows where the money went
@@ -113,8 +157,8 @@ describe("the same payment arriving twice", () => {
 
   it("keeps two real payments of the same amount far enough apart", () => {
     const two = dedupe([
-      { amount: 60, merchant: "HOC", source: "Google Pay", at: 0 },
-      { amount: 60, merchant: "HOC", source: "Google Pay", at: 600_000 },
+      { dir: "out", amount: 60, merchant: "HOC", source: "Google Pay", at: 0 },
+      { dir: "out", amount: 60, merchant: "HOC", source: "Google Pay", at: 600_000 },
     ]);
     expect(two).toHaveLength(2);
   });
@@ -122,8 +166,8 @@ describe("the same payment arriving twice", () => {
   it("never merges different amounts", () => {
     expect(
       dedupe([
-        { amount: 60, merchant: "HOC", source: "Google Pay", at: 0 },
-        { amount: 61, merchant: "HOC", source: "Google Pay", at: 500 },
+        { dir: "out", amount: 60, merchant: "HOC", source: "Google Pay", at: 0 },
+        { dir: "out", amount: 61, merchant: "HOC", source: "Google Pay", at: 500 },
       ]),
     ).toHaveLength(2);
   });
@@ -154,7 +198,7 @@ describe("building the tray from the inbox", () => {
     ];
     const tray = detectedFrom(list);
     expect(tray).toHaveLength(1);
-    expect(tray[0]).toMatchObject({ amount: 60, merchant: "24/7 Kathi" });
+    expect(tray[0]).toMatchObject({ dir: "out", amount: 60, merchant: "24/7 Kathi" });
     // both notices clear together, so the same spend cannot come back tomorrow
     expect(tray[0].ids.sort()).toEqual(["a", "b"]);
     // and the advert is rubbish that should leave the inbox without being shown
@@ -173,8 +217,8 @@ describe("building the tray from the inbox", () => {
 describe("two names for the same payment", () => {
   it("keeps the payment app's name over the bank's UPI handle", () => {
     const one = dedupe([
-      { amount: 60, merchant: "Kathi", source: "Messages", at: 1000 },
-      { amount: 60, merchant: "24/7 Kathi", source: "Google Pay", at: 3000 },
+      { dir: "out", amount: 60, merchant: "Kathi", source: "Messages", at: 1000 },
+      { dir: "out", amount: 60, merchant: "24/7 Kathi", source: "Google Pay", at: 3000 },
     ]);
     expect(one).toHaveLength(1);
     expect(one[0]).toMatchObject({ merchant: "24/7 Kathi", source: "Google Pay" });
@@ -182,8 +226,8 @@ describe("two names for the same payment", () => {
 
   it("does not downgrade a good name to a worse one", () => {
     const one = dedupe([
-      { amount: 60, merchant: "Southern Stories", source: "Google Pay", at: 1000 },
-      { amount: 60, merchant: "Southern", source: "Messages", at: 3000 },
+      { dir: "out", amount: 60, merchant: "Southern Stories", source: "Google Pay", at: 1000 },
+      { dir: "out", amount: 60, merchant: "Southern", source: "Messages", at: 3000 },
     ]);
     expect(one[0].merchant).toBe("Southern Stories");
   });

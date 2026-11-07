@@ -1,13 +1,15 @@
 import { db } from "./db";
 import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
-import { SEED_CATEGORIES } from "./money";
+import { SEED_CATEGORIES, samePerson } from "./money";
 import type {
   CalEvent,
   Category,
   ClassKind,
+  Due,
   EventKind,
   Expense,
   ExpenseCategory,
+  Income,
   MerchantRule,
   Priority,
   Profile,
@@ -70,6 +72,7 @@ export async function saveProfile(
       | "section"
       | "bio"
       | "roll"
+      | "upi"
     >
   >,
 ): Promise<void> {
@@ -758,8 +761,102 @@ export async function restoreExpense(id: string): Promise<void> {
   await db.expenses.update(id, { deletedAt: null, updatedAt: now() });
 }
 
+// ---------- udhaar and money in ----------
+
+const rupees = (n: number) => Math.round(n * 100) / 100;
+
+export async function addDue(input: {
+  person: string;
+  amount: number;
+  dir: Due["dir"];
+  note?: string;
+  date: string;
+}): Promise<Due> {
+  const t = now();
+  const d: Due = {
+    id: uid(),
+    person: input.person.trim(),
+    amount: rupees(input.amount),
+    dir: input.dir,
+    note: (input.note ?? "").trim(),
+    date: input.date,
+    paid: 0,
+    settledAt: null,
+    createdAt: t,
+    updatedAt: t,
+    deletedAt: null,
+  };
+  await db.dues.put(d);
+  return d;
+}
+
+/**
+ * Money between you and someone came back (or went back): it pays off their
+ * oldest open entries first, part-paying the last one if that is all it
+ * covers. Returns what was left over, which is not a settlement of anything.
+ */
+export async function settleWith(person: string, dir: Due["dir"], amount: number): Promise<number> {
+  const t = now();
+  const open = (await db.dues.filter((d) => !d.deletedAt && !d.settledAt && d.dir === dir).toArray())
+    .filter((d) => samePerson(d.person, person))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt);
+  let left = rupees(amount);
+  for (const d of open) {
+    if (left <= 0) break;
+    const need = rupees(d.amount - d.paid);
+    const pay = Math.min(need, left);
+    const paid = rupees(d.paid + pay);
+    left = rupees(left - pay);
+    await db.dues.update(d.id, { paid, settledAt: paid >= d.amount ? t : null, updatedAt: t });
+  }
+  return left;
+}
+
+/** "Got it back" for one entry, all of it. */
+export async function settleDue(id: string): Promise<void> {
+  const d = await db.dues.get(id);
+  if (!d) return;
+  await db.dues.update(id, { paid: d.amount, settledAt: now(), updatedAt: now() });
+}
+
+export async function reopenDue(id: string, paid = 0): Promise<void> {
+  await db.dues.update(id, { paid, settledAt: null, updatedAt: now() });
+}
+
+export async function deleteDue(id: string): Promise<void> {
+  await db.dues.update(id, { deletedAt: now(), updatedAt: now() });
+}
+
+export async function restoreDue(id: string): Promise<void> {
+  await db.dues.update(id, { deletedAt: null, updatedAt: now() });
+}
+
+export async function addIncome(input: { amount: number; from?: string; note?: string; date: string }): Promise<Income> {
+  const t = now();
+  const i: Income = {
+    id: uid(),
+    amount: rupees(input.amount),
+    from: (input.from ?? "").trim(),
+    note: (input.note ?? "").trim(),
+    date: input.date,
+    createdAt: t,
+    updatedAt: t,
+    deletedAt: null,
+  };
+  await db.incomes.put(i);
+  return i;
+}
+
+export async function deleteIncome(id: string): Promise<void> {
+  await db.incomes.update(id, { deletedAt: now(), updatedAt: now() });
+}
+
+export async function restoreIncome(id: string): Promise<void> {
+  await db.incomes.update(id, { deletedAt: null, updatedAt: now() });
+}
+
 export async function exportAll(): Promise<string> {
-  const [profile, subjects, slots, sessions, expenses, tasks, events] = await Promise.all([
+  const [profile, subjects, slots, sessions, expenses, tasks, events, dues, incomes] = await Promise.all([
     db.profile.toArray(),
     db.subjects.toArray(),
     db.slots.toArray(),
@@ -767,9 +864,11 @@ export async function exportAll(): Promise<string> {
     db.expenses.toArray(),
     db.tasks.toArray(),
     db.events.toArray(),
+    db.dues.toArray(),
+    db.incomes.toArray(),
   ]);
   return JSON.stringify(
-    { app: "dockin", version: 3, exportedAt: now(), profile, subjects, slots, sessions, expenses, tasks, events },
+    { app: "dockin", version: 4, exportedAt: now(), profile, subjects, slots, sessions, expenses, tasks, events, dues, incomes },
     null,
     2,
   );
@@ -816,6 +915,8 @@ export async function importAll(text: string): Promise<ImportSummary> {
   const expenses = stamp(asRows(data.expenses));
   const tasks = stamp(asRows(data.tasks));
   const events = stamp(asRows(data.events));
+  const dues = stamp(asRows(data.dues));
+  const incomes = stamp(asRows(data.incomes));
   const oldProfile = Array.isArray(data.profile) ? (data.profile[0] as Partial<Profile> | undefined) : undefined;
   const profile: Profile = {
     id: "me",
@@ -829,7 +930,7 @@ export async function importAll(text: string): Promise<ImportSummary> {
   };
   await db.transaction(
     "rw",
-    [db.profile, db.subjects, db.slots, db.sessions, db.expenses, db.tasks, db.events],
+    [db.profile, db.subjects, db.slots, db.sessions, db.expenses, db.tasks, db.events, db.dues, db.incomes],
     async () => {
       await Promise.all([
         db.profile.clear(),
@@ -839,8 +940,12 @@ export async function importAll(text: string): Promise<ImportSummary> {
         db.expenses.clear(),
         db.tasks.clear(),
         db.events.clear(),
+        db.dues.clear(),
+        db.incomes.clear(),
       ]);
       await db.profile.put(profile);
+      await db.dues.bulkPut(dues as never[]);
+      await db.incomes.bulkPut(incomes as never[]);
       await db.subjects.bulkPut(subjects as never[]);
       await db.slots.bulkPut(slots as never[]);
       await db.sessions.bulkPut(sessions as never[]);
@@ -862,7 +967,7 @@ export async function importAll(text: string): Promise<ImportSummary> {
 export async function resetAll(): Promise<void> {
   await db.transaction(
     "rw",
-    [db.profile, db.subjects, db.slots, db.sessions, db.expenses, db.tasks, db.events],
+    [db.profile, db.subjects, db.slots, db.sessions, db.expenses, db.tasks, db.events, db.dues, db.incomes],
     async () => {
       await Promise.all([
         db.profile.clear(),
@@ -872,6 +977,8 @@ export async function resetAll(): Promise<void> {
         db.expenses.clear(),
         db.tasks.clear(),
         db.events.clear(),
+        db.dues.clear(),
+        db.incomes.clear(),
       ]);
     },
   );

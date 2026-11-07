@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launch animation: the dot drops into the tray and the tray takes the
+    weight — DockIn's mark, "docking in". Android 12+ plays it on the system
+    splash; older phones show the still mark (splash_icon.xml).
+
+    Same geometry as splash_icon.xml. The dot starts above, faded, and lands
+    with a bounce; the tray squashes a touch as it lands and springs back.
+-->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="288dp"
+            android:height="288dp"
+            android:viewportWidth="288"
+            android:viewportHeight="288">
+            <group
+                android:scaleX="2.1"
+                android:scaleY="2.1"
+                android:translateX="76.8"
+                android:translateY="78.5">
+                <group
+                    android:name="dot"
+                    android:translateY="-18">
+                    <path
+                        android:name="dotFill"
+                        android:fillAlpha="0"
+                        android:fillColor="#FFFFFF"
+                        android:pathData="M25.8,17.5 A6.2,6.2 0 1 1 38.2,17.5 A6.2,6.2 0 1 1 25.8,17.5 Z" />
+                </group>
+                <group
+                    android:name="tray"
+                    android:pivotX="32"
+                    android:pivotY="51">
+                    <path
+                        android:fillColor="#FFFFFF"
+                        android:pathData="M20,29 H44 A8,8 0 0 1 52,37 V43 A8,8 0 0 1 44,51 H20 A8,8 0 0 1 12,43 V37 A8,8 0 0 1 20,29 Z" />
+                    <path
+                        android:fillColor="#1F5FD6"
+                        android:pathData="M23.0,22.5 H41.0 A5.5,5.5 0 0 1 46.5,28.0 V40.0 A5.5,5.5 0 0 1 41.0,45.5 H23.0 A5.5,5.5 0 0 1 17.5,40.0 V28.0 A5.5,5.5 0 0 1 23.0,22.5 Z" />
+                </group>
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="dot">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="620"
+                android:interpolator="@android:anim/bounce_interpolator"
+                android:propertyName="translateY"
+                android:startOffset="80"
+                android:valueFrom="-18"
+                android:valueTo="0"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="dotFill">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:duration="220"
+                android:propertyName="fillAlpha"
+                android:startOffset="80"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:valueType="floatType" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="tray">
+        <aapt:attr name="android:animation">
+            <set android:ordering="sequentially">
+                <set android:ordering="together">
+                    <objectAnimator
+                        android:duration="110"
+                        android:interpolator="@android:anim/decelerate_interpolator"
+                        android:propertyName="scaleY"
+                        android:startOffset="300"
+                        android:valueFrom="1"
+                        android:valueTo="0.9"
+                        android:valueType="floatType" />
+                    <objectAnimator
+                        android:duration="110"
+                        android:interpolator="@android:anim/decelerate_interpolator"
+                        android:propertyName="scaleX"
+                        android:startOffset="300"
+                        android:valueFrom="1"
+                        android:valueTo="1.05"
+                        android:valueType="floatType" />
+                </set>
+                <set android:ordering="together">
+                    <objectAnimator
+                        android:duration="260"
+                        android:interpolator="@android:anim/overshoot_interpolator"
+                        android:propertyName="scaleY"
+                        android:valueFrom="0.9"
+                        android:valueTo="1"
+                        android:valueType="floatType" />
+                    <objectAnimator
+                        android:duration="260"
+                        android:interpolator="@android:anim/overshoot_interpolator"
+                        android:propertyName="scaleX"
+                        android:valueFrom="1.05"
+                        android:valueTo="1"
+                        android:valueType="floatType" />
+                </set>
+            </set>
+        </aapt:attr>
+    </target>
+</animated-vector>

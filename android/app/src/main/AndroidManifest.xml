@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: the "where did it go?" prompt after each payment. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps the hourly Camu/LMS check scheduled across a restart of the phone. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -27,6 +29,19 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Camu's own sign-in page, so DockIn can read attendance with his session. -->
+        <activity
+            android:name=".CamuLoginActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
+        <!-- The hourly check of Camu and the LMS. -->
+        <service
+            android:name=".CollegeJob"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
 
         <!--
             Payment detection. Reads only the payment apps listed in

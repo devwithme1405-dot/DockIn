@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Before Android 12 the splash cannot animate, and an animated drawable would
+    show its first frame there — the dot still invisible above the tray. These
+    phones get the finished mark instead; drawable-v31 has the animation.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_icon" />

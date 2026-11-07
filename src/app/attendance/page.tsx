@@ -16,9 +16,12 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
-import { useAttendanceStats, useEvents, useSessionsOn } from "@/lib/hooks";
-import { eventsOn, holidayLength, nextHoliday } from "@/lib/calendar";
-import { addDays, toDateStr, fmtDay } from "@/lib/dates";
+import { useEvents, useSessionsOn } from "@/lib/hooks";
+import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
+import { CamuStatus, ConnectCamu } from "@/components/College";
+import { CamuHistorySheet } from "@/components/CamuHistory";
+import { eventsOn, nextHoliday } from "@/lib/calendar";
+import { addDays, toDateStr, fmtDay, daysBetweenDates } from "@/lib/dates";
 import { countable, describe, fmtPct, ifYouMiss, recentForm } from "@/lib/attendance";
 import type { AttendanceState, SessionStatus } from "@/lib/types";
 import {
@@ -58,19 +61,28 @@ const DOT_TONE: Record<SessionStatus, string> = {
 export default function AttendancePage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const target = profile?.target ?? 75;
-  const data = useAttendanceStats(target);
+  const { data, camu, native } = useAttendanceData(target);
+  const [open, setOpen] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [targetOpen, setTargetOpen] = useState(false);
   const events = useEvents();
   const today = toDateStr();
   // Attendance already ignores holidays; this is the screen finally saying so.
-  const onHoliday = useMemo(() => eventsOn(events ?? [], today).holidays[0] ?? null, [events, today]);
-  const coming = useMemo(() => nextHoliday(events ?? [], today), [events, today]);
+  const onHoliday = useMemo(() => {
+    const h = camu ? holidayOn(camu, today) : null;
+    if (h) return { title: h.title, date: h.start, endDate: holidayLastDay(h) };
+    return eventsOn(events ?? [], today).holidays[0] ?? null;
+  }, [events, today, camu]);
+  const coming = useMemo(() => {
+    const next = (camu?.holidays ?? []).filter((h) => h.start > today).sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (next) return { title: next.title, date: next.start, endDate: holidayLastDay(next) };
+    return nextHoliday(events ?? [], today);
+  }, [events, today, camu]);
   // The question the record cannot answer: what happens if I skip tomorrow.
   const tomorrow = addDays(today, 1);
   const tomorrowSessions = useSessionsOn(tomorrow);
-  const tomorrowCount = countable(tomorrowSessions ?? []);
+  const tomorrowCount = camu ? classesOn(camu, tomorrow).length : countable(tomorrowSessions ?? []);
 
   const counts = useMemo(() => {
     const c = { all: 0, danger: 0, warn: 0, safe: 0 };
@@ -103,7 +115,7 @@ export default function AttendancePage() {
   if (!profile || !data)
     return (
       <>
-        <PageHeader title="Attendance" subtitle="Track your classes and stay above target" />
+        <PageHeader title="Attendance" subtitle={native ? "From Camu, kept up to date" : "Track your classes and stay above target"} />
         <div className="h-4" />
         <AttendanceSkeleton />
       </>
@@ -123,7 +135,7 @@ export default function AttendancePage() {
     <div className="page-wash">
       <PageHeader
         title="Attendance"
-        subtitle="Track your classes and stay above target"
+        subtitle={camu ? "Straight from Camu" : "Track your classes and stay above target"}
         right={
           <>
           <Link
@@ -133,17 +145,27 @@ export default function AttendancePage() {
           >
             <CalendarDays size={20} />
           </Link>
-          <Link
-            href="/attendance/timetable"
-            aria-label="Timetable"
-            className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
-          >
-            <CalendarClock size={20} />
-          </Link>
+          {!camu && (
+            <Link
+              href="/attendance/timetable"
+              aria-label="Timetable"
+              className="grid size-11 place-items-center rounded-full bg-surface text-text shadow-[0_0_0_1px_var(--line)]"
+            >
+              <CalendarClock size={20} />
+            </Link>
+          )}
           </>
         }
       />
-      <div className="h-4" />
+      {camu ? (
+        <CamuStatus camu={camu} className="mt-1 mb-2" />
+      ) : native ? (
+        <div className="mx-5 mt-2 mb-4">
+          <ConnectCamu />
+        </div>
+      ) : (
+        <div className="h-4" />
+      )}
 
       <section
         className={cx(
@@ -190,7 +212,11 @@ export default function AttendancePage() {
         <dl className="mt-4 grid grid-cols-3 divide-x divide-line border-t border-line pt-3 text-center">
           <Count label="Present" value={overallCounts.present} tone="text-safe" />
           <Count label="Absent" value={overallCounts.absent} tone="text-danger" />
-          <Count label="Cancelled" value={overallCounts.cancelled} tone="text-muted" />
+          {camu ? (
+            <Count label="Classes" value={overallCounts.present + overallCounts.absent} tone="text-muted" />
+          ) : (
+            <Count label="Cancelled" value={overallCounts.cancelled} tone="text-muted" />
+          )}
         </dl>
       </section>
 
@@ -208,8 +234,8 @@ export default function AttendancePage() {
             </span>
             <span className="block text-[12.5px] text-muted">
               {onHoliday
-                ? `Holiday today${holidayLength(onHoliday) > 1 ? ` · ${holidayLength(onHoliday)} days` : ""} · nothing counts against you`
-                : `Next holiday · ${fmtDay(coming!.date)}${holidayLength(coming!) > 1 ? ` · ${holidayLength(coming!)} days` : ""}`}
+                ? `Holiday today${spanDays(onHoliday) > 1 ? ` · till ${fmtDay(onHoliday.endDate)}` : ""} · nothing counts against you`
+                : `Next holiday · ${fmtDay(coming!.date)}${spanDays(coming!) > 1 ? ` · ${spanDays(coming!)} days` : ""}`}
             </span>
           </span>
           <ChevronRight size={18} className="shrink-0 text-violet" />
@@ -286,7 +312,9 @@ export default function AttendancePage() {
       </div>
 
       <div className="mt-4">
-        {stats.length === 0 ? (
+        {stats.length === 0 && camu ? (
+          <EmptyState title="Fetching from Camu" body="Your subjects appear here in a moment." />
+        ) : stats.length === 0 ? (
           <EmptyState
             title="No subjects yet"
             body="Add your subjects and weekly classes in the timetable."
@@ -302,8 +330,10 @@ export default function AttendancePage() {
           <ul className="space-y-3 px-5">
             {visible.map(({ subject, summary, counts: c }) => (
               <li key={subject.id}>
-                <Link
-                  href={`/attendance/${subject.id}`}
+                <SubjectLink
+                  id={subject.id}
+                  camu={!!camu}
+                  onOpen={setOpen}
                   className={cx(
                     "block rounded-2xl p-4 shadow-[0_0_0_1px_var(--line)] transition active:scale-[0.99]",
                     summary.state === "danger" ? "bg-danger-soft" : "bg-surface",
@@ -332,7 +362,10 @@ export default function AttendancePage() {
                     <ProgressBar pct={summary.pct} target={target} state={summary.state} />
                   </div>
                   <dl className="mt-3.5 grid grid-cols-3 gap-2 text-center tabular-nums">
-                    {([["Present", c.present], ["Absent", c.absent], ["Cancelled", c.cancelled]] as const).map(([l, v]) => (
+                    {(camu
+                      ? ([["Present", c.present], ["Absent", c.absent], ["Classes", c.present + c.absent]] as const)
+                      : ([["Present", c.present], ["Absent", c.absent], ["Cancelled", c.cancelled]] as const)
+                    ).map(([l, v]) => (
                       <div key={l} className="rounded-xl bg-bg/60 py-1.5">
                         <dd className="text-[15px] font-semibold text-text">{v}</dd>
                         <dt className="text-[11px] text-muted">{l}</dt>
@@ -342,12 +375,21 @@ export default function AttendancePage() {
                   <p className={cx("mt-3 text-[13px] font-medium leading-snug", STATE_TEXT[summary.state])}>
                     {describe(summary)}
                   </p>
-                </Link>
+                </SubjectLink>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {camu && (
+        <CamuHistorySheet
+          camu={camu}
+          stat={stats.find((x) => x.subject.id === open) ?? null}
+          target={target}
+          onClose={() => setOpen(null)}
+        />
+      )}
 
       <Sheet open={targetOpen} onClose={() => setTargetOpen(false)} title="Target attendance">
         <p className="mb-4 text-sm text-muted">
@@ -369,6 +411,38 @@ export default function AttendancePage() {
         </div>
       </Sheet>
     </div>
+  );
+}
+
+/** Days a holiday covers, both ends included. */
+function spanDays(h: { date: string; endDate: string }): number {
+  return daysBetweenDates(h.date, h.endDate) + 1;
+}
+
+/** A subject card opens its own page, or Camu's class list when Camu is the source. */
+function SubjectLink({
+  id,
+  camu,
+  onOpen,
+  className,
+  children,
+}: {
+  id: string;
+  camu: boolean;
+  onOpen: (id: string) => void;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (camu)
+    return (
+      <button type="button" onClick={() => onOpen(id)} className={cx("w-full text-left", className)}>
+        {children}
+      </button>
+    );
+  return (
+    <Link href={`/attendance/${id}`} className={className}>
+      {children}
+    </Link>
   );
 }
 

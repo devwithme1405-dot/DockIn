@@ -20,7 +20,7 @@ export default function Privacy() {
     <main className="page-wash min-h-dvh px-5 pt-10 pb-16">
       <article className="mx-auto w-full max-w-md">
         <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Privacy</h1>
-        <p className="mt-2 text-[13px] text-muted">Last updated 4 October 2026</p>
+        <p className="mt-2 text-[13px] text-muted">Last updated 7 November 2026</p>
 
         <p className="mt-5 text-[15px]">
           DockIn is made by a student for students. It keeps as little as it can, and everything it
@@ -71,6 +71,31 @@ export default function Privacy() {
               Nothing is ever added to your spending on its own. Every payment waits for you to tap
               it.
             </li>
+          </ul>
+        </Section>
+
+        <Section title="Camu and the LMS, if you connect them">
+          <p>
+            The Android app can read your own attendance and timetable from Camu, and your pending
+            assignments from the LMS, so you never type them in. It only reads; it never marks,
+            submits or changes anything there.
+          </p>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5">
+            <li>
+              Camu: you sign in on Camu&rsquo;s own page with Microsoft, inside the app. DockIn never
+              sees that password. It keeps the sign-in Camu gives back, encrypted on your phone.
+            </li>
+            <li>
+              LMS: your LMS username and password are kept encrypted on your phone with Android&rsquo;s
+              keystore, so the app can sign in again when the LMS logs you out. They are sent to the
+              LMS and nowhere else.
+            </li>
+            <li>
+              Your Camu attendance and timetable stay on your phone. Assignments found on the LMS
+              become tasks, and are backed up like any task you add yourself. It checks about once an
+              hour, and only Camu and the LMS are contacted.
+            </li>
+            <li>Disconnect either one in Profile and everything it kept for it is wiped at once.</li>
           </ul>
         </Section>
 

@@ -16,10 +16,11 @@
         <item name="android:windowBackground">@color/page</item>
     </style>
 
-    <!-- The instant the icon is tapped: brand colour and the mark, drawn by Android itself. -->
+    <!-- The instant the icon is tapped: brand colour and the mark docking in, drawn by Android itself. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/brand</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_animated</item>
+        <item name="windowSplashScreenAnimationDuration">900</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

@@ -158,6 +158,11 @@ export function TaskRow({
                 <origin.icon size={11} /> {origin.label}
               </span>
             )}
+            {!origin && task.source === "lms" && (
+              <span className="inline-flex items-center rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
+                LMS
+              </span>
+            )}
           </span>
         </span>
         {task.priority === "high" && !task.done && (
@@ -265,6 +270,17 @@ export function TaskForm({
 
   return (
     <div>
+      {task?.source === "lms" && task.url && (
+        <a
+          href={task.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mb-4 flex items-center justify-between rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent"
+        >
+          From the LMS · open it to submit
+          <span aria-hidden>↗</span>
+        </a>
+      )}
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="radiogroup" aria-label="Type">
         {KINDS.map((k) => {
           const Icon = KIND_ICON[k.id];

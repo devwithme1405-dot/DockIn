@@ -25,7 +25,7 @@ import {
   saveProfile,
 } from "@/lib/repo";
 import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar } from "@/lib/avatars";
-import { useAttendanceStats, useExpenses, useTasks } from "@/lib/hooks";
+import { useExpenses, useTasks } from "@/lib/hooks";
 import { fmtPct } from "@/lib/attendance";
 import { fmtMoney, inMonth, monthKey, sum } from "@/lib/money";
 import { toDateStr } from "@/lib/dates";
@@ -42,6 +42,8 @@ import {
 } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
 import { PhoneSetup } from "@/components/PhoneSetup";
+import { ConnectCamu, ConnectLms } from "@/components/College";
+import { useAttendanceData, useCollege } from "@/lib/college";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { signOutCloud, useAuth } from "@/lib/auth";
@@ -64,7 +66,7 @@ export default function ProfilePage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { session, configured } = useAuth();
   const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
-  const data = useAttendanceStats(profile?.target ?? 75);
+  const { data } = useAttendanceData(profile?.target ?? 75);
   const tasks = useTasks();
   const expenses = useExpenses();
 
@@ -334,6 +336,9 @@ export default function ProfilePage() {
           </section>
         )}
 
+        {/* Camu and the LMS: only the app can read them */}
+        <CollegeCard />
+
         {/* the phone's switches: payment reading and notifications */}
         <PhoneSetup />
 
@@ -564,5 +569,19 @@ function AvatarPicker({
         ))}
       </div>
     </div>
+  );
+}
+
+function CollegeCard() {
+  const { native } = useCollege();
+  if (!native) return null;
+  return (
+    <section className="lift rounded-3xl bg-surface px-4 pt-3.5 pb-1" aria-label="College accounts">
+      <h2 className="text-[13px] font-semibold tracking-wide text-muted uppercase">College</h2>
+      <div className="border-b border-line">
+        <ConnectCamu compact />
+      </div>
+      <ConnectLms compact />
+    </section>
   );
 }

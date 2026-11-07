@@ -7,4 +7,6 @@
     <string name="pay_watch_label">DockIn payment detection</string>
     <string name="channel_payments">Payments</string>
     <string name="channel_payments_about">Asks where the money went, right after you pay.</string>
+    <string name="channel_college">Classes and assignments</string>
+    <string name="channel_college_about">New LMS assignments, deadlines within a day, and absences Camu records.</string>
 </resources>

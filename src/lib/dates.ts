@@ -95,3 +95,8 @@ export function greetingFor(d: Date = new Date()): string {
   if (h < 21) return "Good evening";
   return "Good night";
 }
+
+/** Whole days from one "YYYY-MM-DD" to another (negative when `to` is earlier). */
+export function daysBetweenDates(from: string, to: string): number {
+  return Math.round((fromDateStr(to).getTime() - fromDateStr(from).getTime()) / 86_400_000);
+}

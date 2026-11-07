@@ -8,9 +8,11 @@ import type {
   AttendanceSummary,
   CalEvent,
   Category,
+  Due,
   Expense,
   Friend,
   Group,
+  Income,
   Reaction,
   Session,
   Share,
@@ -110,6 +112,26 @@ export function useExpenses(): Expense[] | undefined {
   return useLiveQuery(
     async () =>
       (await db.expenses.filter((e) => !e.deletedAt).toArray()).sort(
+        (a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt,
+      ),
+    [],
+  );
+}
+
+export function useDues(): Due[] | undefined {
+  return useLiveQuery(
+    async () =>
+      (await db.dues.filter((d) => !d.deletedAt).toArray()).sort(
+        (a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt,
+      ),
+    [],
+  );
+}
+
+export function useIncomes(): Income[] | undefined {
+  return useLiveQuery(
+    async () =>
+      (await db.incomes.filter((i) => !i.deletedAt).toArray()).sort(
         (a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt,
       ),
     [],

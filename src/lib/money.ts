@@ -1,4 +1,4 @@
-import type { Expense, ExpenseCategory } from "./types";
+import type { Due, Expense, ExpenseCategory } from "./types";
 import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
 
 export interface CategoryMeta {
@@ -213,4 +213,104 @@ export function pace(
   const mine = sum(expenses.filter((e) => !e.deletedAt && monthKey(e.date) === month));
   const theirs = sum(prevList);
   return { diff: mine - theirs, lastMonth: theirs, upTo: day };
+}
+
+// ---------- udhaar ----------
+
+/**
+ * "Rahul", "rahul", "Rahul Kumar" and "RAHUL K" are one person here; "Rahul"
+ * and "Rohit" are not: the same first name (three letters or more) is the same person.
+ */
+export function samePerson(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, " ").replace(/\s+/g, " ").trim();
+  const x = norm(a);
+  const y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const fx = x.split(" ")[0];
+  const fy = y.split(" ")[0];
+  return fx === fy && fx.length >= 3;
+}
+
+/** Everything between you and one person that is still open. */
+export interface PersonLedger {
+  person: string;
+  /** They owe you. */
+  lena: number;
+  /** You owe them. */
+  dena: number;
+  /** Positive: they owe you on balance. */
+  net: number;
+  open: Due[];
+  /** Most recent entry, "YYYY-MM-DD". */
+  last: string;
+}
+
+const left = (d: Due) => Math.max(0, Math.round((d.amount - d.paid) * 100) / 100);
+
+/** Open udhaar, one row per person, the biggest balance first. */
+export function ledger(dues: Due[]): PersonLedger[] {
+  const out: PersonLedger[] = [];
+  for (const d of dues) {
+    if (d.deletedAt || d.settledAt || left(d) <= 0) continue;
+    let row = out.find((r) => samePerson(r.person, d.person));
+    if (!row) {
+      row = { person: d.person, lena: 0, dena: 0, net: 0, open: [], last: d.date };
+      out.push(row);
+    }
+    // The fuller spelling is the one to show.
+    if (d.person.length > row.person.length) row.person = d.person;
+    if (d.dir === "owed") row.lena += left(d);
+    else row.dena += left(d);
+    row.net = Math.round((row.lena - row.dena) * 100) / 100;
+    row.open.push(d);
+    if (d.date > row.last) row.last = d.date;
+  }
+  return out.sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.last.localeCompare(a.last));
+}
+
+export function ledgerTotals(rows: PersonLedger[]): { lena: number; dena: number } {
+  let lena = 0;
+  let dena = 0;
+  for (const r of rows) {
+    if (r.net > 0) lena += r.net;
+    else dena += -r.net;
+  }
+  return { lena, dena };
+}
+
+/** The people you have had udhaar with, most recent first, for the name picker. */
+export function knownPeople(dues: Due[], limit = 8): string[] {
+  const out: string[] = [];
+  for (const d of [...dues].sort((a, b) => b.date.localeCompare(a.date))) {
+    if (!out.some((p) => samePerson(p, d.person))) out.push(d.person);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * A polite nudge, ready to send. With a UPI id it carries a pay link, so
+ * settling up is one tap on their side too.
+ */
+export function reminderText(row: PersonLedger, upi?: string): string {
+  const first = row.person.split(" ")[0];
+  const items = row.open
+    .filter((d) => d.dir === "owed")
+    .slice(0, 3)
+    .map((d) => (d.note ? `${d.note} ${fmtMoney(left(d))}` : fmtMoney(left(d))));
+  const what = items.length ? ` (${items.join(", ")})` : "";
+  let text = `Hey ${first}, ${fmtMoney(row.net)} pending from you${what}. Bhej dena jab time mile 🙏`;
+  if (upi) text += `\nUPI: upi://pay?pa=${encodeURIComponent(upi)}&am=${row.net}&cu=INR`;
+  return text;
+}
+
+export const whatsappUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+/** Splitting a bill: your share and each other person's, in whole rupees where possible. */
+export function splitShares(amount: number, people: number): { mine: number; each: number } {
+  const n = Math.max(1, Math.floor(people));
+  const each = Math.round((amount / n) * 100) / 100;
+  const mine = Math.round((amount - each * (n - 1)) * 100) / 100;
+  return { mine, each };
 }

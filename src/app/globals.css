@@ -155,6 +155,17 @@ textarea {
 }
 
 /* ---------- launch screen ---------- */
+/*
+ * The mark docks (the dot drops into the tray), and then the blue opens from
+ * the mark outwards onto the app — a hole that grows until there is nothing
+ * left of the splash. Inside the Android app, Android has just played the
+ * docking itself, so the mark starts docked and only the opening plays here.
+ */
+@property --boot-hole {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
 .boot {
   position: fixed;
   inset: 0;
@@ -165,11 +176,36 @@ textarea {
   justify-content: center;
   background: #1f5fd6;
   color: #fff;
-  transition: opacity 380ms ease;
+  --boot-hole: 0px;
+  -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
+  mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
 }
 .boot-out {
-  opacity: 0;
   pointer-events: none;
+  animation: boot-open 560ms cubic-bezier(0.65, 0, 0.25, 1) forwards;
+}
+.boot-out .boot-center,
+.boot-out .boot-tag {
+  animation: boot-away 360ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes boot-open {
+  0% {
+    --boot-hole: 0px;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    --boot-hole: 150vmax;
+    opacity: 0;
+  }
+}
+@keyframes boot-away {
+  to {
+    transform: scale(1.18);
+    opacity: 0;
+  }
 }
 .boot-center {
   display: flex;
@@ -202,25 +238,53 @@ textarea {
   animation: boot-drop 760ms 120ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
 }
 .boot-tray {
-  transform-origin: 32px 40px;
-  animation: boot-pop 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: 32px 51px;
+  animation: boot-land 760ms 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* A soft ring that breathes while data loads, so a slow network looks alive. */
+.boot-glow {
+  position: absolute;
+  inset: -18px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 65%);
+  animation: boot-breathe 1600ms 700ms ease-in-out infinite both;
+}
+.in-app .boot-dot,
+.in-app .boot-tray {
+  animation: none;
+}
+.in-app .boot-word {
+  animation-delay: 0ms;
 }
 @keyframes boot-drop {
-  from {
+  0% {
     transform: translateY(-16px);
     opacity: 0;
   }
-  to {
+  30% {
+    opacity: 1;
+  }
+  100% {
     transform: translateY(0);
     opacity: 1;
   }
 }
-@keyframes boot-pop {
-  from {
+@keyframes boot-land {
+  0% {
     transform: scale(0.86);
     opacity: 0;
   }
-  to {
+  45% {
+    transform: scale(1, 1);
+    opacity: 1;
+  }
+  58% {
+    transform: scale(1.05, 0.9);
+  }
+  78% {
+    transform: scale(0.98, 1.03);
+  }
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -232,6 +296,17 @@ textarea {
   }
   to {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes boot-breathe {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
     opacity: 1;
   }
 }
@@ -261,11 +336,15 @@ textarea {
   .boot-dot,
   .boot-tray,
   .boot-word,
-  .boot-tag {
+  .boot-tag,
+  .boot-glow,
+  .boot-out .boot-center,
+  .boot-out .boot-tag {
     animation: none;
   }
-  .boot {
-    transition: none;
+  .boot-out {
+    animation: none;
+    opacity: 0;
   }
 }
 

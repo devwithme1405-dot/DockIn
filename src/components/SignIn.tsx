@@ -12,6 +12,7 @@ import {
   verifyEmailCode,
   type Providers,
 } from "@/lib/auth";
+import { isNativeApp } from "@/lib/native";
 import { Button, cx } from "./ui";
 
 function GoogleG() {
@@ -84,7 +85,9 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
   const field =
     "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
   const muted = dark ? "text-white/70" : "text-muted";
-  const oneTap = providers?.google || providers?.azure;
+  // Google refuses to sign in inside an app's WebView, so inside DockIn's
+  // Android app the email code is the way in; it works with any inbox.
+  const oneTap = !isNativeApp() && (providers?.google || providers?.azure);
 
   return (
     <div>

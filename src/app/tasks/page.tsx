@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { ConnectLms, timeAgo } from "@/components/College";
+import { syncCollege, useCollege } from "@/lib/college";
 import { TasksSkeleton } from "@/components/Skeleton";
-import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, Share2 } from "lucide-react";
+import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, RefreshCw, Share2 } from "lucide-react";
 import { useReactions, useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
 import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
@@ -124,7 +126,7 @@ export default function TasksPage() {
             : `${stats.pending} pending${stats.overdue ? `, ${stats.overdue} overdue` : ""}`
         }
       />
-      <div className="h-4" />
+      <LmsLine />
 
       {/* One surface. Three coloured panels made these look like three separate
           things; they are three readings of the same list, and the numbers
@@ -425,5 +427,41 @@ function ExamCard({
         )}
       </div>
     </button>
+  );
+}
+
+/**
+ * Where LMS deadlines come from. Not connected yet: the card to connect it.
+ * Connected: one quiet line with how fresh the list is.
+ */
+function LmsLine() {
+  const { state, native } = useCollege();
+  const [spin, setSpin] = useState(false);
+  if (!native) return <div className="h-4" />;
+  const lms = state.lms;
+  if (!lms?.connected)
+    return (
+      <div className="mx-5 mt-2 mb-4">
+        <ConnectLms />
+      </div>
+    );
+  return (
+    <div className="mx-5 mt-1 mb-2 flex items-center gap-2 text-[12.5px] text-muted">
+      <span className={cx("size-1.5 shrink-0 rounded-full", lms.error ? "bg-warn" : "bg-safe")} aria-hidden />
+      <span className="min-w-0 flex-1 truncate">
+        LMS deadlines added by themselves · {lms.error ? lms.error : `checked ${timeAgo(lms.syncedAt)}`}
+      </span>
+      <button
+        onClick={async () => {
+          setSpin(true);
+          await syncCollege();
+          setSpin(false);
+        }}
+        aria-label="Check the LMS now"
+        className="grid size-8 shrink-0 place-items-center rounded-full"
+      >
+        <RefreshCw size={15} className={cx(spin && "animate-spin")} />
+      </button>
+    </div>
   );
 }

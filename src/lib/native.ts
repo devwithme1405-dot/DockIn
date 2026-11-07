@@ -35,6 +35,94 @@ export interface PhoneStatus {
   build: number;
 }
 
+/** One subject as Camu counts it. */
+export interface CamuSubject {
+  id: string;
+  code: string;
+  name: string;
+  present: number;
+  total: number;
+  absent: number;
+  leave: number;
+  duty: number;
+  /** Camu's own percentage for the subject. */
+  pct: number;
+}
+
+/** One scheduled class. Dates and times are Camu's wall-clock, "YYYY-MM-DD" and "HH:MM". */
+export interface CamuPeriod {
+  date: string;
+  from: string;
+  to: string;
+  name: string;
+  code: string;
+  subId: string;
+  room: string;
+  teacher: string;
+  kind: string;
+  status: string;
+}
+
+/** A class that has happened, with whether Camu marked you present. */
+export interface CamuClass {
+  date: string;
+  from: string;
+  to: string;
+  present: boolean;
+  leave: string;
+}
+
+export interface CamuHoliday {
+  title: string;
+  /** First day, "YYYY-MM-DD". */
+  start: string;
+  /** Camu's end, which is the day after the last holiday. */
+  end: string;
+}
+
+export interface CamuState {
+  connected: boolean;
+  /** Camu ended the session; attendance shown is the last good copy. */
+  expired?: boolean;
+  syncedAt?: number;
+  error?: string;
+  overall?: { pct: number; present: number; total: number };
+  subjects?: CamuSubject[];
+  periods?: CamuPeriod[];
+  holidays?: CamuHoliday[];
+  history?: Record<string, CamuClass[]>;
+  historyAt?: number;
+}
+
+/** Something on the LMS with a deadline that still needs doing. */
+export interface LmsItem {
+  id: number;
+  instance: number;
+  /** "assign", "quiz", … */
+  module: string;
+  name: string;
+  course: string;
+  /** Deadline, in seconds since 1970. */
+  due: number;
+  url: string;
+  overdue: boolean;
+  action: string;
+}
+
+export interface LmsState {
+  connected: boolean;
+  name?: string;
+  syncedAt?: number;
+  error?: string;
+  items?: LmsItem[];
+}
+
+export interface CollegeState {
+  camu?: CamuState;
+  lms?: LmsState;
+  syncedAt?: number;
+}
+
 interface DockInPlugin {
   status(): Promise<PhoneStatus>;
   openListenerSettings(): Promise<void>;
@@ -44,9 +132,15 @@ interface DockInPlugin {
   testPrompt(): Promise<{ notifications: NotifState }>;
   pending(): Promise<{ notices: NativeNotice[] }>;
   ack(options: { ids: string[] }): Promise<void>;
+  college(): Promise<CollegeState>;
+  connectCamu(): Promise<CollegeState>;
+  connectLms(options: { username: string; password: string }): Promise<CollegeState>;
+  disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
+  syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   addListener(event: "notice", fn: (n: NativeNotice) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
+  addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
 }
 
 export const DockIn = registerPlugin<DockInPlugin>("DockIn");
@@ -67,7 +161,8 @@ export function isNativeApp(): boolean {
 export function onPhone(event: "notice", fn: (n: NativeNotice) => void): () => void;
 export function onPhone(event: "open", fn: (d: { path: string }) => void): () => void;
 export function onPhone(event: "resume", fn: () => void): () => void;
-export function onPhone(event: "notice" | "open" | "resume", fn: (arg: never) => void): () => void {
+export function onPhone(event: "college", fn: (s: CollegeState) => void): () => void;
+export function onPhone(event: "notice" | "open" | "resume" | "college", fn: (arg: never) => void): () => void {
   if (!isNativeApp()) return () => {};
   let handle: PluginListenerHandle | null = null;
   let gone = false;

@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowRight,
+  BookOpen,
   CalendarCheck,
+  HandCoins,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -29,7 +31,9 @@ import { StickyBar } from "@/components/PageHeader";
 import { Logo } from "@/components/Logo";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { appliesOn, ensureSessionsSince, getProfile, setSessionStatus } from "@/lib/repo";
-import { useAttendanceStats, useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { holidayLastDay, holidayOn, nextClass, useAttendanceData, type ViewSession } from "@/lib/college";
+import { CamuStatus } from "@/components/College";
 import { eventsOn, holidayLength } from "@/lib/calendar";
 import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
 import { fmtMoney, monthKey, sum } from "@/lib/money";
@@ -84,7 +88,7 @@ export default function TodayPage() {
   const date = picked ?? today;
   const target = profile?.target ?? 75;
 
-  const data = useAttendanceStats(target);
+  const { data, camu } = useAttendanceData(target);
   const slots = useSlots();
   const expenses = useExpenses();
   const tasks = useTasks();
@@ -107,12 +111,26 @@ export default function TodayPage() {
     () => sum((expenses ?? []).filter((e) => monthKey(e.date) === monthKey(today))),
     [expenses, today],
   );
-  const sessions = useSessionsOn(date);
-  const todaySessions = useSessionsOn(today);
+  const localDay = useSessionsOn(date);
+  const localToday = useSessionsOn(today);
+  // With Camu connected the day comes from Camu's timetable and record instead.
+  const sessions: ViewSession[] | undefined = camu ? data?.sessions.filter((s) => s.date === date) : localDay;
+  const todaySessions: ViewSession[] | undefined = camu ? data?.sessions.filter((s) => s.date === today) : localToday;
   const events = useEvents();
   // A day off is a fact about the day, not the absence of one. Without this a
   // holiday looked exactly like a day somebody had forgotten to mark.
-  const dayOff = useMemo(() => eventsOn(events ?? [], date).holidays, [events, date]);
+  const dayOff = useMemo(() => {
+    const h = camu ? holidayOn(camu, date) : null;
+    if (h) return [{ id: `camu-${h.start}`, title: h.title, kind: "holiday" as const, date: h.start, endDate: holidayLastDay(h), note: "", createdAt: 0, updatedAt: 0 }];
+    return eventsOn(events ?? [], date).holidays;
+  }, [events, date, camu]);
+  const upcoming = useMemo(() => {
+    if (!camu) return null;
+    const n = nextClass(camu, today, hm);
+    if (!n) return null;
+    const when = n.date === today ? "today" : n.date === addDays(today, 1) ? "tomorrow" : WEEKDAYS_LONG[weekdayOf(n.date)];
+    return `Next: ${cleanTitle(n.name)} ${when}, ${fmtTime(n.from)}${n.room ? ` · ${n.room}` : ""}`;
+  }, [camu, today, hm]);
 
   // Create the classes of every day since the user joined (max 30 days back),
   // so missed days show up as "not marked" and can be caught up on.
@@ -183,12 +201,15 @@ export default function TodayPage() {
         name={name}
         sessions={todaySessions}
         subjectById={subjectById}
-        slots={slots ?? []}
+        slots={camu ? [] : slots ?? []}
+        upcoming={upcoming}
+        fromCamu={!!camu}
       />
+      {camu && <CamuStatus camu={camu} className="mt-2" />}
 
       {(streak > 0 || (overall.state !== "none" && Number.isFinite(overall.canMiss))) && (
         <div className="mt-4 flex flex-wrap gap-2 px-5">
-          {streak > 0 && (
+          {streak > 0 && !camu && (
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-warn-soft px-3 text-[13px] font-medium text-warn">
               <Flame size={15} /> {streak}-day marking streak
             </span>
@@ -262,7 +283,7 @@ export default function TodayPage() {
         </Link>
       )}
 
-      {unmarkedPast.count > 0 && (
+      {unmarkedPast.count > 0 && !camu && (
         <button
           onClick={() => setPicked(unmarkedPast.latest)}
           className="mx-5 mt-5 flex w-[calc(100%-2.5rem)] items-center justify-between rounded-2xl bg-accent-soft px-4 py-3 text-left"
@@ -329,14 +350,18 @@ export default function TodayPage() {
         {sessions === undefined ? null : sessions.length === 0 ? (
           <div className="-mx-5">
             <EmptyState
-              title={(slots?.length ?? 0) > 0 ? "No classes this day" : "No timetable yet"}
+              title={camu || (slots?.length ?? 0) > 0 ? "No classes this day" : "No timetable yet"}
               body={
-                (slots?.length ?? 0) > 0
-                  ? "Enjoy the free time."
-                  : "Add your subjects and weekly classes to see them here."
+                camu
+                  ? dayOff.length
+                    ? "It is a holiday."
+                    : "Nothing on Camu's timetable."
+                  : (slots?.length ?? 0) > 0
+                    ? "Enjoy the free time."
+                    : "Add your subjects and weekly classes to see them here."
               }
               action={
-                (slots?.length ?? 0) === 0 && (
+                !camu && (slots?.length ?? 0) === 0 && (
                   <Link
                     href="/attendance/timetable"
                     className="rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-on-accent"
@@ -349,14 +374,24 @@ export default function TodayPage() {
           </div>
         ) : (
           <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
-            {sessions.map((s) => (
-              <ClassRow
-                key={s.id}
-                session={s}
-                subject={subjectById.get(s.subjectId)}
-                live={date === today && toMinutes(s.start) <= toMinutes(hm) && toMinutes(hm) < toMinutes(s.end)}
-              />
-            ))}
+            {sessions.map((s) =>
+              s.camu ? (
+                <CamuClassRow
+                  key={s.id}
+                  session={s}
+                  subject={subjectById.get(s.subjectId)}
+                  live={date === today && toMinutes(s.start) <= toMinutes(hm) && toMinutes(hm) < toMinutes(s.end)}
+                  past={date < today || (date === today && toMinutes(s.end) <= toMinutes(hm))}
+                />
+              ) : (
+                <ClassRow
+                  key={s.id}
+                  session={s}
+                  subject={subjectById.get(s.subjectId)}
+                  live={date === today && toMinutes(s.start) <= toMinutes(hm) && toMinutes(hm) < toMinutes(s.end)}
+                />
+              ),
+            )}
           </ul>
         )}
       </div>
@@ -389,7 +424,7 @@ export default function TodayPage() {
 
       <section className="mt-7 px-5" aria-label="Quick actions">
         <div className="lift grid grid-cols-4 divide-x divide-line overflow-hidden rounded-2xl bg-surface">
-          {QUICK.map(({ href, label, icon: Icon }) => (
+          {(camu ? QUICK_CAMU : QUICK).map(({ href, label, icon: Icon }) => (
             <Link
               key={label}
               href={href}
@@ -414,7 +449,7 @@ export default function TodayPage() {
             {attention.slice(0, 3).map(({ subject, summary }) => (
               <li key={subject.id}>
                 <Link
-                  href={`/attendance/${subject.id}`}
+                  href={camu ? "/attendance" : `/attendance/${subject.id}`}
                   className="flex items-center gap-3 px-4 py-3"
                 >
                   <SubjectTile name={subject.name} code={subject.code} color={subject.color} size={38} />
@@ -453,6 +488,19 @@ const QUICK = [
   { href: "/attendance/timetable", label: "Timetable", icon: GraduationCap },
 ];
 
+/** With Camu doing the marking, the shortcuts are to the things still done by hand. */
+const QUICK_CAMU = [
+  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { href: "/add", label: "Expense", icon: Receipt },
+  { href: "/tasks", label: "Tasks", icon: BookOpen },
+  { href: "/money#dues", label: "Lena-dena", icon: HandCoins },
+];
+
+/** "Database Management Systems ( P-LA-203 )" → "Database Management Systems". */
+function cleanTitle(name: string): string {
+  return name.replace(/\s*\(\s*[^)]*\)?\s*$/, "").trim();
+}
+
 const SKY_ICON = { sunrise: Sunrise, sun: Sun, sunset: Sunset, moon: Moon };
 
 // ---------- hero card ----------
@@ -473,6 +521,8 @@ function DayHero({
   sessions,
   subjectById,
   slots,
+  upcoming,
+  fromCamu,
 }: {
   today: string;
   hm: string;
@@ -481,6 +531,9 @@ function DayHero({
   sessions: Session[] | undefined;
   subjectById: Map<string, Subject>;
   slots: Slot[];
+  /** With Camu, the next class line is worked out by the caller. */
+  upcoming?: string | null;
+  fromCamu?: boolean;
 }) {
   const nowMin = toMinutes(hm);
   const list = sessions ?? [];
@@ -497,20 +550,29 @@ function DayHero({
       const sub1 = subjectById.get(ongoing.subjectId);
       eyebrow = "Happening now";
       title = sub1?.name ?? "Class";
-      sub = `Until ${fmtTime(ongoing.end)} · ${fmtDuration(toMinutes(ongoing.end) - nowMin)} left`;
+      const room = (ongoing as ViewSession).room;
+      sub = `Until ${fmtTime(ongoing.end)} · ${fmtDuration(toMinutes(ongoing.end) - nowMin)} left${room ? ` · ${room}` : ""}`;
     } else if (next) {
       const sub1 = subjectById.get(next.subjectId);
       eyebrow = "Up next";
       title = sub1?.name ?? "Class";
-      sub = `${fmtTime(next.start)} · in ${fmtDuration(toMinutes(next.start) - nowMin)}`;
+      const room = (next as ViewSession).room;
+      sub = `${fmtTime(next.start)} · in ${fmtDuration(toMinutes(next.start) - nowMin)}${room ? ` · ${room}` : ""}`;
     } else {
       eyebrow = "Done for the day";
       title = marked === list.length ? "All classes marked" : "Classes are over";
       sub =
         marked === list.length
-          ? "Nice. Nothing left to track."
-          : `${list.length - marked} still to mark`;
+          ? fromCamu
+            ? "Camu has marked every class."
+            : "Nice. Nothing left to track."
+          : fromCamu
+            ? upcoming ?? `${list.length - marked} not marked on Camu yet`
+            : `${list.length - marked} still to mark`;
     }
+  } else if (fromCamu) {
+    eyebrow = "Free day";
+    sub = upcoming ?? "Nothing on Camu's timetable this week";
   } else {
     // find the next day that has a class
     for (let i = 1; i <= 7; i++) {
@@ -567,7 +629,7 @@ function DayHero({
                 ))}
               </div>
               <p className="mt-1.5 text-xs text-white/70 tabular-nums">
-                {marked} of {list.length} classes marked
+                {marked} of {list.length} classes marked{fromCamu ? " on Camu" : ""}
               </p>
             </div>
           )}
@@ -729,6 +791,50 @@ function ClassRow({
           );
         })}
       </div>
+    </li>
+  );
+}
+
+/** A class as Camu has it: time, room and teacher, and what Camu marked. Nothing to tap. */
+function CamuClassRow({
+  session,
+  subject,
+  live,
+  past,
+}: {
+  session: ViewSession;
+  subject: Subject | undefined;
+  live: boolean;
+  past: boolean;
+}) {
+  const name = subject?.name ?? "Class";
+  const status =
+    session.status === "present"
+      ? { text: "Present", tone: "bg-safe-soft text-safe" }
+      : session.status === "absent"
+        ? { text: "Absent", tone: "bg-danger-soft text-danger" }
+        : past
+          ? { text: "Not marked yet", tone: "bg-surface-2 text-muted" }
+          : null;
+  return (
+    <li className={cx("flex items-center gap-3 px-3.5 py-3", live && "bg-accent-soft")}>
+      <div className="w-[2.6rem] shrink-0 text-center leading-tight tabular-nums">
+        <p className="text-[15px] font-semibold">{fmtTime(session.start).replace(/ (am|pm)/, "")}</p>
+        <p className="text-[11px] uppercase text-muted">{fmtTime(session.start).slice(-2)}</p>
+      </div>
+      <span className="h-9 w-1 shrink-0 self-center rounded-full" style={{ background: subject?.color ?? "#888" }} aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-[15px] font-medium leading-snug [overflow-wrap:anywhere]">{name}</p>
+        <p className="truncate text-[13px] leading-snug text-muted">
+          {session.room || (session.kind === "practical" ? "Lab" : "Lecture")} · to {fmtTime(session.end)}
+          {session.teacher ? ` · ${session.teacher}` : ""}
+          {live && <span className="ml-1.5 font-semibold text-accent">· Now</span>}
+        </p>
+        {session.usual && <p className="text-[11.5px] text-muted">Usual timetable · Camu has not posted this day yet</p>}
+      </div>
+      {status && (
+        <span className={cx("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-medium", status.tone)}>{status.text}</span>
+      )}
     </li>
   );
 }

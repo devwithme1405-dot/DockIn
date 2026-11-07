@@ -9,7 +9,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * in. When two devices edit the same record, the later `updatedAt` wins.
  */
 
-export const SYNC_KINDS = ["profile", "subjects", "slots", "sessions", "expenses", "tasks", "events", "shareState", "categories", "merchants"] as const;
+export const SYNC_KINDS = ["profile", "subjects", "slots", "sessions", "expenses", "tasks", "events", "shareState", "categories", "merchants", "dues", "incomes"] as const;
+
+/**
+ * Kinds the server may not accept yet: each new kind needs its name added on
+ * the server (supabase/migrations). Until it is, a refusal for one of these
+ * must not stop everything else from backing up, so it is skipped and tried
+ * again next time.
+ */
+const NEWER_KINDS = new Set<string>(["dues", "incomes"]);
 export type SyncKind = (typeof SYNC_KINDS)[number];
 
 export interface RemoteRow {
@@ -107,6 +115,8 @@ async function localHasData(): Promise<boolean> {
 
 async function pushAll(remote: Remote, lastPushed: number): Promise<number> {
   let max = lastPushed;
+  // The oldest change that could not go up; the next push starts before it.
+  let held = Infinity;
   for (const kind of SYNC_KINDS) {
     const rows = await table(kind)
       .filter((r) => Number(r.updatedAt ?? 0) > lastPushed)
@@ -119,11 +129,17 @@ async function pushAll(remote: Remote, lastPushed: number): Promise<number> {
         deleted_at: (r.deletedAt as number | null | undefined) ?? null,
         data: r,
       }));
-      await remote.push(batch);
+      try {
+        await remote.push(batch);
+      } catch (e) {
+        if (!NEWER_KINDS.has(kind)) throw e;
+        for (const b of batch) held = Math.min(held, b.updated_at);
+        break;
+      }
       for (const b of batch) if (b.updated_at > max) max = b.updated_at;
     }
   }
-  return max;
+  return held === Infinity ? max : Math.min(max, held - 1);
 }
 
 async function pullAll(remote: Remote, lastPull: string | null): Promise<string | null> {
