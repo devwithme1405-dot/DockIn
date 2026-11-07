@@ -100,52 +100,45 @@ export async function signInWithPassword(email: string, password: string): Promi
   return error.message;
 }
 
-export interface SignUpResult {
-  error: string | null;
-  /** True when the account was made but needs an email confirmation before it can sign in. */
-  needsConfirm: boolean;
-}
-
-/** Makes a new account with a password. Logs straight in unless the project asks for email confirmation. */
-export async function signUpWithPassword(email: string, password: string): Promise<SignUpResult> {
-  const sb = getSupabase();
-  if (!sb) return { error: "Cloud sync is not set up.", needsConfirm: false };
-  if (password.length < 6) return { error: "Use at least 6 characters for the password.", needsConfirm: false };
-  const { data, error } = await sb.auth.signUp({
-    email: clean(email),
-    password,
-    options: { emailRedirectTo: `${window.location.origin}/` },
-  });
-  if (error) {
-    if (network(error.message)) return { error: "No internet right now.", needsConfirm: false };
-    if (!matchesAllowedDomain(email)) return { error: `Use your college email (@${ALLOWED_DOMAIN}).`, needsConfirm: false };
-    if (/already registered|already been registered/i.test(error.message))
-      return { error: "That email already has an account. Sign in, or tap “Forgot password”.", needsConfirm: false };
-    if (/database error|P0001/i.test(error.message))
-      return {
-        error: ALLOWED_DOMAIN ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn.` : "That email cannot sign up.",
-        needsConfirm: false,
-      };
-    return { error: error.message, needsConfirm: false };
-  }
-  // A session means they are in now; no session but a user means confirmation is on.
-  return { error: null, needsConfirm: !data.session };
-}
-
-/** Sends the "set a new password" email. The link opens /reset in the browser. */
-export async function sendPasswordReset(email: string): Promise<string | null> {
+/**
+ * Emails a six-digit code to set or reset a password — the in-app path.
+ *
+ * A link cannot be used here: inside the Android app the email opens in a
+ * separate browser, and the sign-in it does there never reaches the app. A code
+ * is typed back into this screen, so the session is created where it is needed.
+ * `shouldCreateUser` means the same flow is the first sign-in for a brand-new
+ * email and the "forgot password" for an old one.
+ */
+export async function sendEmailCode(email: string): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return "Cloud sync is not set up.";
-  const { error } = await sb.auth.resetPasswordForEmail(clean(email), {
-    redirectTo: `${window.location.origin}/reset`,
+  const { error } = await sb.auth.signInWithOtp({
+    email: clean(email),
+    options: { shouldCreateUser: true },
   });
   if (!error) return null;
   if (network(error.message)) return "No internet right now.";
-  if (/rate limit|too many/i.test(error.message)) return "Too many tries. Wait a few minutes.";
+  if (!matchesAllowedDomain(email)) return `Use your college email (@${ALLOWED_DOMAIN}).`;
+  if (/rate limit|too many|after \d+ seconds/i.test(error.message))
+    return "Too many codes asked for. Wait a minute and try again.";
+  if (/database error|P0001/i.test(error.message))
+    return ALLOWED_DOMAIN ? `Only @${ALLOWED_DOMAIN} accounts can use DockIn.` : "That email cannot be used.";
   return error.message;
 }
 
-/** Sets a new password for whoever is signed in right now (the reset link, or Settings). */
+/** Checks the six-digit code and, on success, signs the person in on this device. */
+export async function verifyEmailCode(email: string, token: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  const { error } = await sb.auth.verifyOtp({ email: clean(email), token: token.trim(), type: "email" });
+  if (!error) return null;
+  if (network(error.message)) return "No internet right now.";
+  if (/expired|invalid|incorrect|token/i.test(error.message))
+    return "That code did not work. Check it, or ask for a new one.";
+  return error.message;
+}
+
+/** Sets a new password for whoever is signed in right now (after a code, or from Settings). */
 export async function updatePassword(password: string): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return "Cloud sync is not set up.";
@@ -156,7 +149,7 @@ export async function updatePassword(password: string): Promise<string | null> {
   if (/should be different|same.*password/i.test(error.message))
     return "That is the same as your old password. Pick a new one.";
   if (/Auth session missing|not authenticated/i.test(error.message))
-    return "This reset link has expired. Ask for a new one.";
+    return "Your session timed out. Ask for a fresh code.";
   return error.message;
 }
 
