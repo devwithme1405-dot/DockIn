@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
 // Self-hosted so the build needs no network and the app keeps its type offline.
-// Text face: a clean, warm grotesk with excellent numerals — the everyday voice.
-import "@fontsource-variable/hanken-grotesk";
-// Display face: headings and the big numbers, so figures read as designed.
-import "@fontsource-variable/space-grotesk";
+// One modern geometric family for text and headings, matching the brand.
+import "@fontsource-variable/plus-jakarta-sans";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 
@@ -24,8 +22,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f3f2ed" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d0e11" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f6fb" },
+    { media: "(prefers-color-scheme: dark)", color: "#0e0d14" },
   ],
 };
 

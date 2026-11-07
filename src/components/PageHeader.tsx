@@ -75,7 +75,7 @@ export function PageHeader({
     <StickyBar className="px-5 pb-3">
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="min-w-[8rem] flex-1">
-          <h1 className="truncate text-[26px] font-semibold leading-tight tracking-tight">{title}</h1>
+          <h1 className="font-display truncate text-[26px] leading-tight font-bold tracking-[-0.02em]">{title}</h1>
           {subtitle != null && <p className="text-[13px] leading-snug text-muted">{subtitle}</p>}
         </div>
         {right && <div className="flex shrink-0 items-center gap-1">{right}</div>}
@@ -124,7 +124,7 @@ export function BackHeader({
         )}
       </StickyBar>
       {!hideLargeTitle && (
-        <h1 className="px-5 pt-2 pb-3 text-[26px] font-semibold leading-tight tracking-tight">{title}</h1>
+        <h1 className="font-display px-5 pt-2 pb-3 text-[26px] leading-tight font-bold tracking-[-0.02em]">{title}</h1>
       )}
     </>
   );

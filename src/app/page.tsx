@@ -15,13 +15,9 @@ import {
   GraduationCap,
   ListChecks,
   Minus,
-  Moon,
   PartyPopper,
   Plus,
   Receipt,
-  Sun,
-  Sunrise,
-  Sunset,
   Wallet,
   X,
 } from "lucide-react";
@@ -67,21 +63,9 @@ function useNow(): { today: string; hm: string } {
   return now;
 }
 
-function useSkyHour(hm: string): number {
-  // The page renders nothing until the local DB has loaded, so reading the URL here is safe.
-  const [override] = useState<number | null>(() => {
-    if (typeof window === "undefined") return null;
-    const n = parseFloat(new URLSearchParams(window.location.search).get("sky") ?? "");
-    return Number.isFinite(n) ? n : null;
-  });
-  const [h, m] = hm.split(":").map(Number);
-  return override ?? h + m / 60;
-}
-
 export default function TodayPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { today, hm } = useNow();
-  const hour = useSkyHour(hm);
   const [picked, setPicked] = useState<string | null>(null);
   const date = picked ?? today;
   const target = profile?.target ?? 75;
@@ -178,25 +162,28 @@ export default function TodayPage() {
 
   return (
     <div className="page-wash">
-      <StickyBar className="px-4 pb-2">
-        <div className="flex h-11 items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Logo size={32} />
-            <div className="leading-tight">
-              <p className="font-display text-[16px] font-semibold tracking-[-0.02em]">DockIn</p>
-              <p className="text-[12px] text-muted">{fmtDayLong(today)}</p>
-            </div>
+      <StickyBar className="px-5 pb-2">
+        <div className="flex h-12 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Logo size={30} />
+            <p className="font-display text-[19px] font-bold tracking-[-0.03em]">DockIn</p>
           </div>
           <Link href="/settings" aria-label="Profile and settings" className="rounded-full transition active:scale-95">
             <Avatar name={name} avatar={profile.avatar} size={40} />
           </Link>
         </div>
       </StickyBar>
+
+      <div className="px-5 pt-1">
+        <h1 className="font-display text-[26px] leading-tight font-bold tracking-[-0.02em]">
+          Hi, {name.split(" ")[0]} <span aria-hidden>👋</span>
+        </h1>
+        <p className="mt-0.5 text-[13.5px] text-muted">{fmtDayLong(today)}</p>
+      </div>
+
       <DayHero
         today={today}
         hm={hm}
-        hour={hour}
-        name={name}
         sessions={todaySessions}
         subjectById={subjectById}
         slots={camu ? [] : slots ?? []}
@@ -499,21 +486,19 @@ function cleanTitle(name: string): string {
   return name.replace(/\s*\(\s*[^)]*\)?\s*$/, "").trim();
 }
 
-// ---------- hero card ----------
+// ---------- up-next card ----------
 
-const DOT: Record<SessionStatus, string> = {
-  present: "bg-[#47c98f]",
-  absent: "bg-[#ff7a70]",
-  cancelled: "bg-white/35",
-  holiday: "bg-white/35",
-  unmarked: "bg-white/15",
+const DOT_SOFT: Record<SessionStatus, string> = {
+  present: "bg-safe",
+  absent: "bg-danger",
+  cancelled: "bg-muted/40",
+  holiday: "bg-muted/35",
+  unmarked: "bg-accent/25",
 };
 
 function DayHero({
   today,
   hm,
-  hour,
-  name,
   sessions,
   subjectById,
   slots,
@@ -522,8 +507,6 @@ function DayHero({
 }: {
   today: string;
   hm: string;
-  hour: number;
-  name: string;
   sessions: Session[] | undefined;
   subjectById: Map<string, Subject>;
   slots: Slot[];
@@ -587,39 +570,36 @@ function DayHero({
     }
   }
 
-  const greet =
-    hour < 5 ? "Burning the midnight oil" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : hour < 21 ? "Good evening" : "Good night";
-  const GIcon = hour < 6 || hour >= 20 ? Moon : hour < 11 ? Sunrise : hour < 17 ? Sun : Sunset;
+  // The badge on the right: how far off the next/ongoing class is.
+  let badge: string | null = null;
+  if (ongoing) badge = `${fmtDuration(toMinutes(ongoing.end) - nowMin)} left`;
+  else if (next) badge = `in ${fmtDuration(toMinutes(next.start) - nowMin)}`;
 
   return (
-    <section className="ink-card relative mx-4 mt-3 overflow-hidden rounded-[28px]" aria-label="Today at a glance">
-      <div className="relative p-5">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted">
-            <GIcon size={15} /> {greet}
-          </p>
-          <p className="text-[12px] font-medium text-ink-muted tnum">{fmtDayLong(today)}</p>
-        </div>
-        <h1 className="font-display mt-1 truncate text-[30px] leading-tight font-semibold text-on-ink">{name}</h1>
-
-        <div className="mt-5 rounded-2xl bg-white/[0.045] p-4 ring-1 ring-white/[0.06]">
-          <p className="text-[11px] font-semibold tracking-[0.14em] text-ink-muted uppercase">{eyebrow}</p>
-          <p className="mt-1.5 line-clamp-2 text-[18.5px] font-semibold leading-snug text-on-ink">{title}</p>
-          <p className="mt-0.5 text-[13.5px] text-ink-muted">{sub}</p>
-          {list.length > 0 && (
-            <div className="mt-3.5">
-              <div className="flex gap-1.5" role="img" aria-label={`${marked} of ${list.length} classes marked`}>
-                {list.map((s) => (
-                  <span key={s.id} className={cx("h-1.5 flex-1 rounded-full", DOT[s.status])} />
-                ))}
-              </div>
-              <p className="mt-2 text-[11.5px] text-ink-muted tnum">
-                {marked} of {list.length} classes marked{fromCamu ? " on Camu" : ""}
-              </p>
-            </div>
-          )}
-        </div>
+    <section
+      className="relative mx-5 mt-4 overflow-hidden rounded-[22px] bg-accent-soft p-4"
+      aria-label="Up next"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold tracking-wide text-on-accent uppercase">
+          {eyebrow}
+        </span>
+        {badge && <span className="text-[12px] font-semibold text-accent tnum">{badge}</span>}
       </div>
+      <p className="mt-2.5 line-clamp-2 text-[18px] font-bold leading-snug text-text">{title}</p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13.5px] text-muted">{sub}</p>
+      {list.length > 0 && (
+        <div className="mt-3.5">
+          <div className="flex gap-1.5" role="img" aria-label={`${marked} of ${list.length} classes marked`}>
+            {list.map((s) => (
+              <span key={s.id} className={cx("h-1.5 flex-1 rounded-full", DOT_SOFT[s.status])} />
+            ))}
+          </div>
+          <p className="mt-2 text-[11.5px] text-muted tnum">
+            {marked} of {list.length} classes marked{fromCamu ? " on Camu" : ""}
+          </p>
+        </div>
+      )}
     </section>
   );
 }

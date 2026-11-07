@@ -246,7 +246,7 @@ export function Chip({
 }) {
   const base = cx(
     "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition",
-    active ? "bg-text text-bg" : "bg-surface-2 text-text",
+    active ? "bg-accent text-on-accent" : "bg-surface-2 text-text",
     className,
   );
   if (!onClick) return <span className={base}>{children}</span>;

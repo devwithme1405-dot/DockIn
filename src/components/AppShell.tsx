@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarCheck, ListChecks, Sun, Users, Wallet } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, Wallet } from "lucide-react";
 import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
@@ -42,11 +42,11 @@ function useNeedsAttention(): number {
 }
 
 const TABS = [
-  { href: "/", label: "Today", icon: Sun },
-  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
+  { href: "/", label: "Today", icon: House },
+  { href: "/attendance", label: "Attendance", icon: ChartNoAxesColumn },
+  { href: "/timetable", label: "Timetable", icon: CalendarDays },
   { href: "/money", label: "Money", icon: Wallet },
-  { href: "/tasks", label: "Tasks", icon: ListChecks },
-  ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: Users }] : []),
+  { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
 ];
 
 /**
@@ -254,7 +254,7 @@ function Tab({
 }: {
   href: string;
   label: string;
-  icon: typeof Sun;
+  icon: typeof House;
   active: boolean;
   badge: number;
 }) {

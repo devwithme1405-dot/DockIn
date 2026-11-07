@@ -1,70 +1,71 @@
 @import "tailwindcss";
 
 /*
- * DockIn — "Paper & Ink", a premium light-first system.
+ * DockIn — a modern, friendly-premium light system built on violet.
  *
- * Warm paper under crisp ink, a deep charcoal hero card the way a premium card
- * sits on a table, and one disciplined accent (a deep cobalt) for the live
- * parts — selected, linked, in-progress. Green / amber / red stay strictly
- * semantic: present / warning / absent, money in / out. Nothing is decorative.
+ * A soft lavender-white page under near-black headings, white cards, and one
+ * confident violet accent for anything live or primary. Green / amber / red
+ * stay strictly semantic: present / warning / absent, money in / out.
  */
 :root {
-  --bg: #f3f2ed;
+  --bg: #f7f6fb;
   --surface: #ffffff;
-  --surface-2: #ebe8df;
-  --text: #16171c;
-  --muted: #71747c;
-  --line: #e7e3da;
-  --accent: #2d3bda;
-  --accent-soft: #e7e8fb;
+  --surface-2: #f0eef7;
+  --text: #1a1726;
+  --muted: #6e6b7e;
+  --line: #ece9f4;
+  --accent: #6d3beb;
+  --accent-2: #7e4ff0;
+  --accent-soft: #ede8fd;
   --on-accent: #ffffff;
-  /* Ink: the charcoal used for the hero card and primary buttons. */
-  --ink: #17181d;
-  --ink-2: #26272e;
-  --on-ink: #f6f6f2;
-  --ink-muted: #9b9da6;
-  --safe: #16864f;
-  --safe-soft: #e3f2e9;
-  --warn: #a96a00;
-  --warn-soft: #f8edd8;
-  --danger: #d03a34;
-  --danger-soft: #fae6e4;
-  --hero: #17181d;
-  --hero-fg: #f6f6f2;
-  --hero-muted: #9b9da6;
-  --violet: #6b4ee6;
-  --violet-soft: #ece8fc;
-  --rose: #c43a62;
-  --rose-soft: #fae5ec;
+  /* Kept for components that still ask for an "ink" surface; now the accent. */
+  --ink: #6d3beb;
+  --ink-2: #7e4ff0;
+  --on-ink: #ffffff;
+  --ink-muted: #d9ccfb;
+  --safe: #16a34a;
+  --safe-soft: #e3f6ea;
+  --warn: #d9821a;
+  --warn-soft: #fbeedb;
+  --danger: #e5484d;
+  --danger-soft: #fce7e8;
+  --hero: #6d3beb;
+  --hero-fg: #ffffff;
+  --hero-muted: #d9ccfb;
+  --violet: #6d3beb;
+  --violet-soft: #ede8fd;
+  --rose: #e5486f;
+  --rose-soft: #fce6ec;
 }
 
 [data-theme="dark"] {
-  --bg: #0d0e11;
-  --surface: #17181c;
-  --surface-2: #202127;
-  --text: #f1f1f4;
-  --muted: #9195a0;
-  --line: #2a2c33;
-  --accent: #7e86ff;
-  --accent-soft: #1e2142;
-  --on-accent: #0b1020;
-  --ink: #1b1d23;
-  --ink-2: #292b33;
-  --on-ink: #f3f3f6;
-  --ink-muted: #9a9ca7;
+  --bg: #0e0d14;
+  --surface: #181721;
+  --surface-2: #211f2d;
+  --text: #f2f1f7;
+  --muted: #9b98ab;
+  --line: #2a2838;
+  --accent: #9a6bff;
+  --accent-2: #a884ff;
+  --accent-soft: #241d3d;
+  --on-accent: #ffffff;
+  --ink: #6d3beb;
+  --ink-2: #7e4ff0;
+  --on-ink: #ffffff;
+  --ink-muted: #cbbdf7;
   --safe: #3fbb85;
-  --safe-soft: #12291f;
+  --safe-soft: #122a1f;
   --warn: #eba234;
   --warn-soft: #33260f;
-  --danger: #ff726a;
-  --danger-soft: #371816;
-  --hero: #1b1d23;
-  --hero-fg: #f3f3f6;
-  --hero-muted: #9a9ca7;
-  --violet: #a590f0;
-  --violet-soft: #231d3f;
-  --rose: #ff7fa3;
-  --rose-soft: #3a1823;
+  --danger: #ff6b70;
+  --danger-soft: #38191b;
+  --hero: #6d3beb;
+  --hero-fg: #ffffff;
+  --hero-muted: #cbbdf7;
+  --violet: #a884ff;
+  --violet-soft: #241d3d;
+  --rose: #ff85a6;
+  --rose-soft: #37202a;
 }
 
 @theme inline {
@@ -94,9 +95,10 @@
   --color-ink-2: var(--ink-2);
   --color-on-ink: var(--on-ink);
   --color-ink-muted: var(--ink-muted);
-  --font-sans: "Hanken Grotesk Variable", system-ui, sans-serif;
-  --font-display: "Space Grotesk Variable", "Hanken Grotesk Variable", system-ui, sans-serif;
-  --font-mono: "Space Grotesk Variable", ui-monospace, monospace;
+  --color-accent-2: var(--accent-2);
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-mono: "Plus Jakarta Sans Variable", ui-monospace, monospace;
 }
 
 html {
@@ -210,7 +212,7 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(120% 80% at 50% 36%, #22232b 0%, #141519 70%);
+  background: radial-gradient(130% 80% at 50% 32%, #7e4ff0 0%, #6d3beb 55%, #5a2fd4 100%);
   color: #fff;
   --boot-hole: 0px;
   -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
@@ -443,25 +445,23 @@ textarea {
     0 0 0 1px var(--line);
 }
 
-/* The ink hero card: a deep charcoal slab with a faint top sheen, the premium
-   "black card on the table" moment, used for the Today greeting and Money. */
+/* The brand card: a violet slab with a soft top sheen, used for the money
+   summary and other headline moments. */
 .ink-card {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(120% 90% at 88% -10%, color-mix(in srgb, var(--accent) 26%, var(--ink)) 0%, transparent 46%),
-    linear-gradient(160deg, var(--ink-2), var(--ink) 62%);
-  color: var(--on-ink);
-  box-shadow:
-    0 1px 1px rgb(16 18 22 / 6%),
-    0 18px 40px -22px rgb(16 18 22 / 55%);
+    radial-gradient(120% 90% at 85% -15%, color-mix(in srgb, #ffffff 24%, var(--accent)) 0%, transparent 50%),
+    linear-gradient(155deg, var(--accent-2), var(--accent) 70%);
+  color: #ffffff;
+  box-shadow: 0 16px 34px -20px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 .ink-card::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
   pointer-events: none;
 }
 
