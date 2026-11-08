@@ -227,7 +227,10 @@ export function onPasswordRecovery(fn: () => void): () => void {
 }
 
 export async function signOutCloud(): Promise<void> {
-  await getSupabase()?.auth.signOut();
+  // Local scope clears this device's session straight away with no server
+  // round-trip, so logging out never hangs on the network — the welcome screen
+  // comes up at once instead of after a wait.
+  await getSupabase()?.auth.signOut({ scope: "local" });
 }
 
 /** A sign-in error that Supabase put in the address after redirecting back (e.g. wrong email domain). */

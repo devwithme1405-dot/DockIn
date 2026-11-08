@@ -120,7 +120,10 @@ export default function OnboardingPage() {
 
 function Welcome({ onStart }: { onStart: () => void }) {
   return (
-    <div className="relative isolate min-h-dvh overflow-hidden bg-[#1b2a5a] text-white">
+    // `fixed inset-0` covers the whole screen behind the status and navigation
+    // bars (the page is viewport-fit: cover), so the image reaches every edge —
+    // min-h-dvh left a strip of bare background under the gesture bar.
+    <div className="fixed inset-0 isolate z-50 overflow-hidden bg-[#1b2a5a] text-white">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/welcome.webp"
@@ -140,7 +143,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
         className="absolute inset-x-0 bottom-0 -z-10 h-[34%] bg-gradient-to-t from-[#0a0f24]/80 via-[#0a0f24]/35 to-transparent"
       />
 
-      <div className="flex min-h-dvh flex-col justify-between px-6 pt-[max(1.75rem,env(safe-area-inset-top))] pb-[max(1.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex h-full flex-col justify-between px-6 pt-[max(1.75rem,env(safe-area-inset-top))] pb-[max(1.75rem,env(safe-area-inset-bottom))]">
         <div>
           <div className="flex items-center gap-2.5">
             <Logo size={34} />
