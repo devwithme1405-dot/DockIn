@@ -26,6 +26,18 @@ const config: CapacitorConfig = {
     // site's first paint: the same leather, so the opening reads as one motion.
     backgroundColor: "#864220",
   },
+  plugins: {
+    // Android 15+ forces every app edge-to-edge (we target SDK 36). Capacitor
+    // works out the webview's `viewport-fit` on its own, but during that first
+    // detection the layout jumps — and the very first screen it paints is the
+    // welcome page, so that page came up cut off at the bottom. Telling it up
+    // front that we use `cover` removes the jump, and keeping the default "css"
+    // handling also hands us real `--safe-area-inset-*` values to pad with.
+    SystemBars: {
+      insetsHandling: "css",
+      initialViewportFitValueHint: "cover",
+    },
+  },
 };
 
 export default config;

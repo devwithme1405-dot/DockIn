@@ -185,12 +185,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [minShown, setMinShown] = useState(false);
   // The launch screen is a one-time thing. Once content has shown, a slow Dexie
   // read or an auth flicker while moving between tabs must never bring it back —
-  // that looked like the whole app reopening on every navigation.
-  const [bootedOnce, setBootedOnce] = useState(false);
+  // that looked like the whole app reopening on every navigation. It is also
+  // kept in sessionStorage, so if a script-recovery reload fires mid-session
+  // (see the heal script in layout) the cover does not play a second time; a
+  // real fresh launch clears sessionStorage and shows it again.
+  const [bootedOnce, setBootedOnce] = useState(() => {
+    try {
+      return sessionStorage.getItem("dockin-booted") === "1";
+    } catch {
+      return false;
+    }
+  });
   useEffect(() => {
     const t = setTimeout(() => setMinShown(true), Math.max(0, 260 - performance.now()));
     return () => clearTimeout(t);
   }, []);
+  // Remember, for this app session, that the cover has already played.
+  useEffect(() => {
+    if (!bootedOnce) return;
+    try {
+      sessionStorage.setItem("dockin-booted", "1");
+    } catch {}
+  }, [bootedOnce]);
 
   // A bare page (privacy, password reset) draws on its own, with no tabs, no
   // launch screen and no sign-in gate — it may be the first DockIn page a phone

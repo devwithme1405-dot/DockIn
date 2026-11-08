@@ -151,6 +151,35 @@ export interface CamuView {
 
 const subjectId = (id: string) => `camu:${id}`;
 
+function mins(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Which of a day's periods are labs, keyed by start time.
+ *
+ * Camu does not reliably say "practical", so we read it off the timetable the
+ * way a student does: a lab is the double period. If one block already runs the
+ * full two hours, or two periods of the same subject sit back to back, both are
+ * the lab. Camu's own "prac"/"lab" tag still counts when it is there.
+ */
+export function labStarts(periods: DayClass[]): Set<string> {
+  const labs = new Set<string>();
+  const sorted = [...periods].sort((a, b) => a.from.localeCompare(b.from));
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i];
+    if (/prac|lab/i.test(p.kind)) labs.add(p.from);
+    if (p.to && mins(p.to) - mins(p.from) >= 110) labs.add(p.from);
+    const q = sorted[i + 1];
+    if (q && q.subId === p.subId && p.to && p.to === q.from) {
+      labs.add(p.from);
+      labs.add(q.from);
+    }
+  }
+  return labs;
+}
+
 /**
  * Subjects, every class Camu has recorded, and the timetable around today,
  * as one set of sessions. A class in the history is present or absent; one
@@ -182,23 +211,26 @@ export function camuView(state: CamuState | undefined, target: number, today: st
   // Timetable days around today, so Today and the week strip have classes to show.
   for (let i = -7; i <= 7; i++) {
     const date = addDays(today, i);
-    for (const p of classesOn(state, date)) {
+    const dayPeriods = classesOn(state, date);
+    const labs = labStarts(dayPeriods);
+    for (const p of dayPeriods) {
       const sub = subjectOf(p, state.subjects);
       if (!sub) continue;
       const id = `camu:${sub.id}:${date}:${p.from}`;
+      const kind = labs.has(p.from) ? "practical" : "lecture";
       const known = sessions.find((x) => x.id === id);
       if (known) {
         known.room = p.room;
         known.teacher = p.teacher;
         if (p.to) known.end = p.to;
-        known.kind = /prac|lab/i.test(p.kind) ? "practical" : "lecture";
+        known.kind = kind;
         continue;
       }
       have.add(id);
       const s = session(id, subjectId(sub.id), date, p.from, p.to || p.from, "unmarked");
       s.room = p.room;
       s.teacher = p.teacher;
-      s.kind = /prac|lab/i.test(p.kind) ? "practical" : "lecture";
+      s.kind = kind;
       s.usual = p.usual;
       sessions.push(s);
     }
@@ -257,6 +289,26 @@ const listeners = new Set<() => void>();
 /** A sync is worth starting when the last one is older than this. */
 const STALE_MS = 15 * 60 * 1000;
 let syncing: Promise<void> | null = null;
+/**
+ * Backing off when Camu or the LMS will not answer. A failed sync leaves the
+ * data untouched, so without this the "data is stale" check below would fire a
+ * fresh request on every single app open — exactly the hammering that gets an
+ * account rate-limited. Instead each failure in a row pushes the next attempt
+ * further out: 30s, 1m, 2m … up to the normal 15-minute cadence. One clean sync
+ * resets it. Camu signing you out is handled by a renewal, not counted here.
+ */
+let lastSyncAttempt = 0;
+let syncFails = 0;
+
+function syncHadError(s: CollegeState): boolean {
+  const camu = !!(s.camu?.connected && s.camu.error && !s.camu.expired);
+  const lms = !!(s.lms?.connected && s.lms.error);
+  return camu || lms;
+}
+
+function syncBackoffMs(): number {
+  return syncFails > 0 ? Math.min(STALE_MS, 30_000 * 2 ** (syncFails - 1)) : 0;
+}
 /** At most one silent Camu renewal per app open, so a stubborn expiry never loops. */
 let renewing = false;
 let renewTried = false;
@@ -298,9 +350,15 @@ export const collegeNow = () => current;
 export function syncCollege(full = false): Promise<void> {
   if (!isNativeApp()) return Promise.resolve();
   if (syncing) return syncing;
+  lastSyncAttempt = Date.now();
   syncing = DockIn.syncCollege({ full })
-    .then(set)
-    .catch(() => {})
+    .then((s) => {
+      set(s);
+      syncFails = syncHadError(s) ? syncFails + 1 : 0;
+    })
+    .catch(() => {
+      syncFails += 1;
+    })
     .finally(() => {
       syncing = null;
     });
@@ -315,7 +373,9 @@ function start() {
       const s = await DockIn.college();
       set(s);
       const connected = s.camu?.connected || s.lms?.connected;
-      if (connected && Date.now() - (s.syncedAt ?? 0) > STALE_MS) void syncCollege();
+      const stale = Date.now() - (s.syncedAt ?? 0) > STALE_MS;
+      const cooled = Date.now() - lastSyncAttempt >= syncBackoffMs();
+      if (connected && stale && cooled) void syncCollege();
     } catch {
       loaded = true;
       listeners.forEach((l) => l());

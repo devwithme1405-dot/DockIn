@@ -299,14 +299,20 @@ textarea {
   }
 }
 
+/*
+ * `backwards` holds each keyframe's start state (opacity 0) from the moment the
+ * element mounts, before the first animated frame paints. Without it the WebView
+ * shows one frame at the element's resting style — a full-strength dark backdrop
+ * and a fully-placed sheet — which reads as a flicker the instant the sheet opens.
+ */
 .anim-sheet {
-  animation: sheet-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
 }
 .anim-fade {
-  animation: fade-in 160ms ease-out;
+  animation: fade-in 160ms ease-out backwards;
 }
 .anim-toast {
-  animation: toast-in 180ms ease-out;
+  animation: toast-in 180ms ease-out backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -331,11 +337,6 @@ textarea {
  * left of the splash. Inside the Android app, Android has just played the
  * docking itself, so the mark starts docked and only the opening plays here.
  */
-@property --boot-hole {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
 .boot {
   position: fixed;
   inset: 0;
@@ -349,9 +350,6 @@ textarea {
   background-image: var(--leather),
     radial-gradient(120% 75% at 50% 32%, #a65c2d 0%, #864220 55%, #66310f 100%);
   color: #fff;
-  --boot-hole: 0px;
-  -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
-  mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
 }
 .boot::after {
   content: "";
@@ -361,25 +359,24 @@ textarea {
   border: 2px dashed rgb(255 226 190 / 42%);
   pointer-events: none;
 }
+/*
+ * The cover lifts away onto the app. This used to grow a hole in a CSS mask,
+ * which is re-rasterised every frame and stuttered badly on mid-range phones.
+ * Opacity and transform are composited on the GPU, so this version is smooth.
+ */
 .boot-out {
   pointer-events: none;
-  animation: boot-open 560ms cubic-bezier(0.65, 0, 0.25, 1) forwards;
+  will-change: opacity, transform;
+  animation: boot-lift 440ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .boot-out .boot-center,
 .boot-out .boot-tag {
-  animation: boot-away 360ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: boot-away 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
-@keyframes boot-open {
-  0% {
-    --boot-hole: 0px;
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    --boot-hole: 150vmax;
+@keyframes boot-lift {
+  to {
     opacity: 0;
+    transform: scale(1.05);
   }
 }
 @keyframes boot-away {

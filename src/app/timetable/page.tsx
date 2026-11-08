@@ -8,7 +8,8 @@ import { TodaySkeleton } from "@/components/Skeleton";
 import { ConnectCamu } from "@/components/College";
 import { getProfile } from "@/lib/repo";
 import { useClassNotes, useSlots, useSubjects } from "@/lib/hooks";
-import { classesOn, cleanName, colorFor, subjectOf, useAttendanceData } from "@/lib/college";
+import { classesOn, cleanName, colorFor, labStarts, subjectOf, useAttendanceData } from "@/lib/college";
+import type { ClassKind } from "@/lib/types";
 import { addDays, fmtTime, nowHM, toDateStr, weekdayOf, WEEKDAYS_SHORT } from "@/lib/dates";
 import { appliesOn, classKey, setClassNote } from "@/lib/repo";
 import { Ban, Clock3, X } from "lucide-react";
@@ -31,6 +32,7 @@ interface Row {
   room: string;
   teacher: string;
   color: string;
+  kind: ClassKind;
   /** What Camu recorded for this class, when it is in the past. */
   status: "present" | "absent" | null;
   /** Camu subject id, for noting an unmarked class. */
@@ -59,7 +61,9 @@ export default function TimetablePage() {
         const m = marks.find((x) => x.start === from && (x.subjectId === `camu:${subId}` || x.subjectId.endsWith(subId)));
         return m && (m.status === "present" || m.status === "absent") ? m.status : null;
       };
-      return classesOn(camu, date)
+      const dayPeriods = classesOn(camu, date);
+      const labs = labStarts(dayPeriods);
+      return dayPeriods
         .map((p) => {
           const sub = subjectOf(p, camu.subjects ?? []);
           return {
@@ -70,6 +74,7 @@ export default function TimetablePage() {
             room: p.room,
             teacher: p.teacher,
             color: colorFor(sub?.id ?? p.subId ?? p.name),
+            kind: labs.has(p.from) ? ("practical" as const) : ("lecture" as const),
             status: statusAt(p.subId, p.from),
             subId: p.subId,
           };
@@ -91,6 +96,7 @@ export default function TimetablePage() {
           room: s.room ?? "",
           teacher: "",
           color: sub?.color ?? colorFor(s.subjectId),
+          kind: s.kind,
           status: null,
         };
       });
@@ -231,6 +237,11 @@ export default function TimetablePage() {
                 <div className="flex items-start justify-between gap-2">
                   <p className="min-w-0 text-[15.5px] font-semibold leading-snug [overflow-wrap:anywhere]">
                     {r.name}
+                    {r.kind === "practical" && (
+                      <span className="ml-2 inline-block rounded-md bg-accent-soft px-1.5 py-0.5 align-middle text-[10px] font-extrabold tracking-[0.08em] text-accent">
+                        LAB
+                      </span>
+                    )}
                   </p>
                   {r.status ? (
                     <span

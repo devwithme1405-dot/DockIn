@@ -33,6 +33,7 @@ import { bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/
 import { budgetStatus, fmtMoney, monthKey, sum } from "@/lib/money";
 import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
 import { describe, fmtPct, weekChange } from "@/lib/attendance";
+import { loadReadKeys, saveReadKeys } from "@/lib/bell";
 import type { AttendanceState, AttendanceSummary, Session, SessionStatus, Subject, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useCountUp, useToast } from "@/components/ui";
 import { BookTile, Cap3D, InkBar, Notebook, PaperCheck, PaperIconButton, SectionTitle, TrendPill } from "@/components/Paper";
@@ -116,6 +117,25 @@ export default function TodayPage() {
     return { count: list.length, latest };
   }, [data, camu, today]);
 
+  // The bell's notifications and which of them have been marked read. The read
+  // marks live on the phone (see lib/bell), so closing the sheet or the whole
+  // app keeps them; a mark is pruned only once its alert has cleared.
+  const bellRows = useMemo(
+    () => buildBellRows({ attention, overdue: work.overdue, exam: work.exam, today, unmarked: unmarkedPast }),
+    [attention, work.overdue, work.exam, today, unmarkedPast],
+  );
+  const [readKeys, setReadKeys] = useState<Set<string>>(() => loadReadKeys());
+  const markRead = (keys: string[]) => {
+    // Keep only marks whose alert is still showing, then add the new ones, so
+    // the stored set never grows without bound. A content-aware key that is no
+    // longer present can never match a row anyway, so dropping it is safe.
+    const present = new Set(bellRows.map((r) => r.key));
+    const next = new Set([...readKeys].filter((k) => present.has(k)));
+    for (const k of keys) next.add(k);
+    setReadKeys(next);
+    saveReadKeys(next);
+  };
+
   const trend = useMemo(() => (data ? weekChange(data.sessions, data.overall, today) : null), [data, today]);
 
   // Today's classes, for the "Today's Classes" card and the schedule.
@@ -142,11 +162,7 @@ export default function TodayPage() {
   if (!profile || !data) return <TodaySkeleton />;
 
   const name = profile.name || "there";
-  const urgent =
-    attention.some((a) => a.summary.state === "danger") ||
-    work.overdue > 0 ||
-    unmarkedPast.count > 0 ||
-    (!!work.exam?.dueDate && daysBetween(today, work.exam.dueDate) <= 3);
+  const urgent = bellRows.some((r) => !readKeys.has(r.key));
   const greeting = greetingFor().replace(/\b\w/g, (c) => c.toUpperCase());
   const range = classes.length ? `${clock(classes[0].start)} – ${clock(classes[classes.length - 1].end)}` : "No classes";
 
@@ -345,11 +361,9 @@ export default function TodayPage() {
 
       <Sheet open={bell} onClose={() => setBell(false)} title="Updates">
         <Updates
-          attention={attention}
-          overdue={work.overdue}
-          exam={work.exam}
-          today={today}
-          unmarked={unmarkedPast}
+          rows={bellRows}
+          read={readKeys}
+          onMarkRead={markRead}
           onClose={() => setBell(false)}
         />
       </Sheet>
@@ -472,7 +486,14 @@ function ScheduleRow({
       <div className={cx("lift flex items-center gap-3 rounded-2xl p-2.5", live && "bg-accent-soft")}>
         <BookTile size={44} />
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-[14.5px] leading-snug font-bold [overflow-wrap:anywhere]">{name}</p>
+          <p className="line-clamp-2 text-[14.5px] leading-snug font-bold [overflow-wrap:anywhere]">
+            {name}
+            {session.kind === "practical" && (
+              <span className="ml-1.5 inline-block rounded-md bg-accent-soft px-1.5 py-0.5 align-middle text-[9.5px] font-extrabold tracking-[0.08em] text-accent">
+                LAB
+              </span>
+            )}
+          </p>
           <p className="mt-0.5 text-[12.5px] font-semibold text-muted tnum">
             {clock(session.start)} – {clock(session.end)}
             {live && <span className="ml-1.5 font-extrabold text-accent">· Now</span>}
@@ -592,27 +613,26 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
 
 // ---------- the bell ----------
 
-function Updates({
-  attention,
-  overdue,
-  exam,
-  today,
-  unmarked,
-  onClose,
-}: {
+type BellRow = { key: string; icon: typeof Bell; tone: string; title: string; body: string; href: string };
+
+/**
+ * Everything the bell would ring about, worked out from the same data the page
+ * already has. Each key folds in the alert's current state — the rounded
+ * percentage, the count, the date — so a mark-read sticks while nothing changes
+ * and the alert rings again the moment it does.
+ */
+function buildBellRows(args: {
   attention: { subject: Subject; summary: AttendanceSummary }[];
   overdue: number;
   exam: Task | undefined;
   today: string;
   unmarked: { count: number; latest: string | null };
-  onClose: () => void;
-}) {
-  // What a notification would say, gathered in one place; each can be read.
-  const [read, setRead] = useState<Set<string>>(new Set());
-  const rows: { key: string; icon: typeof Bell; tone: string; title: string; body: string; href: string }[] = [];
+}): BellRow[] {
+  const { attention, overdue, exam, today, unmarked } = args;
+  const rows: BellRow[] = [];
   for (const { subject, summary } of attention.slice(0, 5)) {
     rows.push({
-      key: subject.id,
+      key: `att:${subject.id}:${summary.state}:${Math.round(summary.pct ?? 0)}`,
       icon: TriangleAlert,
       tone: summary.state === "danger" ? "bg-danger-soft text-danger" : "bg-warn-soft text-warn",
       title: `${subject.name} · ${fmtPct(summary.pct)}`,
@@ -621,12 +641,25 @@ function Updates({
     });
   }
   if (overdue > 0)
-    rows.push({ key: "overdue", icon: ClipboardList, tone: "bg-danger-soft text-danger", title: `${overdue} overdue ${overdue === 1 ? "task" : "tasks"}`, body: "Finish them or move the date", href: "/tasks" });
+    rows.push({ key: `overdue:${overdue}`, icon: ClipboardList, tone: "bg-danger-soft text-danger", title: `${overdue} overdue ${overdue === 1 ? "task" : "tasks"}`, body: "Finish them or move the date", href: "/tasks" });
   if (exam?.dueDate)
-    rows.push({ key: "exam", icon: GraduationCap, tone: "bg-accent-soft text-accent", title: exam.title, body: `Exam · ${countdownText(daysBetween(today, exam.dueDate))}`, href: "/tasks" });
+    rows.push({ key: `exam:${exam.id}:${exam.dueDate}`, icon: GraduationCap, tone: "bg-accent-soft text-accent", title: exam.title, body: `Exam · ${countdownText(daysBetween(today, exam.dueDate))}`, href: "/tasks" });
   if (unmarked.count > 0)
-    rows.push({ key: "unmarked", icon: ClipboardList, tone: "bg-warn-soft text-warn", title: `${unmarked.count} past ${unmarked.count === 1 ? "class" : "classes"} not marked`, body: "Catch up to keep your numbers right", href: "/attendance" });
+    rows.push({ key: `unmarked:${unmarked.count}`, icon: ClipboardList, tone: "bg-warn-soft text-warn", title: `${unmarked.count} past ${unmarked.count === 1 ? "class" : "classes"} not marked`, body: "Catch up to keep your numbers right", href: "/attendance" });
+  return rows;
+}
 
+function Updates({
+  rows,
+  read,
+  onMarkRead,
+  onClose,
+}: {
+  rows: BellRow[];
+  read: Set<string>;
+  onMarkRead: (keys: string[]) => void;
+  onClose: () => void;
+}) {
   const unreadRows = rows.filter((r) => !read.has(r.key));
 
   if (rows.length === 0 || unreadRows.length === 0)
@@ -641,7 +674,7 @@ function Updates({
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <button onClick={() => setRead(new Set(rows.map((r) => r.key)))} className="text-[13px] font-bold text-accent">
+        <button onClick={() => onMarkRead(rows.map((r) => r.key))} className="text-[13px] font-bold text-accent">
           Mark all as read
         </button>
       </div>
@@ -656,7 +689,7 @@ function Updates({
               <span className="block truncate text-[12.5px] text-muted">{r.body}</span>
             </Link>
             <button
-              onClick={() => setRead((s) => new Set(s).add(r.key))}
+              onClick={() => onMarkRead([r.key])}
               aria-label="Mark as read"
               className="btn-paper lip-sm grid size-8 shrink-0 place-items-center rounded-full text-muted"
             >

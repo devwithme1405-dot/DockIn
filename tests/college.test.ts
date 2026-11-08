@@ -11,6 +11,7 @@ import {
   holidayLastDay,
   holidayOn,
   importLms,
+  labStarts,
   lmsTask,
   lmsTaskId,
   nextClass,
@@ -184,5 +185,44 @@ describe("LMS deadlines as tasks", () => {
   it("does nothing until the LMS is connected", async () => {
     await importLms({ lms: { connected: false, items: [item(1, IN_3_DAYS)] } }, NOW);
     expect(await db.tasks.count()).toBe(0);
+  });
+});
+
+describe("labStarts: which classes are the lab", () => {
+  // DayClass = a Camu period plus whether it was carried over from last week.
+  const day = (from: string, to: string, subId: string, kind = "LECTURE") => ({
+    ...period("2026-11-09", from, to, "Subject", "CODE", subId),
+    kind,
+    usual: false,
+  });
+
+  it("marks two back-to-back periods of the same subject as a lab", () => {
+    const labs = labStarts([
+      day("08:20", "09:20", "s-cpp"),
+      day("09:20", "10:20", "s-cpp"),
+      day("10:30", "11:30", "s-math"),
+    ]);
+    expect(labs.has("08:20")).toBe(true);
+    expect(labs.has("09:20")).toBe(true);
+    expect(labs.has("10:30")).toBe(false);
+  });
+
+  it("marks a single block that already runs two hours as a lab", () => {
+    const labs = labStarts([day("14:00", "16:00", "s-dbms")]);
+    expect(labs.has("14:00")).toBe(true);
+  });
+
+  it("trusts Camu when it does say practical", () => {
+    const labs = labStarts([day("09:00", "10:00", "s-micro", "PRACTICAL")]);
+    expect(labs.has("09:00")).toBe(true);
+  });
+
+  it("leaves ordinary one-hour lectures alone", () => {
+    const labs = labStarts([
+      day("08:20", "09:20", "s-cpp"),
+      day("10:30", "11:30", "s-cpp"), // same subject but a gap between them
+      day("11:30", "12:30", "s-math"), // adjacent but a different subject
+    ]);
+    expect(labs.size).toBe(0);
   });
 });
