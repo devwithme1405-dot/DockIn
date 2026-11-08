@@ -342,6 +342,27 @@ export async function updateTask(
   await db.tasks.update(id, { ...patch, updatedAt: now() });
 }
 
+/**
+ * Copy a task to another day: a fresh, not-done task with the same contents
+ * (its checklist reset), so an unfinished task can be carried forward or a
+ * repeating one set up again in a tap. An LMS task copies as a plain one.
+ */
+export async function copyTask(id: string, date: string | null): Promise<Task | null> {
+  const src = await db.tasks.get(id);
+  if (!src) return null;
+  return addTask({
+    title: src.title,
+    notes: src.notes,
+    kind: src.kind,
+    subjectId: src.subjectId,
+    dueDate: date,
+    dueTime: src.dueTime,
+    room: src.room,
+    priority: src.priority,
+    subtasks: src.subtasks.map((s) => ({ ...s, done: false })),
+  });
+}
+
 export async function setTaskDone(id: string, done: boolean): Promise<void> {
   await db.tasks.update(id, { done, doneAt: done ? now() : null, updatedAt: now() });
 }

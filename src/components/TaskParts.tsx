@@ -8,13 +8,14 @@ import {
   Flame,
   GraduationCap,
   ListChecks,
+  Pin,
   Plus,
   Rocket,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
-import { addTask, deleteTask, restoreTask, setTaskDone, updateTask, uid } from "@/lib/repo";
+import { addTask, copyTask, deleteTask, restoreTask, setTaskDone, updateTask, uid } from "@/lib/repo";
 import {
   KINDS,
   KIND_BY_ID,
@@ -170,6 +171,14 @@ export function TaskRow({
         )}
       </button>
       <button
+        onClick={() => void updateTask(task.id, { pinned: !task.pinned })}
+        aria-label={task.pinned ? "Unpin" : "Pin to top"}
+        aria-pressed={!!task.pinned}
+        className={cx("grid size-8 shrink-0 place-items-center rounded-full", task.pinned ? "text-accent" : "text-muted")}
+      >
+        <Pin size={15} className={task.pinned ? "fill-current" : ""} />
+      </button>
+      <button
         onClick={() => setRemoving(true)}
         aria-label={`Delete ${task.title}`}
         className="grid size-8 shrink-0 place-items-center rounded-full text-muted"
@@ -219,6 +228,7 @@ export function TaskForm({
   const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
   const [newSub, setNewSub] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   const isExam = kind === "exam" || kind === "quiz";
   const valid = title.trim().length > 0;
@@ -262,6 +272,13 @@ export function TaskForm({
     if (!task) return;
     await deleteTask(task.id);
     toast.show("Deleted", () => restoreTask(task.id));
+    onDone();
+  }
+
+  async function copyTo(date: string | null) {
+    if (!task) return;
+    const made = await copyTask(task.id, date);
+    toast.show(`Copied${date ? "" : " with no date"}`, made ? () => void deleteTask(made.id) : undefined);
     onDone();
   }
 
@@ -484,16 +501,56 @@ export function TaskForm({
         aria-label="Notes"
       />
 
-      <div className="mt-5 flex gap-3">
-        {task && (
-          <Button variant="danger" onClick={remove}>
-            Delete
+      {task && (
+        <>
+          <p className="mt-6 mb-2 flex items-center gap-1.5 text-[13px] font-medium text-muted">
+            <Plus size={15} /> Copy to another day
+          </p>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {[
+              { label: "Tomorrow", date: addDays(today, 1) },
+              { label: "In 3 days", date: addDays(today, 3) },
+              { label: dateChips(today)[3].label, date: dateChips(today)[3].date },
+              { label: "In a week", date: addDays(today, 7) },
+            ].map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                onClick={() => void copyTo(c.date)}
+                className="btn-paper lip-sm h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13.5px]"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {confirmDel ? (
+        <div className="mt-5 rounded-2xl border-[1.5px] border-dashed border-danger/40 bg-danger-soft p-3.5">
+          <p className="text-[14px] font-bold text-danger">Delete this task?</p>
+          <p className="mt-0.5 text-[12.5px] text-muted">This removes it for good (you get a few seconds to undo).</p>
+          <div className="mt-3 flex gap-2.5">
+            <Button variant="secondary" className="flex-1" onClick={() => setConfirmDel(false)}>
+              Keep it
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={remove}>
+              Delete
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 flex gap-3">
+          {task && (
+            <Button variant="danger" onClick={() => setConfirmDel(true)}>
+              Delete
+            </Button>
+          )}
+          <Button className="flex-1" onClick={save} disabled={!valid || busy}>
+            {task ? "Save changes" : `Add ${KIND_BY_ID[kind].label.toLowerCase()}`}
           </Button>
-        )}
-        <Button className="flex-1" onClick={save} disabled={!valid || busy}>
-          {task ? "Save changes" : `Add ${KIND_BY_ID[kind].label.toLowerCase()}`}
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

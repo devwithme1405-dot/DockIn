@@ -194,6 +194,8 @@ export interface Task extends Base {
   subtasks: Subtask[];
   /** Set on tasks DockIn copied from the LMS; they keep themselves up to date. */
   source?: "lms";
+  /** Pinned to the top of the list. */
+  pinned?: boolean;
   /** Where to open it on the LMS. */
   url?: string;
 }

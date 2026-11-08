@@ -1,5 +1,5 @@
 import type { Priority, Subject, Task, TaskKind } from "./types";
-import { addDays, fmtDay, fmtTime, fromDateStr, weekdayOf } from "./dates";
+import { addDays, fmtDay, fmtTime, fromDateStr, toDateStr, weekdayOf } from "./dates";
 
 export interface KindMeta {
   id: TaskKind;
@@ -69,14 +69,26 @@ export function compareTasks(a: Task, b: Task): number {
  * it, and leaves you wondering whether the tap registered — so a freshly done
  * one stays where it was, struck through, until the screen is next opened.
  */
+/** A task counts as done "today" if it was ticked off on today's date. */
+export function doneToday(task: Task, today: string): boolean {
+  return !!task.done && !!task.doneAt && toDateStr(new Date(task.doneAt)) === today;
+}
+
 export function groupPending(
   tasks: Task[],
   today: string,
   keep?: ReadonlySet<string>,
 ): { bucket: Bucket; items: Task[] }[] {
+  // A finished task stays in place for the rest of the day (struck through), so
+  // ticking one off never makes the list jump; the next day it moves to Done.
   const shown = tasks
-    .filter((t) => !t.done || keep?.has(t.id))
-    .sort((a, b) => Number(a.done) - Number(b.done) || compareTasks(a, b));
+    .filter((t) => !t.done || keep?.has(t.id) || doneToday(t, today))
+    .sort(
+      (a, b) =>
+        Number(a.done) - Number(b.done) ||
+        Number(!!b.pinned) - Number(!!a.pinned) ||
+        compareTasks(a, b),
+    );
   return BUCKET_ORDER.map((bucket) => ({
     bucket,
     items: shown.filter((t) => bucketOf(t, today) === bucket),
