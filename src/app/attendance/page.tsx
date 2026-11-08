@@ -11,7 +11,7 @@ import { useEvents, useSessionsOn } from "@/lib/hooks";
 import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
 import { CamuStatus, ConnectCamu } from "@/components/College";
 import { CamuHistorySheet } from "@/components/CamuHistory";
-import { AttendanceCalendar, AttendanceLog } from "@/components/AttendanceViews";
+import { AttendanceLog } from "@/components/AttendanceViews";
 import { eventsOn, nextHoliday } from "@/lib/calendar";
 import { addDays, toDateStr, fmtDay, daysBetweenDates } from "@/lib/dates";
 import { countable, describe, fmtPct, ifYouMiss, weekChange } from "@/lib/attendance";
@@ -77,7 +77,6 @@ export default function AttendancePage() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>("overview");
-  const [past, setPast] = useState<"log" | "calendar">("log");
   const [targetOpen, setTargetOpen] = useState(false);
   const events = useEvents();
   const today = toDateStr();
@@ -354,24 +353,9 @@ export default function AttendancePage() {
       )}
 
       {view === "history" && (
-        <>
-          <Segmented
-            small
-            value={past}
-            onChange={setPast}
-            options={[
-              ["log", "Log"],
-              ["calendar", "Calendar"],
-            ]}
-            label="History"
-            className="mx-auto mt-5 w-[min(100%-2.5rem,18rem)]"
-          />
-          {past === "log" ? (
-            <AttendanceLog sessions={data.sessions} subjects={stats.map((s) => s.subject)} />
-          ) : (
-            <AttendanceCalendar sessions={data.sessions} subjects={stats.map((s) => s.subject)} holidays={camu?.holidays ?? []} />
-          )}
-        </>
+        <div className="mt-2">
+          <AttendanceLog sessions={data.sessions} subjects={stats.map((s) => s.subject)} />
+        </div>
       )}
 
       {camu && (

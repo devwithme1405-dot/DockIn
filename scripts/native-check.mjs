@@ -406,7 +406,6 @@ await step("the Log lists classes by present/absent across subjects", async () =
   await page.goto(`${BASE}/attendance`, { waitUntil: "domcontentloaded" });
   await waitFor("From Camu");
   await page.getByRole("tab", { name: "History" }).click();
-  await page.getByRole("tab", { name: "Log" }).click();
   await waitFor("Database Management Systems");
   // Filter to just absences, and the present-only class should drop out.
   await page.getByRole("tab", { name: "absent", exact: true }).click();
@@ -417,17 +416,17 @@ await step("the Log lists classes by present/absent across subjects", async () =
   await page.screenshot({ path: `${SHOTS}/native-camu-log.png`, fullPage: true });
 });
 
-await step("the Calendar marks a day and opens it", async () => {
+await step("the holiday calendar and bunk calculator live on the timetable", async () => {
+  await page.goto(`${BASE}/timetable`, { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "Calendar" }).click();
-  await waitFor("All present");
-  // Yesterday had an absence; tapping a marked day opens its class list.
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  await page.getByRole("button", { name: new RegExp(`${d.getDate()}[^0-9]`) }).first().click();
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/native-camu-calendar.png`, fullPage: true });
-  await page.getByRole("tab", { name: "Overview" }).click();
-  await waitFor("Your target");
+  await waitFor("Bunk calculator");
+  const t = await text();
+  if (!/Next holiday/.test(t)) throw new Error("the next-holiday card is missing");
+  if (!/next two weeks/i.test(t)) throw new Error("the fortnight section is missing");
+  // Skipping a class lowers the figure the calculator shows.
+  await page.getByRole("button", { name: "One more" }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/native-calendar.png`, fullPage: true });
 });
 
 await step("Today shows Camu's classes with the room, and nothing to mark", async () => {

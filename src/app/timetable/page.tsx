@@ -12,6 +12,9 @@ import { classesOn, cleanName, colorFor, subjectOf, useAttendanceData } from "@/
 import { addDays, fmtTime, toDateStr, weekdayOf, WEEKDAYS_SHORT } from "@/lib/dates";
 import { appliesOn } from "@/lib/repo";
 import { EmptyState, cx } from "@/components/ui";
+import { Segmented } from "@/components/Paper";
+import { BunkCalculator, HolidayCalendar } from "@/components/Calendar";
+import { classesOn as camuClassesOn } from "@/lib/college";
 
 /** Monday of the week that `date` falls in. */
 function mondayOf(date: string): string {
@@ -39,6 +42,7 @@ export default function TimetablePage() {
   const subjects = useSubjects();
   const today = toDateStr();
   const [date, setDate] = useState(today);
+  const [view, setView] = useState<"week" | "calendar">("week");
 
   const weekStart = mondayOf(date);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -95,6 +99,32 @@ export default function TimetablePage() {
     <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <PageHeader title="Timetable" />
 
+      <Segmented
+        value={view}
+        onChange={setView}
+        options={[
+          ["week", "Week"],
+          ["calendar", "Calendar"],
+        ]}
+        label="Timetable view"
+        className="mx-5 mt-1 mb-2"
+      />
+
+      {view === "calendar" ? (
+        <div className="mt-4 space-y-6">
+          <HolidayCalendar
+            classCountOn={(d) => (camu ? camuClassesOn(camu, d).length : (slots ?? []).filter((s) => s.weekday === weekdayOf(d) && appliesOn(s, d)).length)}
+          />
+          <BunkCalculator
+            attended={data?.overall.attended ?? 0}
+            total={data?.overall.total ?? 0}
+            target={target}
+            canMiss={data?.overall.canMiss ?? 0}
+            state={data?.overall.state ?? "none"}
+          />
+        </div>
+      ) : (
+      <>
       {!camu && native && !hasManual ? (
         <div className="mx-5 mt-2">
           <ConnectCamu />
@@ -209,6 +239,8 @@ export default function TimetablePage() {
             </li>
           ))}
         </ul>
+      )}
+      </>
       )}
     </div>
   );
