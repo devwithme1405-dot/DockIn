@@ -68,7 +68,7 @@
     <target android:name="cap">
         <aapt:attr name="android:animation">
             <objectAnimator
-                android:duration="680"
+                android:duration="1000"
                 android:interpolator="@android:anim/bounce_interpolator"
                 android:propertyName="translateY"
                 android:startOffset="60"
@@ -81,7 +81,7 @@
     <target android:name="shadow">
         <aapt:attr name="android:animation">
             <objectAnimator
-                android:duration="680"
+                android:duration="1000"
                 android:interpolator="@android:anim/bounce_interpolator"
                 android:propertyName="scaleX"
                 android:startOffset="60"

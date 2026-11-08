@@ -10,7 +10,6 @@ import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
-import { BootSplash } from "./BootSplash";
 import { RemindersSync } from "./RemindersSync";
 import { useAuth } from "@/lib/auth";
 import { isNativeApp, onPhone } from "@/lib/native";
@@ -261,9 +260,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </button>
       )}
-      <BootSplash show={showBoot} message={restoring && userId ? "Getting your data…" : undefined} />
+      <BrandHold show={showBoot} />
     </ToastProvider>
   );
+}
+
+/**
+ * Android plays the opening — the mark docking onto the brown cover — while the
+ * app starts. All this does is hold that same brown for the breath between
+ * Android handing over and the first screen being ready, so the two read as one
+ * motion with no second splash of its own. No logo, no words: the opening has
+ * already happened.
+ */
+function BrandHold({ show }: { show: boolean }) {
+  const [mounted, setMounted] = useState(true);
+  if (show && !mounted) setMounted(true);
+  useEffect(() => {
+    if (show) return;
+    const t = setTimeout(() => setMounted(false), 360);
+    return () => clearTimeout(t);
+  }, [show]);
+  if (!mounted) return null;
+  return <div className={cx("brand-hold", !show && "brand-hold-out")} aria-hidden />;
 }
 
 function TabBar({ pathname }: { pathname: string }) {

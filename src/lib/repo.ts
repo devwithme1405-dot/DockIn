@@ -95,13 +95,23 @@ export async function saveProfile(
 
 const THEME_COLOR = { light: "#f2e4cb", dark: "#1c140e" } as const;
 
-export const TEXT_SCALES = [0.9, 1, 1.1, 1.25] as const;
-export const TEXT_SCALE_LABELS = ["Small", "Default", "Large", "Larger"] as const;
+// The whole interface was sized to read well a touch smaller than 1:1, so the
+// comfortable size — the one everything was drawn for — is the largest option,
+// and the two below it are tighter again. Larger-than-this is deliberately not
+// offered; the app already breathes at "Large".
+export const DEFAULT_TEXT_SCALE = 0.9;
+export const TEXT_SCALES = [0.78, 0.84, 0.9] as const;
+export const TEXT_SCALE_LABELS = ["Small", "Medium", "Large"] as const;
+
+/** A stored size, or the default when it is unset or from the older range. */
+export function normTextScale(scale: number | undefined): number {
+  return TEXT_SCALES.includes(scale as (typeof TEXT_SCALES)[number]) ? (scale as number) : DEFAULT_TEXT_SCALE;
+}
 
 /** Scales the whole interface, the way the phone's own text-size setting does. */
 export function applyTextScale(scale: number | undefined): void {
   if (typeof document === "undefined") return;
-  const s = TEXT_SCALES.includes(scale as (typeof TEXT_SCALES)[number]) ? (scale as number) : 1;
+  const s = normTextScale(scale);
   document.documentElement.style.zoom = s === 1 ? "" : String(s);
   try {
     localStorage.setItem("dockin-text-scale", String(s));

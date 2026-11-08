@@ -41,7 +41,8 @@ import java.util.Set;
 @CapacitorPlugin(
         name = "DockIn",
         permissions = {
-                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS})
+                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS}),
+                @Permission(alias = "sms", strings = {Manifest.permission.RECEIVE_SMS})
         }
 )
 public class DockInPlugin extends Plugin {
@@ -110,6 +111,7 @@ public class DockInPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("listening", listening(c));
         r.put("notifications", notificationState());
+        r.put("sms", smsState());
         r.put("pending", PayInbox.size(c));
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
@@ -215,6 +217,30 @@ public class DockInPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
         call.resolve(r);
+    }
+
+    /** Reading payment SMS directly. Asks for SMS access; older phones grant at install. */
+    @PluginMethod
+    public void requestSms(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            requestPermissionForAlias("sms", call, "smsAnswered");
+            return;
+        }
+        smsAnswered(call);
+    }
+
+    @PermissionCallback
+    private void smsAnswered(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("sms", smsState());
+        call.resolve(r);
+    }
+
+    private String smsState() {
+        PermissionState s = getPermissionState("sms");
+        if (s == PermissionState.GRANTED) return "granted";
+        if (s == PermissionState.PROMPT || s == PermissionState.PROMPT_WITH_RATIONALE) return "prompt";
+        return "denied";
     }
 
     /** Shows what a payment prompt looks like, so the whole path can be checked without paying. */

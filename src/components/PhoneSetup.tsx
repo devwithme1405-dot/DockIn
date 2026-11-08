@@ -78,6 +78,14 @@ export function PhoneSetup() {
     });
   }
 
+  async function allowSms() {
+    await run("sms", async () => {
+      const r = await DockIn.requestSms();
+      // A hard "no" (the dialog won't show again) — the only way left is App info.
+      if (r.sms === "denied") await DockIn.openAppSettings();
+    });
+  }
+
   async function test() {
     await run("test", async () => {
       await DockIn.testPrompt();
@@ -150,6 +158,23 @@ export function PhoneSetup() {
           action={
             status.notifications !== "granted" && (
               <ActionButton busy={busy === "notif"} onClick={allowNotifications}>
+                Allow
+              </ActionButton>
+            )
+          }
+        />
+
+        <Step
+          done={status.sms === "granted"}
+          title="Read bank payment SMS"
+          body={
+            status.sms === "granted"
+              ? "On. A bank's debit or credit SMS is caught even when no notification shows."
+              : "The surest way to catch bank payments — many banks only send an SMS. DockIn reads only money SMS; OTPs and chats are ignored."
+          }
+          action={
+            status.sms !== "granted" && (
+              <ActionButton busy={busy === "sms"} onClick={allowSms}>
                 Allow
               </ActionButton>
             )

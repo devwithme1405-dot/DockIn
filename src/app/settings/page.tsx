@@ -19,6 +19,7 @@ import {
 import {
   TEXT_SCALES,
   TEXT_SCALE_LABELS,
+  normTextScale,
   applyTextScale,
   applyTheme,
   exportAll,
@@ -291,16 +292,16 @@ export default function ProfilePage() {
           <p className="mt-2 text-[12.5px] text-muted">System follows your phone and switches on its own.</p>
 
           <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Text size</p>
-          <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Text size">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Text size">
             {TEXT_SCALES.map((scale, i) => (
               <button
                 key={scale}
                 role="radio"
-                aria-checked={(profile.textScale ?? 1) === scale}
+                aria-checked={normTextScale(profile.textScale) === scale}
                 onClick={() => pickTextScale(scale)}
                 className={cx(
                   "lip-sm flex h-11 items-center justify-center rounded-full",
-                  (profile.textScale ?? 1) === scale ? "btn-leather" : "btn-paper",
+                  normTextScale(profile.textScale) === scale ? "btn-leather" : "btn-paper",
                 )}
                 style={{ fontSize: 11 + i * 1.5 }}
               >

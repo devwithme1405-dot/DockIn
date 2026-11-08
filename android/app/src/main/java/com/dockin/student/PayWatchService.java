@@ -111,15 +111,28 @@ public class PayWatchService extends NotificationListenerService {
         if (title.isEmpty() && body.isEmpty()) return;
 
         String whole = title + " " + body;
-        if (!LOOKS_LIKE_MONEY.matcher(whole).find()) return;
-        if (!LOOKS_LIKE_PAYING.matcher(whole).find()) return;
-        if (!known && !SAYS_MONEY_MOVED.matcher(whole).find()) return;
+        // A known payment app is read loosely; anything else (a bank, a new
+        // wallet) only when it says outright that money moved.
+        if (!looksLikePayment(whole, !known)) return;
 
         JSONObject kept = PayInbox.add(this, sbn.getPackageName(), title, body, sbn.getPostTime());
         if (kept == null) return;
 
         DockInPlugin.deliver(kept);
         PayNotifier.ask(this, PayInbox.redact(whole), sbn.getPostTime());
+    }
+
+    /**
+     * Does this text look like a payment? An amount and a word about paying,
+     * always; and, when {@code requireMoved}, a word that says the money has
+     * actually left or arrived (so an OTP or a balance does not count). Shared
+     * with {@link SmsReceiver}, which reads bank SMS the same way.
+     */
+    static boolean looksLikePayment(String whole, boolean requireMoved) {
+        if (!LOOKS_LIKE_MONEY.matcher(whole).find()) return false;
+        if (!LOOKS_LIKE_PAYING.matcher(whole).find()) return false;
+        if (requireMoved && !SAYS_MONEY_MOVED.matcher(whole).find()) return false;
+        return true;
     }
 
     private static String text(CharSequence cs) {

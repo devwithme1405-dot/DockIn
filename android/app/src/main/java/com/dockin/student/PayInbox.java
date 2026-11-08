@@ -72,10 +72,19 @@ final class PayInbox {
         for (int i = 0; i < list.length(); i++) {
             JSONObject o = list.optJSONObject(i);
             if (o == null) continue;
+            boolean near = Math.abs(at - o.optLong("at")) < SAME_WINDOW_MS;
+            if (!near) continue;
+            // The same words from the same app, moments apart: a re-post.
             if (app.equals(o.optString("app"))
                     && t.equals(o.optString("title"))
-                    && b.equals(o.optString("body"))
-                    && Math.abs(at - o.optLong("at")) < SAME_WINDOW_MS) {
+                    && b.equals(o.optString("body"))) {
+                return null;
+            }
+            // The same text seen twice from different sources — a bank SMS read
+            // both as an SMS and as the messaging app's notification. The body
+            // carries the reference number, so a real second payment never reads
+            // identically; this only folds the one event back into one.
+            if (!b.isEmpty() && b.equals(o.optString("body"))) {
                 return null;
             }
         }

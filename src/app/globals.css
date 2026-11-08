@@ -332,169 +332,26 @@ textarea {
 
 /* ---------- launch screen ---------- */
 /*
- * The mark docks (the dot drops into the tray), and then the blue opens from
- * the mark outwards onto the app — a hole that grows until there is nothing
- * left of the splash. Inside the Android app, Android has just played the
- * docking itself, so the mark starts docked and only the opening plays here.
+ * Android plays the whole opening — the mark docking onto the brown cover — and
+ * hands over to this. All that is left to do is hold the same brown for the
+ * breath before the first screen is ready, so there is no second splash with a
+ * logo or a line of its own; the opening already happened, on Android's side.
  */
-.boot {
+.brand-hold {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  /* The notebook's leather cover. */
   background-color: #8a4520;
   background-image: var(--leather),
     radial-gradient(120% 75% at 50% 32%, #a65c2d 0%, #864220 55%, #66310f 100%);
-  color: #fff;
 }
-.boot::after {
-  content: "";
-  position: absolute;
-  inset: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
-  border-radius: 26px;
-  border: 2px dashed rgb(255 226 190 / 42%);
+.brand-hold-out {
   pointer-events: none;
+  animation: brand-hold-fade 320ms ease forwards;
 }
-/*
- * The cover lifts away onto the app. This used to grow a hole in a CSS mask,
- * which is re-rasterised every frame and stuttered badly on mid-range phones.
- * Opacity and transform are composited on the GPU, so this version is smooth.
- */
-.boot-out {
-  pointer-events: none;
-  will-change: opacity, transform;
-  animation: boot-lift 440ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-.boot-out .boot-center,
-.boot-out .boot-tag {
-  animation: boot-away 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-@keyframes boot-lift {
+@keyframes brand-hold-fade {
   to {
     opacity: 0;
-    transform: scale(1.05);
-  }
-}
-@keyframes boot-away {
-  to {
-    transform: scale(1.18);
-    opacity: 0;
-  }
-}
-.boot-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: -4vh;
-}
-.boot-word {
-  margin-top: 16px;
-  font-family: var(--font-display);
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  color: #fff4e3;
-  text-shadow: 0 2px 2px rgb(40 15 0 / 45%);
-  animation: boot-rise 600ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.boot-msg {
-  margin-top: 10px;
-  min-height: 1.4em;
-  font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.78);
-}
-.boot-tag {
-  position: absolute;
-  bottom: max(28px, env(safe-area-inset-bottom));
-  font-size: 12.5px;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.62);
-  animation: boot-rise 600ms 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.boot-dot {
-  animation: boot-drop 760ms 120ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
-}
-.boot-tray {
-  transform-origin: 32px 51px;
-  animation: boot-land 760ms 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-/* A soft ring that breathes while data loads, so a slow network looks alive. */
-.boot-glow {
-  position: absolute;
-  inset: -18px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 65%);
-  animation: boot-breathe 1600ms 700ms ease-in-out infinite both;
-}
-.boot-pop {
-  transform-origin: 50% 80%;
-  animation: boot-land 760ms 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  filter: drop-shadow(0 10px 14px rgb(40 15 0 / 45%));
-}
-.in-app .boot-dot,
-.in-app .boot-tray,
-.in-app .boot-pop {
-  animation: none;
-}
-.in-app .boot-word {
-  animation-delay: 0ms;
-}
-@keyframes boot-drop {
-  0% {
-    transform: translateY(-16px);
-    opacity: 0;
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-@keyframes boot-land {
-  0% {
-    transform: scale(0.86);
-    opacity: 0;
-  }
-  45% {
-    transform: scale(1, 1);
-    opacity: 1;
-  }
-  58% {
-    transform: scale(1.05, 0.9);
-  }
-  78% {
-    transform: scale(0.98, 1.03);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-@keyframes boot-rise {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-@keyframes boot-breathe {
-  0%,
-  100% {
-    transform: scale(0.85);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 1;
   }
 }
 
@@ -519,18 +376,10 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton,
-  .boot-pop,
-  .boot-dot,
-  .boot-tray,
-  .boot-word,
-  .boot-tag,
-  .boot-glow,
-  .boot-out .boot-center,
-  .boot-out .boot-tag {
+  .skeleton {
     animation: none;
   }
-  .boot-out {
+  .brand-hold-out {
     animation: none;
     opacity: 0;
   }

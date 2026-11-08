@@ -26,6 +26,8 @@ export interface PhoneStatus {
   listening: boolean;
   /** Whether DockIn may post its own notifications (the "where did it go?" prompt). */
   notifications: NotifState;
+  /** Whether DockIn may read payment SMS directly (bank debits/credits). */
+  sms: NotifState;
   /** Payments waiting in the phone's inbox. */
   pending: number;
   /** Android version number, e.g. 34 for Android 14. */
@@ -129,6 +131,7 @@ interface DockInPlugin {
   openAppSettings(): Promise<void>;
   openNotificationSettings(): Promise<void>;
   requestNotifications(): Promise<{ notifications: NotifState }>;
+  requestSms(): Promise<{ sms: NotifState }>;
   testPrompt(): Promise<{ notifications: NotifState }>;
   pending(): Promise<{ notices: NativeNotice[] }>;
   ack(options: { ids: string[] }): Promise<void>;

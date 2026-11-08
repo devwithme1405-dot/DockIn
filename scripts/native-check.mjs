@@ -77,7 +77,7 @@ await page.addInitScript(
     const saved = sessionStorage.getItem("fake-phone");
     const phone = saved
       ? JSON.parse(saved)
-      : { listening: false, notifications: "prompt", inbox, calls: [], college: { camu: { connected: false }, lms: { connected: false } }, camuReady, lmsReady };
+      : { listening: false, notifications: "prompt", sms: "prompt", inbox, calls: [], college: { camu: { connected: false }, lms: { connected: false } }, camuReady, lmsReady };
     const save = () => sessionStorage.setItem("fake-phone", JSON.stringify(phone));
     const listeners = {};
     let nextId = 1;
@@ -97,6 +97,7 @@ await page.addInitScript(
       status: () => ({
         listening: phone.listening,
         notifications: phone.notifications,
+        sms: phone.sms ?? "prompt",
         pending: phone.inbox.length,
         sdk: 34,
         maker: "Pretend",
@@ -109,6 +110,10 @@ await page.addInitScript(
       requestNotifications: () => {
         phone.notifications = "granted";
         return { notifications: "granted" };
+      },
+      requestSms: () => {
+        phone.sms = "granted";
+        return { sms: "granted" };
       },
       testPrompt: () => ({ notifications: phone.notifications }),
       college: () => phone.college,
@@ -295,10 +300,23 @@ await step("coming back from Settings ticks the step without a refresh", async (
 });
 
 await step("Allow asks for notifications, and the card goes green", async () => {
-  await page.getByRole("button", { name: "Allow" }).click();
+  await page
+    .locator("li", { hasText: "Ask me right after I pay" })
+    .getByRole("button", { name: "Allow" })
+    .click();
   await waitFor("Reading your payments");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-setup-on.png`, fullPage: true });
+});
+
+await step("Allow turns on reading bank payment SMS", async () => {
+  await page
+    .locator("li", { hasText: "Read bank payment SMS" })
+    .getByRole("button", { name: "Allow" })
+    .click();
+  await waitFor("even when no notification shows");
+  const sms = await page.evaluate(() => window.__phone.get().sms);
+  if (sms !== "granted") throw new Error("SMS access was not granted");
 });
 
 await step("Money shows the bank's and GPay's copy as one payment, and money in apart", async () => {
