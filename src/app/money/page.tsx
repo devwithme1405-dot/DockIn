@@ -32,6 +32,7 @@ import { MoneyHero } from "@/components/MoneyHero";
 import { DetectedTray } from "@/components/DetectedTray";
 import { PhoneSetupNudge } from "@/components/PhoneSetup";
 import { UdhaarCard } from "@/components/Udhaar";
+import { Notebook, Segmented } from "@/components/Paper";
 
 export default function MoneyPage() {
   const profile = useLiveQuery(() => getProfile(), []);
@@ -45,6 +46,7 @@ export default function MoneyPage() {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [budgetText, setBudgetText] = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
+  const [view, setView] = useState<"overview" | "expenses" | "history">("overview");
 
   const list = useMemo(() => inMonth(all ?? [], month), [all, month]);
   const spent = sum(list);
@@ -114,8 +116,19 @@ export default function MoneyPage() {
                   </>
         }
       />
-      <div className="h-4" />
+      <Segmented
+        value={view}
+        onChange={setView}
+        options={[
+          ["overview", "Overview"],
+          ["expenses", "Expenses"],
+          ["history", "History"],
+        ]}
+        label="Money view"
+        className="mx-5 mt-1 mb-7"
+      />
 
+      {view === "overview" && (
       <MoneyHero
         label={isCurrent ? "Spent this month" : `Spent in ${monthLabel(month)}`}
         spent={spent}
@@ -129,7 +142,8 @@ export default function MoneyPage() {
           setBudgetOpen(true);
         }}
       />
-      {isCurrent && (
+      )}
+      {isCurrent && view !== "history" && (
         <div className="mt-4 px-5">
           <button
             onClick={() => setAdding(true)}
@@ -140,14 +154,19 @@ export default function MoneyPage() {
         </div>
       )}
 
-      <PhoneSetupNudge />
-      <DetectedTray />
+      {view === "overview" && (
+        <>
+          <PhoneSetupNudge />
+          <DetectedTray />
+        </>
+      )}
 
       {/* One surface, three numbers. Three different pastel panels made these
           look like three unrelated things; they are three views of the same
           spending, and the hero above is already carrying the colour. */}
+      {view === "overview" && (
       <section
-        className="mx-5 mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl lift"
+        className="mx-5 mt-4 grid grid-cols-3 divide-x divide-dashed divide-card-edge overflow-hidden rounded-2xl lift"
         aria-label="Quick numbers"
       >
         <Stat label="Today" value={fmtMoney(todaySpent)} />
@@ -158,8 +177,9 @@ export default function MoneyPage() {
           <Stat label="Avg / day" value={fmtMoney(Math.round(avg))} />
         )}
       </section>
+      )}
 
-      {paceNow && (
+      {view === "overview" && paceNow && (
         <p className="mx-5 mt-3 rounded-2xl bg-surface px-4 py-3 text-[13.5px] shadow-[0_0_0_1px_var(--line)]">
           {paceNow.diff === 0 ? (
             <>Exactly level with last month at this point.</>
@@ -175,9 +195,9 @@ export default function MoneyPage() {
         </p>
       )}
 
-      <UdhaarCard />
+      {view === "overview" && <UdhaarCard />}
 
-      {repeats.length > 0 && isCurrent && (
+      {view === "overview" && repeats.length > 0 && isCurrent && (
         <section className="mt-4" aria-label="Add again">
           <h2 className="mb-2 px-5 text-[13px] font-semibold tracking-wide text-muted uppercase">
             Add again
@@ -201,45 +221,36 @@ export default function MoneyPage() {
         </section>
       )}
 
-      {list.length >= 5 && (
-        <section className="mt-6 px-5" aria-label="Daily spending">
+      {view === "history" && list.length > 0 && (
+        <section className="mt-2 px-5" aria-label="Daily spending">
           <h2 className="mb-3 font-display text-[19px] font-extrabold tracking-[-0.02em]">Daily spending</h2>
           <DailyBars values={daily} month={month} today={today} />
         </section>
       )}
 
-      {allCats.length >= 2 && (
-          <section className="mt-6 px-5" aria-label="Where it went">
-            <h2 className="mb-3 font-display text-[19px] font-extrabold tracking-[-0.02em]">Where it went</h2>
-            <div className="lift rounded-3xl bg-surface p-4">
-              <ul className="space-y-3.5">
-                {cats.map((c) => (
-                  <li key={c.meta.id}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[17px] leading-none">{c.meta.emoji}</span>
-                      <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium">
-                        {c.meta.label}
-                      </span>
-                      <span className="text-[14.5px] font-semibold tabular-nums">{fmtMoney(c.total)}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-                        <span
-                          className="block h-full rounded-full bg-accent"
-                          style={{ width: `${Math.max(2, c.pct)}%` }}
-                        />
-                      </span>
-                      <span className="w-9 shrink-0 text-right text-[12px] text-muted tabular-nums">
-                        {Math.round(c.pct)}%
-                      </span>
-                    </div>
+      {view === "overview" && allCats.length >= 1 && (
+        <section className="mt-7" aria-label="Where it went">
+          <h2 className="mb-3 px-5 font-display text-[19px] font-extrabold tracking-[-0.02em]">Where it went</h2>
+          <Notebook className="mx-5 px-4 pb-4">
+            <div className="flex items-center gap-4">
+              <Donut parts={cats.map((c, i) => ({ value: c.total, color: SLICE[i % SLICE.length] }))} total={spent} />
+              <ul className="min-w-0 flex-1 space-y-2">
+                {cats.map((c, i) => (
+                  <li key={c.meta.id} className="flex items-center gap-2 text-[13px]">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ background: SLICE[i % SLICE.length] }} />
+                    <span className="min-w-0 flex-1 truncate font-semibold">
+                      {c.meta.emoji} {c.meta.label}
+                    </span>
+                    <span className="shrink-0 font-extrabold tnum">{Math.round(c.pct)}%</span>
                   </li>
                 ))}
               </ul>
             </div>
-          </section>
+          </Notebook>
+        </section>
       )}
 
+      {view === "expenses" && (
       <section className="mt-6" aria-label="Transactions">
         <h2 className="mb-3 px-5 font-display text-[19px] font-extrabold tracking-[-0.02em]">Transactions</h2>
         {list.length > 0 && (
@@ -296,8 +307,13 @@ export default function MoneyPage() {
           </div>
         )}
       </section>
+      )}
 
-      {cameIn.length > 0 && (
+      {view === "history" && list.length === 0 && cameIn.length === 0 && (
+        <p className="px-5 py-10 text-center text-[14px] text-muted">Nothing this month yet.</p>
+      )}
+
+      {view !== "expenses" && cameIn.length > 0 && (
         <section className="mt-6 px-5" aria-label="Money in">
           <h2 className="mb-3 font-display text-[19px] font-extrabold">Money in</h2>
           <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
@@ -432,3 +448,49 @@ function DailyBars({ values, month, today }: { values: number[]; month: string; 
     </div>
   );
 }
+
+/** Category colours for the donut: ink colours from the notebook, never a rainbow. */
+const SLICE = ["#6a3de8", "#f2871f", "#2e8a47", "#8f4a22", "#47708a", "#b23a5b", "#c9a13a"];
+
+/** Where the month's money went, as a ring of ink around the total. */
+function Donut({ parts, total }: { parts: { value: number; color: string }[]; total: number }) {
+  const size = 132;
+  const stroke = 18;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const sum = parts.reduce((n, p) => n + p.value, 0) || 1;
+  const lens = parts.map((p) => (p.value / sum) * c);
+  const starts = lens.map((_, i) => lens.slice(0, i).reduce((n, l) => n + l, 0));
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} style={{ stroke: "var(--groove)" }} />
+        {parts.map((p, i) => {
+          const len = lens[i];
+          const gap = parts.length > 1 ? 2 : 0;
+          return (
+            <circle
+              key={i}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={p.color}
+              strokeWidth={stroke}
+              strokeDasharray={`${Math.max(0, len - gap)} ${c}`}
+              strokeDashoffset={-starts[i]}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          );
+        })}
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div>
+          <p className="font-display text-[19px] leading-none font-extrabold tnum">{fmtMoney(total)}</p>
+          <p className="mt-1 text-[11px] font-bold text-muted">spent</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+

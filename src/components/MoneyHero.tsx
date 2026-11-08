@@ -27,7 +27,7 @@ export function MoneyHero({
   const shownSpent = useCountUp(spent);
 
   return (
-    <section className="notebook rings relative mx-5 mt-4" aria-label="Month summary">
+    <section className="notebook rings relative mx-5" aria-label="Month summary">
       <div className="relative px-5 pt-2 pb-5">
         <div className="flex items-start justify-between gap-3">
           <p className="text-[14px] font-bold text-muted">{label}</p>
