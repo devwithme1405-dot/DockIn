@@ -144,7 +144,7 @@ export default function TasksPage() {
           things; they are three readings of the same list, and the numbers
           themselves carry the colour that means something. */}
       <section
-        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl lift"
         aria-label="Summary"
       >
         <Stat label="Overdue" value={stats.overdue} ink={stats.overdue ? "text-danger" : undefined} />
@@ -213,7 +213,7 @@ export default function TasksPage() {
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-1.5 px-5" role="tablist">
+      <div className="mt-4 grid grid-cols-3 gap-2.5 px-5" role="tablist">
         {([
           ["todo", "To do", stats.pending + sharedOpen.length],
           ["exams", "Exams", exams.length],
@@ -225,8 +225,8 @@ export default function TasksPage() {
             aria-selected={tab === id}
             onClick={() => setTab(id)}
             className={cx(
-              "h-10 rounded-xl text-[13.5px] font-medium transition",
-              tab === id ? "bg-text text-bg" : "bg-surface-2 text-text",
+              "h-11 rounded-full text-[14px]",
+              tab === id ? "btn-leather" : "btn-paper",
             )}
           >
             {label} <span className="tabular-nums opacity-70">{n}</span>
@@ -241,7 +241,7 @@ export default function TasksPage() {
               <GraduationCap size={14} /> From your LMS
               <span className="font-normal tabular-nums">{lmsPending.length}</span>
             </h2>
-            <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
               {lmsPending.map((t) => (
                 <TaskRow
                   key={t.id}
@@ -264,7 +264,7 @@ export default function TasksPage() {
                   <Share2 size={14} /> Shared with you
                   <span className="font-normal tabular-nums">{sharedOpen.length}</span>
                 </h2>
-                <div className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+                <div className="divide-y divide-line overflow-hidden rounded-2xl lift">
                   {sharedOpen.map((s) => (
                     <ShareRow
                       key={s.id}
@@ -299,7 +299,7 @@ export default function TasksPage() {
                     {BUCKET_LABEL[g.bucket]}
                     <span className="font-normal tabular-nums">{g.items.length}</span>
                   </h2>
-                  <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+                  <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
                     {g.items.map((t) => (
                       <TaskRow
                         key={t.id}
@@ -343,7 +343,7 @@ export default function TasksPage() {
             <EmptyState title="Nothing finished yet" body="Completed tasks show up here." />
           ) : (
             <div className="px-5">
-              <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
                 {doneList.map((t) => (
                   <TaskRow
                     key={t.id}
@@ -361,7 +361,7 @@ export default function TasksPage() {
       <button
         onClick={() => setAdding(true)}
         aria-label="Add task"
-        className="no-rise fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_12px_30px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] transition active:scale-95"
+        className="btn-leather no-rise fixed! right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl"
       >
         <Plus size={26} />
       </button>

@@ -76,7 +76,7 @@ export function CamuHistorySheet({
           {groups.map((g) => (
             <section key={g.month}>
               <h3 className="mb-1.5 text-[12px] font-semibold tracking-wide text-muted uppercase">{g.month}</h3>
-              <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
                 {g.items.map((c) => (
                   <li key={`${c.date}-${c.from}`} className="flex items-center gap-3 px-3.5 py-2.5">
                     <span

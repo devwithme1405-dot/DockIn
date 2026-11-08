@@ -118,7 +118,7 @@ export default function TimetablePage() {
         <button
           aria-label="Previous week"
           onClick={() => setDate(addDays(weekStart, -7))}
-          className="grid size-10 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)]"
+          className="btn-paper lip-sm grid size-10 place-items-center rounded-full"
         >
           <ChevronLeft size={18} />
         </button>
@@ -128,7 +128,7 @@ export default function TimetablePage() {
         <button
           aria-label="Next week"
           onClick={() => setDate(addDays(weekStart, 7))}
-          className="grid size-10 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)]"
+          className="btn-paper lip-sm grid size-10 place-items-center rounded-full"
         >
           <ChevronRight size={18} />
         </button>
@@ -143,16 +143,16 @@ export default function TimetablePage() {
               key={d}
               onClick={() => setDate(d)}
               className={cx(
-                "flex flex-col items-center gap-1 rounded-2xl py-2.5 transition",
-                on ? "bg-accent text-on-accent" : "bg-surface text-text shadow-[0_0_0_1px_var(--line)]",
+                "lip-sm flex flex-col items-center gap-1 rounded-2xl py-2.5",
+                on ? "btn-leather" : "btn-paper",
               )}
             >
-              <span className={cx("text-[11px] font-medium", on ? "text-on-accent/80" : "text-muted")}>
+              <span className={cx("text-[11px] font-medium", on ? "text-on-ink/80" : "text-muted")}>
                 {WEEKDAYS_SHORT[weekdayOf(d)]}
               </span>
-              <span className="font-display text-[16px] font-semibold tnum">{Number(d.split("-")[2])}</span>
+              <span className="font-display text-[16px] font-extrabold tnum">{Number(d.split("-")[2])}</span>
               {d === today && (
-                <span className={cx("size-1 rounded-full", on ? "bg-white" : "bg-accent")} />
+                <span className={cx("size-1 rounded-full", on ? "bg-orange" : "bg-accent")} />
               )}
             </button>
           );
@@ -161,7 +161,7 @@ export default function TimetablePage() {
 
       {/* Day heading */}
       <div className="mt-6 flex items-baseline justify-between px-5">
-        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em]">{fullDay(date)}</h2>
+        <h2 className="font-display text-[19px] font-extrabold tracking-[-0.02em]">{fullDay(date)}</h2>
         <span className="text-[13px] text-muted">
           {rows.length} {rows.length === 1 ? "class" : "classes"}
         </span>
@@ -190,8 +190,8 @@ export default function TimetablePage() {
                   {r.status ? (
                     <span
                       className={cx(
-                        "shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-semibold",
-                        r.status === "present" ? "bg-safe-soft text-safe" : "bg-danger-soft text-danger",
+                        "stamp shrink-0",
+                        r.status === "present" ? "text-safe" : "text-danger",
                       )}
                     >
                       {r.status === "present" ? "Present" : "Absent"}

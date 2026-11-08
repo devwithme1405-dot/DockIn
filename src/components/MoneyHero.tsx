@@ -6,7 +6,7 @@ import { fmtMoney } from "@/lib/money";
 import { useCountUp } from "./ui";
 
 /**
- * The month at a glance: a violet card with what's been spent, the budget it is
+ * The month at a glance: a notebook card with what's been spent, the budget it is
  * measured against, and — in plain words next to the bar — how much is safe to
  * spend before it runs out. The state is always spelled out, never colour alone.
  */
@@ -27,47 +27,47 @@ export function MoneyHero({
   const shownSpent = useCountUp(spent);
 
   return (
-    <section className="ink-card hero-sheen relative mx-5 overflow-hidden rounded-[22px]" aria-label="Month summary">
-      <div className="relative p-5">
+    <section className="notebook rings relative mx-5 mt-4" aria-label="Month summary">
+      <div className="relative px-5 pt-2 pb-5">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[13px] font-medium text-white/80">{label}</p>
+          <p className="text-[14px] font-bold text-muted">{label}</p>
           {status && (
             <button
               onClick={onEditBudget}
               aria-label="Change budget"
-              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-medium"
+              className="btn-paper lip-sm inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12px]"
             >
               <Pencil size={12} /> Budget
             </button>
           )}
         </div>
 
-        <p className="font-display mt-1.5 text-[34px] leading-none font-bold tnum">
+        <p className="font-display mt-1.5 text-[40px] leading-none font-extrabold tracking-[-0.04em] tnum">
           {fmtMoney(Math.round(shownSpent))}
-          {status && <span className="text-[18px] font-semibold text-white/70"> / {fmtMoney(status.budget)}</span>}
+          {status && <span className="text-[18px] font-bold text-muted"> / {fmtMoney(status.budget)}</span>}
         </p>
 
         {status ? (
           <div className="mt-4">
-            <div className="h-2.5 overflow-hidden rounded-full bg-white/20">
+            <div className="groove h-2.5 overflow-hidden rounded-full">
               <div
-                className="h-full rounded-full bg-white transition-[width] duration-500"
+                className="h-full rounded-full bg-[linear-gradient(90deg,#a48cf2,#6a3de8)] transition-[width] duration-500"
                 style={{ width: `${used * 100}%` }}
               />
             </div>
-            <p className="mt-2.5 text-[13.5px] font-medium text-white/90 tnum">
+            <p className="mt-2.5 text-[13.5px] font-bold tnum">
               {status.left >= 0
                 ? `${fmtMoney(status.left)} safe to spend`
                 : `${fmtMoney(-status.left)} over budget`}
               {status.daysLeft > 0 && status.left >= 0 && status.perDay > 0 && (
-                <span className="text-white/65"> · about {fmtMoney(Math.floor(status.perDay))}/day left</span>
+                <span className="font-semibold text-muted"> · about {fmtMoney(Math.floor(status.perDay))}/day left</span>
               )}
             </p>
           </div>
         ) : (
           <button
             onClick={onSetBudget}
-            className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3.5 text-[13px] font-medium"
+            className="btn-paper lip-sm mt-4 inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px]"
           >
             <Wallet size={14} /> Set a monthly budget
           </button>

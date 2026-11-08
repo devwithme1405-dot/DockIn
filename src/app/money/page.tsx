@@ -96,7 +96,7 @@ export default function MoneyPage() {
           <button
             aria-label="Previous month"
             onClick={() => setMonth(shiftMonth(month, -1))}
-            className="grid size-10 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)]"
+            className="btn-paper lip-sm grid size-10 place-items-center rounded-full"
           >
             <ChevronLeft size={18} />
           </button>
@@ -107,7 +107,7 @@ export default function MoneyPage() {
             aria-label="Next month"
             disabled={isCurrent}
             onClick={() => setMonth(shiftMonth(month, 1))}
-            className="grid size-10 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)] disabled:opacity-35"
+            className="btn-paper lip-sm grid size-10 place-items-center rounded-full disabled:opacity-35"
           >
             <ChevronRight size={18} />
           </button>
@@ -129,6 +129,16 @@ export default function MoneyPage() {
           setBudgetOpen(true);
         }}
       />
+      {isCurrent && (
+        <div className="mt-4 px-5">
+          <button
+            onClick={() => setAdding(true)}
+            className="btn-leather flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl text-[15.5px]"
+          >
+            <Plus size={19} strokeWidth={2.75} /> Add Expense
+          </button>
+        </div>
+      )}
 
       <PhoneSetupNudge />
       <DetectedTray />
@@ -137,7 +147,7 @@ export default function MoneyPage() {
           look like three unrelated things; they are three views of the same
           spending, and the hero above is already carrying the colour. */}
       <section
-        className="mx-5 mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]"
+        className="mx-5 mt-3 grid grid-cols-3 divide-x divide-line overflow-hidden rounded-2xl lift"
         aria-label="Quick numbers"
       >
         <Stat label="Today" value={fmtMoney(todaySpent)} />
@@ -193,14 +203,14 @@ export default function MoneyPage() {
 
       {list.length >= 5 && (
         <section className="mt-6 px-5" aria-label="Daily spending">
-          <h2 className="mb-3 font-display text-[17px] font-bold tracking-[-0.02em]">Daily spending</h2>
+          <h2 className="mb-3 font-display text-[19px] font-extrabold tracking-[-0.02em]">Daily spending</h2>
           <DailyBars values={daily} month={month} today={today} />
         </section>
       )}
 
       {allCats.length >= 2 && (
           <section className="mt-6 px-5" aria-label="Where it went">
-            <h2 className="mb-3 font-display text-[17px] font-bold tracking-[-0.02em]">Where it went</h2>
+            <h2 className="mb-3 font-display text-[19px] font-extrabold tracking-[-0.02em]">Where it went</h2>
             <div className="lift rounded-3xl bg-surface p-4">
               <ul className="space-y-3.5">
                 {cats.map((c) => (
@@ -231,7 +241,7 @@ export default function MoneyPage() {
       )}
 
       <section className="mt-6" aria-label="Transactions">
-        <h2 className="mb-3 px-5 font-display text-[17px] font-bold tracking-[-0.02em]">Transactions</h2>
+        <h2 className="mb-3 px-5 font-display text-[19px] font-extrabold tracking-[-0.02em]">Transactions</h2>
         {list.length > 0 && (
           <div className="mb-3 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
             <Chip active={catFilter === "all"} onClick={() => setCatFilter("all")}>All</Chip>
@@ -246,7 +256,7 @@ export default function MoneyPage() {
           <EmptyState
             title={isCurrent ? "No expenses yet" : "Nothing spent this month"}
             body={isCurrent ? "Add your first expense, chai counts too." : undefined}
-            action={isCurrent && <Button onClick={() => setAdding(true)}>Add expense</Button>}
+            
           />
         ) : (
           <div className="space-y-4 px-5">
@@ -259,7 +269,7 @@ export default function MoneyPage() {
                   </span>
                   <span className="tabular-nums">{fmtMoney(g.total)}</span>
                 </div>
-                <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+                <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
                   {g.items.map((e) => {
                     const meta = metaFor(e.category, catList ?? []);
                     return (
@@ -289,8 +299,8 @@ export default function MoneyPage() {
 
       {cameIn.length > 0 && (
         <section className="mt-6 px-5" aria-label="Money in">
-          <h2 className="mb-3 text-[17px] font-semibold">Money in</h2>
-          <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+          <h2 className="mb-3 font-display text-[19px] font-extrabold">Money in</h2>
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
             {cameIn.map((i) => (
               <li key={i.id} className="flex items-center gap-3 px-3.5 py-3">
                 <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-safe-soft text-safe">
@@ -317,13 +327,7 @@ export default function MoneyPage() {
         </section>
       )}
 
-      <button
-        onClick={() => setAdding(true)}
-        aria-label="Add expense"
-        className="no-rise fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_12px_30px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] transition active:scale-95"
-      >
-        <Plus size={26} />
-      </button>
+
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="Add expense">
         <ExpenseForm onDone={() => setAdding(false)} />
@@ -390,7 +394,7 @@ function ordinal(n: number): string {
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
     <div className="min-w-0 px-3 py-3 text-center">
-      <p className={cx("truncate text-[17px] font-semibold tabular-nums", tone)}>{value}</p>
+      <p className={cx("truncate font-display text-[19px] font-extrabold tabular-nums", tone)}>{value}</p>
       <p className="mt-0.5 text-[12px] text-muted">{label}</p>
     </div>
   );
