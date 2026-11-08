@@ -38,12 +38,12 @@ export const ACADEMIC_HOLIDAYS: Holiday[] = [
 ];
 
 /**
- * The last day classes are actually held in the odd semester (Sem 3, 2026–27).
- * After this, end-term exams begin and nothing new is taught, so projecting a
- * trip's cost past it would count classes that never happen. This is an assumed
- * date — adjust it to the one on the university's academic calendar.
+ * The last day classes are actually held in the odd semester (Sem 3, 2026–27),
+ * from the university's academic calendar. After this, end-term exams begin and
+ * nothing new is taught, so projecting a trip's cost past it would count classes
+ * that never happen.
  */
-export const LAST_TEACHING_DAY = "2026-12-11";
+export const LAST_TEACHING_DAY = "2026-12-03";
 
 const BY_DATE = new Map(ACADEMIC_HOLIDAYS.map((h) => [h.date, h]));
 

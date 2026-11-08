@@ -398,7 +398,7 @@ export function BunkCalculator({
 
             {plan.pastSemEnd && (
               <p className="mt-3 text-[12px] text-muted">
-                Only counted up to the last teaching day ({fmtTripDay(semEnd)}, assumed) — exams start after that.
+                Only counted up to the last teaching day ({fmtTripDay(semEnd)}) — exams start after that.
               </p>
             )}
 

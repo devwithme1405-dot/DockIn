@@ -113,7 +113,7 @@ describe("the day's classes", () => {
 });
 
 describe("projecting the timetable to the last teaching day", () => {
-  const SEM_END = "2026-12-11";
+  const SEM_END = "2026-12-03";
 
   it("knows the last date Camu has published", () => {
     expect(lastPublishedDate(CAMU)).toBe("2026-11-05");
