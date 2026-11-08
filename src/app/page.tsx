@@ -4,54 +4,38 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  ArrowLeftRight,
   Bell,
+  CalendarCheck,
   CalendarDays,
   Check,
-  ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Clock,
   GraduationCap,
+  Layers,
   Minus,
   PartyPopper,
+  Plus,
+  SquareCheckBig,
   TriangleAlert,
+  Wallet,
   X,
 } from "lucide-react";
 import { StickyBar } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
-import { appliesOn, ensureSessionsSince, getProfile, setSessionStatus, setTaskDone } from "@/lib/repo";
-import { useEvents, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
-import { holidayLastDay, holidayOn, nextClass, useAttendanceData, type ViewSession } from "@/lib/college";
+import { ensureSessionsSince, getProfile, setSessionStatus, setTaskDone } from "@/lib/repo";
+import { useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { holidayLastDay, holidayOn, useAttendanceData, type ViewSession } from "@/lib/college";
 import { CamuStatus } from "@/components/College";
 import { eventsOn, holidayLength } from "@/lib/calendar";
-import { KIND_BY_ID, bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
-import {
-  addDays,
-  fmtDay,
-  fmtDuration,
-  fmtTime,
-  greetingFor,
-  nowHM,
-  relativeDayLabel,
-  toDateStr,
-  toMinutes,
-  weekdayOf,
-  WEEKDAYS_LONG,
-} from "@/lib/dates";
+import { bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
+import { budgetStatus, fmtMoney, monthKey, sum } from "@/lib/money";
+import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
 import { describe, fmtPct, weekChange } from "@/lib/attendance";
-import type { AttendanceSummary, Session, SessionStatus, Slot, Subject, Task } from "@/lib/types";
-import type { CamuState } from "@/lib/native";
+import type { AttendanceState, AttendanceSummary, Session, SessionStatus, Subject, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useCountUp, useToast } from "@/components/ui";
-import {
-  BookTile,
-  Cap3D,
-  InkBar,
-  Notebook,
-  PaperCheck,
-  PaperIconButton,
-  PenArt,
-  SectionTitle,
-  TrendPill,
-} from "@/components/Paper";
+import { BookTile, Cap3D, InkBar, Notebook, PaperCheck, PaperIconButton, SectionTitle, TrendPill } from "@/components/Paper";
 
 function useNow(): { today: string; hm: string } {
   const [now, setNow] = useState(() => ({ today: toDateStr(), hm: nowHM() }));
@@ -62,42 +46,32 @@ function useNow(): { today: string; hm: string } {
   return now;
 }
 
-/** "Database Management Systems ( P-LA-203 )" → "Database Management Systems". */
-function cleanTitle(name: string): string {
-  return name.replace(/\s*\(\s*[^)]*\)?\s*$/, "").trim();
-}
-
 /** "9:00 am" → "9:00 AM", the way it is written on a timetable. */
 const clock = (t: string) => fmtTime(t).toUpperCase();
 
-interface NextUp {
-  label: string;
-  title: string;
-  when: string;
-  room?: string;
-  badge?: string;
-}
+/** Over budget is red, close to it amber, otherwise the calm green of money in. */
+const MONEY_TONE: Record<AttendanceState | "safe" | "warn" | "danger", string> = {
+  none: "text-text",
+  safe: "text-safe",
+  warn: "text-warn",
+  danger: "text-danger",
+};
 
 export default function TodayPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { today, hm } = useNow();
-  const [picked, setPicked] = useState<string | null>(null);
   const [bell, setBell] = useState(false);
-  const date = picked ?? today;
   const target = profile?.target ?? 75;
 
   const { data, camu } = useAttendanceData(target);
   const slots = useSlots();
   const tasks = useTasks();
   const events = useEvents();
-  const localDay = useSessionsOn(date);
+  const expenses = useExpenses();
   const localToday = useSessionsOn(today);
-  // With Camu connected the day comes from Camu's timetable and record instead.
-  const sessions: ViewSession[] | undefined = camu ? data?.sessions.filter((s) => s.date === date) : localDay;
   const todaySessions: ViewSession[] | undefined = camu ? data?.sessions.filter((s) => s.date === today) : localToday;
 
-  // Create the classes of every day since the user joined (max 30 days back),
-  // so missed days show up as "not marked" and can be caught up on.
+  // Keep the record of past days complete, so missed days can be caught up on.
   const joined = profile ? toDateStr(new Date(profile.createdAt)) : null;
   useEffect(() => {
     if (!joined) return;
@@ -107,12 +81,11 @@ export default function TodayPage() {
 
   const subjectById = useMemo(() => new Map(data?.subjects.map((s) => [s.id, s]) ?? []), [data]);
 
-  // A day off is a fact about the day, not the absence of one.
   const dayOff = useMemo(() => {
-    const h = camu ? holidayOn(camu, date) : null;
+    const h = camu ? holidayOn(camu, today) : null;
     if (h) return [{ id: `camu-${h.start}`, title: h.title, kind: "holiday" as const, date: h.start, endDate: holidayLastDay(h), note: "", createdAt: 0, updatedAt: 0 }];
-    return eventsOn(events ?? [], date).holidays;
-  }, [events, date, camu]);
+    return eventsOn(events ?? [], today).holidays;
+  }, [events, today, camu]);
 
   const work = useMemo(() => {
     const pending = (tasks ?? []).filter((t) => !t.done).sort(compareTasks);
@@ -120,10 +93,11 @@ export default function TodayPage() {
       const b = bucketOf(t, today);
       return b === "overdue" || b === "today" || b === "tomorrow";
     });
-    const later = pending.filter((t) => t.dueDate && daysBetween(today, t.dueDate) > 1 && daysBetween(today, t.dueDate) <= 7);
+    const dueToday = pending.filter((t) => bucketOf(t, today) === "today").length;
     const overdue = pending.filter((t) => bucketOf(t, today) === "overdue").length;
+    const totalDue = pending.filter((t) => t.dueDate).length;
     const exam = pending.filter((t) => t.kind === "exam" && t.dueDate && t.dueDate >= today)[0];
-    return { soon, later, overdue, exam };
+    return { soon, dueToday, overdue, totalDue, exam };
   }, [tasks, today]);
 
   const attention = useMemo(
@@ -144,7 +118,26 @@ export default function TodayPage() {
 
   const trend = useMemo(() => (data ? weekChange(data.sessions, data.overall, today) : null), [data, today]);
 
-  const next = findNext({ todaySessions, hm, subjectById, camu, today, slots: slots ?? [] });
+  // Today's classes, for the "Today's Classes" card and the schedule.
+  const classes = useMemo(
+    () =>
+      (todaySessions ?? [])
+        .filter((s) => s.status !== "cancelled" && s.status !== "holiday")
+        .sort((a, b) => a.start.localeCompare(b.start)),
+    [todaySessions],
+  );
+
+  // Money: today's spend (with a nudge vs yesterday) and the month against budget.
+  const money = useMemo(() => {
+    const all = expenses ?? [];
+    const todaySpend = sum(all.filter((e) => e.date === today));
+    const yday = sum(all.filter((e) => e.date === addDays(today, -1)));
+    const monthSpent = sum(all.filter((e) => monthKey(e.date) === monthKey(today)));
+    const budget = profile?.budget ?? 0;
+    const status = budget > 0 ? budgetStatus(budget, monthSpent, monthKey(today), today) : null;
+    const trendPct = yday > 0 ? Math.round(((todaySpend - yday) / yday) * 100) : null;
+    return { todaySpend, monthSpent, budget, status, trendPct };
+  }, [expenses, today, profile?.budget]);
 
   if (!profile || !data) return <TodaySkeleton />;
 
@@ -155,6 +148,7 @@ export default function TodayPage() {
     unmarkedPast.count > 0 ||
     (!!work.exam?.dueDate && daysBetween(today, work.exam.dueDate) <= 3);
   const greeting = greetingFor().replace(/\b\w/g, (c) => c.toUpperCase());
+  const range = classes.length ? `${clock(classes[0].start)} – ${clock(classes[classes.length - 1].end)}` : "No classes";
 
   return (
     <div className="page-wash stagger">
@@ -195,37 +189,76 @@ export default function TodayPage() {
       <AttendanceCard overall={data.overall} trend={trend} target={target} />
       {camu && <CamuStatus camu={camu} className="mt-3.5" />}
 
-      <NextClassCard next={next} />
+      {/* Two by two: the day's facts, each a tap into its screen. */}
+      <div className="mt-6 grid grid-cols-2 gap-3 px-5">
+        <StatCard
+          href="/timetable"
+          tint="bg-accent-soft"
+          icon={<CalendarCheck size={20} className="text-accent" strokeWidth={2.3} />}
+          label="Today's Classes"
+          value={`${classes.length} ${classes.length === 1 ? "Class" : "Classes"}`}
+          foot={
+            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-muted tnum">
+              <Clock size={12} /> {range}
+            </span>
+          }
+        />
+        <StatCard
+          href="/tasks"
+          icon={<Layers size={20} className="text-accent" strokeWidth={2.3} />}
+          label="Next Exam"
+          value={work.exam ? work.exam.title : "None"}
+          valueSmall
+          foot={
+            work.exam?.dueDate ? (
+              <span className="text-[12px] font-semibold text-muted tnum">
+                {fmtDay(work.exam.dueDate)}{" "}
+                <span className="font-extrabold text-accent">({countdownText(daysBetween(today, work.exam.dueDate))})</span>
+              </span>
+            ) : (
+              <span className="text-[12px] font-semibold text-muted">Nothing scheduled</span>
+            )
+          }
+        />
+        <StatCard
+          href="/money"
+          tint="bg-danger-soft"
+          icon={<Wallet size={20} className="text-accent" strokeWidth={2.3} />}
+          label="Today's Spend"
+          value={fmtMoney(money.todaySpend)}
+          foot={
+            money.trendPct !== null && money.trendPct !== 0 ? <TrendPill delta={-money.trendPct} /> : <span className="text-[12px] text-muted">Tracked here</span>
+          }
+        />
+        <StatCard
+          href="/money"
+          icon={<CalendarCheck size={20} className="text-accent" strokeWidth={2.3} />}
+          label="This Month"
+          value={
+            <>
+              <span className={money.status ? MONEY_TONE[money.status.state] : "text-safe"}>{fmtMoney(money.monthSpent)}</span>
+              {money.budget > 0 && <span className="text-[15px] font-bold text-muted"> / {fmtMoney(money.budget)}</span>}
+            </>
+          }
+          valueSmall
+          foot={
+            money.status ? (
+              <span className="flex items-center gap-2">
+                <InkBar pct={money.status.used * 100} state={money.status.state} className="h-1.5 flex-1" />
+                <span className="shrink-0 text-[12px] font-extrabold tnum">{Math.round(money.status.used * 100)}%</span>
+              </span>
+            ) : (
+              <span className="text-[12px] text-muted">Set a budget</span>
+            )
+          }
+        />
+      </div>
 
-      <TasksCard soon={work.soon} later={work.later} today={today} />
-
-      <section className="mt-9" aria-label="Classes">
-        <div className="mb-3 flex items-center justify-between gap-2 px-5">
-          <h2 className="font-display min-w-0 truncate text-[19px] font-extrabold tracking-[-0.02em]">
-            {date === today ? "Today's Classes" : relativeDayLabel(date, today)}
-          </h2>
-          <div className="flex shrink-0 items-center gap-2">
-            {date !== today && (
-              <button onClick={() => setPicked(null)} className="btn-paper lip-sm h-8 rounded-full px-3 text-[12.5px]">
-                Today
-              </button>
-            )}
-            <button
-              aria-label="Previous day"
-              onClick={() => setPicked(addDays(date, -1))}
-              className="btn-paper lip-sm grid size-8 place-items-center rounded-full"
-            >
-              <ChevronLeft size={17} strokeWidth={2.5} />
-            </button>
-            <button
-              aria-label="Next day"
-              onClick={() => setPicked(addDays(date, 1))}
-              className="btn-paper lip-sm grid size-8 place-items-center rounded-full"
-            >
-              <ChevronRight size={17} strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
+      {/* The day, as a timeline. */}
+      <section className="mt-8" aria-label="Today's schedule">
+        <SectionTitle href="/timetable" link="View Timetable">
+          Today&apos;s Schedule
+        </SectionTitle>
 
         {dayOff.length > 0 && (
           <div className="mx-5 mb-3 flex items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-violet/40 bg-violet-soft px-4 py-3">
@@ -239,9 +272,9 @@ export default function TodayPage() {
           </div>
         )}
 
-        {sessions === undefined ? null : sessions.length === 0 ? (
+        {todaySessions === undefined ? null : classes.length === 0 ? (
           <Notebook rings={false} className="mx-5 px-5 py-6 text-center">
-            <p className="font-bold">{camu || (slots?.length ?? 0) > 0 ? "No classes this day" : "No timetable yet"}</p>
+            <p className="font-bold">{camu || (slots?.length ?? 0) > 0 ? "No classes today" : "No timetable yet"}</p>
             <p className="mt-1 text-[13.5px] text-muted">
               {camu
                 ? dayOff.length
@@ -258,20 +291,56 @@ export default function TodayPage() {
             )}
           </Notebook>
         ) : (
-          <Notebook rings={false} className="margin-rule mx-5 overflow-hidden" label={`Classes ${relativeDayLabel(date, today)}`}>
-            <ul>
-              {sessions.map((s) => {
-                const live = date === today && toMinutes(s.start) <= toMinutes(hm) && toMinutes(hm) < toMinutes(s.end);
-                const past = date < today || (date === today && toMinutes(s.end) <= toMinutes(hm));
-                return s.camu ? (
-                  <CamuClassRow key={s.id} session={s} subject={subjectById.get(s.subjectId)} live={live} past={past} />
-                ) : (
-                  <ClassRow key={s.id} session={s} subject={subjectById.get(s.subjectId)} live={live} />
-                );
-              })}
-            </ul>
-          </Notebook>
+          <div className="mx-5">
+            <ol className="relative ml-1.5 border-l-2 border-dashed border-card-edge pl-5">
+              {classes.map((s) => (
+                <ScheduleRow
+                  key={s.id}
+                  session={s}
+                  subject={subjectById.get(s.subjectId)}
+                  camu={!!camu}
+                  live={toMinutes(s.start) <= toMinutes(hm) && toMinutes(hm) < toMinutes(s.end)}
+                  past={toMinutes(s.end) <= toMinutes(hm)}
+                />
+              ))}
+            </ol>
+          </div>
         )}
+      </section>
+
+      {/* Tasks and the quick ways in, side by side like the desk. */}
+      <section className="mt-8 grid grid-cols-2 gap-3 px-5" aria-label="Tasks and actions">
+        <div>
+          <h2 className="font-display mb-2.5 text-[16px] font-extrabold tracking-[-0.02em]">
+            Today&apos;s Tasks {work.soon.length > 0 && <span className="text-muted">({work.soon.length})</span>}
+          </h2>
+          <Notebook rings={false} className="overflow-hidden">
+            {work.soon.length === 0 ? (
+              <div className="px-3.5 py-5 text-center">
+                <p className="text-[13.5px] font-bold">Nothing due</p>
+                <Link href="/tasks?new=1" className="btn-leather mt-3 inline-flex h-9 items-center rounded-xl px-3.5 text-[12.5px]">
+                  Add a task
+                </Link>
+              </div>
+            ) : (
+              <ul>
+                {work.soon.slice(0, 3).map((t) => (
+                  <TaskLine key={t.id} task={t} today={today} />
+                ))}
+              </ul>
+            )}
+          </Notebook>
+        </div>
+
+        <div>
+          <h2 className="font-display mb-2.5 text-[16px] font-extrabold tracking-[-0.02em]">Quick Actions</h2>
+          <div className="grid grid-cols-2 gap-2.5">
+            <QuickAction href="/add" icon={<Plus size={18} strokeWidth={2.75} />} label="Add Expense" />
+            <QuickAction href="/money#dues" icon={<ArrowLeftRight size={18} strokeWidth={2.5} />} label="Lena-Dena" />
+            <QuickAction href="/tasks?new=1" icon={<SquareCheckBig size={18} strokeWidth={2.5} />} label="Add Task" />
+            <QuickAction href="/timetable" icon={<CalendarDays size={18} strokeWidth={2.5} />} label="Timetable" />
+          </div>
+        </div>
       </section>
 
       <Sheet open={bell} onClose={() => setBell(false)} title="Updates">
@@ -281,10 +350,6 @@ export default function TodayPage() {
           exam={work.exam}
           today={today}
           unmarked={unmarkedPast}
-          onUnmarked={(d) => {
-            setPicked(d);
-            setBell(false);
-          }}
           onClose={() => setBell(false)}
         />
       </Sheet>
@@ -292,79 +357,9 @@ export default function TodayPage() {
   );
 }
 
-/** What is on now, or next: today first, then the coming week. */
-function findNext({
-  todaySessions,
-  hm,
-  subjectById,
-  camu,
-  today,
-  slots,
-}: {
-  todaySessions: ViewSession[] | undefined;
-  hm: string;
-  subjectById: Map<string, Subject>;
-  camu: CamuState | null;
-  today: string;
-  slots: Slot[];
-}): NextUp | null {
-  const now = toMinutes(hm);
-  const list = (todaySessions ?? [])
-    .filter((s) => s.status !== "cancelled" && s.status !== "holiday")
-    .sort((a, b) => a.start.localeCompare(b.start));
-  const nameOf = (s: Session) => subjectById.get(s.subjectId)?.name ?? "Class";
-  const ongoing = list.find((s) => toMinutes(s.start) <= now && now < toMinutes(s.end));
-  if (ongoing)
-    return {
-      label: "Happening now",
-      title: nameOf(ongoing),
-      when: `Till ${clock(ongoing.end)}`,
-      room: (ongoing as ViewSession).room,
-      badge: `${fmtDuration(toMinutes(ongoing.end) - now)} left`,
-    };
-  const later = list.find((s) => toMinutes(s.start) > now);
-  if (later)
-    return {
-      label: "Next Class",
-      title: nameOf(later),
-      when: clock(later.start),
-      room: (later as ViewSession).room,
-      badge: `in ${fmtDuration(toMinutes(later.start) - now)}`,
-    };
-  const dayWord = (d: string) => (d === addDays(today, 1) ? "Tomorrow" : WEEKDAYS_LONG[weekdayOf(d)]);
-  if (camu) {
-    const n = nextClass(camu, today, hm);
-    if (!n) return null;
-    return { label: "Next Class", title: cleanTitle(n.name), when: `${dayWord(n.date)}, ${clock(n.from)}`, room: n.room };
-  }
-  for (let i = 1; i <= 7; i++) {
-    const d = addDays(today, i);
-    const wd = weekdayOf(d);
-    const first = slots
-      .filter((s) => s.weekday === wd && appliesOn(s, d))
-      .sort((a, b) => a.start.localeCompare(b.start))[0];
-    if (first)
-      return {
-        label: "Next Class",
-        title: subjectById.get(first.subjectId)?.name ?? "Class",
-        when: `${dayWord(d)}, ${clock(first.start)}`,
-        room: first.room,
-      };
-  }
-  return null;
-}
-
 // ---------- the attendance card ----------
 
-function AttendanceCard({
-  overall,
-  trend,
-  target,
-}: {
-  overall: AttendanceSummary;
-  trend: number | null;
-  target: number;
-}) {
+function AttendanceCard({ overall, trend, target }: { overall: AttendanceSummary; trend: number | null; target: number }) {
   const shown = useCountUp(overall.pct ?? 0, 900);
   const tone = overall.state === "danger" ? "text-danger" : overall.state === "warn" ? "text-warn" : "text-muted";
   return (
@@ -394,78 +389,160 @@ function AttendanceCard({
   );
 }
 
-// ---------- next class ----------
+// ---------- the 2x2 cards ----------
 
-function NextClassCard({ next }: { next: NextUp | null }) {
+function StatCard({
+  href,
+  icon,
+  label,
+  value,
+  foot,
+  tint,
+  valueSmall,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  foot: React.ReactNode;
+  tint?: string;
+  valueSmall?: boolean;
+}) {
   return (
-    <Link href="/timetable" className="mx-5 mt-6 block transition active:scale-[0.99]" aria-label="Timetable">
-      <Notebook rings={false} className="flex items-center gap-3.5 p-4">
-        <BookTile size={54} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className={cx("text-[13px] font-bold", next?.label === "Happening now" ? "text-accent" : "text-muted")}>
-              {next ? next.label : "Next Class"}
-            </p>
-            {next?.badge && (
-              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent tnum">{next.badge}</span>
-            )}
-          </div>
-          <p className="mt-0.5 line-clamp-2 text-[17px] leading-snug font-extrabold [overflow-wrap:anywhere]">
-            {next ? next.title : "Nothing coming up"}
-          </p>
-          <p className="mt-0.5 truncate text-[13.5px] font-semibold text-muted tnum">
-            {next ? (
-              <>
-                {next.when}
-                {next.room && <> &nbsp;•&nbsp; {next.room}</>}
-              </>
-            ) : (
-              "No classes on the timetable this week"
-            )}
-          </p>
-        </div>
-        <ChevronRight size={22} className="shrink-0 text-muted" />
-      </Notebook>
+    <Link href={href} className={cx("lift block rounded-3xl p-3.5 transition active:scale-[0.98]", tint)} aria-label={label}>
+      <div className="flex items-start justify-between gap-2">
+        <span className="grid size-10 place-items-center rounded-2xl bg-card/80 shadow-[inset_0_1px_0_rgb(255_255_255/0.6),0_1px_2px_rgb(var(--shadow-ink)/0.14)]">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2.5 text-[12.5px] font-bold text-muted">{label}</p>
+      <p
+        className={cx(
+          "font-display mt-0.5 truncate font-extrabold tracking-[-0.03em] tnum",
+          valueSmall ? "text-[17px] leading-tight" : "text-[24px] leading-none",
+        )}
+      >
+        {value}
+      </p>
+      <div className="mt-1.5">{foot}</div>
     </Link>
   );
 }
 
-// ---------- tasks ----------
-
-function TasksCard({ soon, later, today }: { soon: Task[]; later: Task[]; today: string }) {
-  const list = (soon.length ? soon : later).slice(0, 4);
-  const title = soon.length ? "Today's Tasks" : later.length ? "Coming Up" : "Today's Tasks";
+function QuickAction({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <section className="mt-9" aria-label={title}>
-      <SectionTitle href="/tasks" link="View all">
-        {title}
-        {soon.length > 0 && <span className="text-muted"> ({soon.length})</span>}
-      </SectionTitle>
-      <div className="relative mx-5">
-        <Notebook rings={false} className="margin-rule overflow-hidden">
-          {list.length === 0 ? (
-            <div className="py-6 pr-5 pl-[58px]">
-              <p className="font-bold">Nothing due. Enjoy it.</p>
-              <p className="mt-0.5 text-[13px] text-muted">Assignments from the LMS show up here by themselves.</p>
-              <Link href="/tasks?new=1" className="btn-leather mt-4 inline-flex h-10 items-center rounded-2xl px-4 text-[13.5px]">
-                Add a task
-              </Link>
-            </div>
-          ) : (
-            <ul>
-              {list.map((t) => (
-                <TaskLine key={t.id} task={t} today={today} />
-              ))}
-            </ul>
-          )}
-          {/* Blank lines at the foot of the page, where the pen rests. */}
-          <div className="h-12 border-t border-dashed border-card-edge/70" aria-hidden />
-        </Notebook>
-        <PenArt className="pointer-events-none absolute -right-2 -bottom-4 w-[158px] rotate-[-12deg] drop-shadow-[0_6px_6px_rgb(60_30_10/0.25)]" />
-      </div>
-    </section>
+    <Link
+      href={href}
+      className="lift flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-accent-soft py-3.5 text-center transition active:scale-[0.97]"
+    >
+      <span className="grid size-9 place-items-center rounded-full bg-card text-accent shadow-[0_1px_2px_rgb(var(--shadow-ink)/0.18)]">
+        {icon}
+      </span>
+      <span className="text-[12px] font-bold">{label}</span>
+    </Link>
   );
 }
+
+// ---------- schedule timeline ----------
+
+function ScheduleRow({
+  session,
+  subject,
+  camu,
+  live,
+  past,
+}: {
+  session: ViewSession;
+  subject: Subject | undefined;
+  camu: boolean;
+  live: boolean;
+  past: boolean;
+}) {
+  const name = subject?.name ?? "Class";
+  return (
+    <li className="relative mb-3 last:mb-0">
+      {/* the dot on the line */}
+      <span
+        className={cx(
+          "absolute top-6 -left-[26px] size-3 rounded-full border-2 border-card",
+          live ? "bg-orange shadow-[0_0_0_3px_rgb(242_135_31/0.3)]" : past ? "bg-accent" : "bg-card-edge",
+        )}
+        aria-hidden
+      />
+      <div className={cx("lift flex items-center gap-3 rounded-2xl p-2.5", live && "bg-accent-soft")}>
+        <BookTile size={44} />
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-[14.5px] leading-snug font-bold [overflow-wrap:anywhere]">{name}</p>
+          <p className="mt-0.5 text-[12.5px] font-semibold text-muted tnum">
+            {clock(session.start)} – {clock(session.end)}
+            {live && <span className="ml-1.5 font-extrabold text-accent">· Now</span>}
+          </p>
+          {!camu && <MarkRow session={session} name={subject?.code || name} />}
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {session.room && (
+            <span className="rounded-full border-[1.5px] border-card-edge bg-card px-2.5 py-1 text-[11.5px] font-bold text-muted tnum">
+              {session.room}
+            </span>
+          )}
+          {camu &&
+            (session.status === "present" ? (
+              <span className="stamp text-safe">Present</span>
+            ) : session.status === "absent" ? (
+              <span className="stamp text-danger">Absent</span>
+            ) : past ? (
+              <span className="text-[10.5px] font-semibold text-muted">Not marked</span>
+            ) : null)}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+const ACTIONS: { status: SessionStatus; label: string; icon: typeof Check; on: string }[] = [
+  { status: "present", label: "Present", icon: Check, on: "bg-safe text-white border-safe" },
+  { status: "absent", label: "Absent", icon: X, on: "bg-danger text-white border-danger" },
+  { status: "cancelled", label: "Cancelled", icon: Minus, on: "bg-text text-bg border-text" },
+];
+
+function MarkRow({ session, name }: { session: Session; name: string }) {
+  const toast = useToast();
+  async function mark(next: SessionStatus) {
+    const prev = session.status;
+    const status = prev === next ? "unmarked" : next;
+    await setSessionStatus(session.id, status);
+    toast.show(
+      status === "unmarked" ? "Cleared" : `${name}: ${status === "cancelled" ? "class cancelled" : `marked ${status}`}`,
+      () => setSessionStatus(session.id, prev),
+    );
+  }
+  return (
+    <div className="mt-2 flex gap-1.5" role="group" aria-label={`Mark ${name}`}>
+      {ACTIONS.map(({ status, label, icon: Icon, on }) => {
+        const selected = session.status === status;
+        return (
+          <button
+            key={status}
+            onClick={(e) => {
+              e.preventDefault();
+              void mark(status);
+            }}
+            aria-pressed={selected}
+            aria-label={label}
+            className={cx(
+              "grid size-8 place-items-center rounded-lg border-[1.5px] shadow-[0_1.5px_0_var(--pbtn-lip)] transition active:translate-y-[1.5px] active:shadow-none",
+              selected ? on : "border-card-edge bg-card text-muted",
+            )}
+          >
+            <Icon size={15} strokeWidth={2.75} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- tasks ----------
 
 function TaskLine({ task, today }: { task: Task; today: string }) {
   const toast = useToast();
@@ -483,7 +560,6 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
   function tick() {
     if (ticked) return;
     setTicked(true);
-    // A beat to see the tick land before the line leaves the list.
     setTimeout(() => {
       void setTaskDone(task.id, true);
       toast.show(`Done: ${task.title}`, () => void setTaskDone(task.id, false));
@@ -492,136 +568,24 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
 
   return (
     <li className="ruled-row">
-      <button
-        type="button"
-        onClick={tick}
-        aria-label={`Mark "${task.title}" done`}
-        className="flex w-full items-center gap-3 py-3.5 pr-4 text-left"
-      >
-        <span className="grid w-[46px] shrink-0 place-items-center">
+      <Link href="/tasks" className="flex items-center gap-2.5 py-3 pr-3 pl-3">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            tick();
+          }}
+          aria-label={`Mark "${task.title}" done`}
+          className="shrink-0"
+        >
           <PaperCheck checked={ticked} />
-        </span>
+        </button>
         <span className="min-w-0 flex-1">
-          <span className={cx("block truncate text-[15px] font-bold transition", ticked && "text-muted line-through")}>
-            {task.title}
-          </span>
-          <span className="block truncate text-[12.5px] text-muted">
-            {KIND_BY_ID[task.kind].label}
-            {task.source === "lms" ? " · LMS" : ""}
-            {task.dueTime ? ` · ${clock(task.dueTime)}` : ""}
-          </span>
+          <span className={cx("block truncate text-[14px] font-bold", ticked && "text-muted line-through")}>{task.title}</span>
+          <span className={cx("block text-[12px] font-semibold", due.tone)}>{due.text}</span>
         </span>
-        <span className={cx("shrink-0 text-[12.5px] font-extrabold", due.tone)}>{due.text}</span>
-      </button>
-    </li>
-  );
-}
-
-// ---------- classes ----------
-
-function TimeCell({ start }: { start: string }) {
-  const t = clock(start);
-  return (
-    <div className="w-[46px] shrink-0 text-center leading-tight tnum">
-      <p className="text-[13.5px] font-extrabold">{t.replace(/ (AM|PM)/, "")}</p>
-      <p className="text-[10px] font-bold text-muted">{t.slice(-2)}</p>
-    </div>
-  );
-}
-
-const ACTIONS: { status: SessionStatus; label: string; icon: typeof Check; on: string }[] = [
-  { status: "present", label: "Present", icon: Check, on: "bg-safe text-white border-safe" },
-  { status: "absent", label: "Absent", icon: X, on: "bg-danger text-white border-danger" },
-  { status: "cancelled", label: "Cancelled", icon: Minus, on: "bg-text text-bg border-text" },
-];
-
-/** A class marked by hand: present, absent or cancelled. */
-function ClassRow({ session, subject, live }: { session: Session; subject: Subject | undefined; live: boolean }) {
-  const toast = useToast();
-  const name = subject?.name ?? "Subject";
-  const code = subject?.code ?? "";
-
-  async function mark(next: SessionStatus) {
-    const prev = session.status;
-    const status = prev === next ? "unmarked" : next;
-    await setSessionStatus(session.id, status);
-    toast.show(
-      status === "unmarked" ? "Cleared" : `${code || name}: ${status === "cancelled" ? "class cancelled" : `marked ${status}`}`,
-      () => setSessionStatus(session.id, prev),
-    );
-  }
-
-  return (
-    <li className={cx("ruled-row flex flex-wrap items-center gap-x-3 gap-y-2 py-3 pr-3.5", live && "bg-accent-soft/60")}>
-      <TimeCell start={session.start} />
-      <div className="min-w-[6.5rem] flex-1">
-        <p className="line-clamp-2 text-[15px] leading-snug font-bold [overflow-wrap:anywhere]">{name}</p>
-        <p className="text-[12.5px] leading-snug text-muted">
-          {session.kind === "practical" ? "Lab" : "Lecture"} · to {clock(session.end)}
-          {live && <span className="ml-1 font-bold text-accent">· Now</span>}
-        </p>
-      </div>
-      <div className="ml-auto flex shrink-0 gap-1.5" role="group" aria-label={`Mark ${name}`}>
-        {ACTIONS.map(({ status, label, icon: Icon, on }) => {
-          const selected = session.status === status;
-          return (
-            <button
-              key={status}
-              onClick={() => mark(status)}
-              aria-pressed={selected}
-              aria-label={label}
-              title={label}
-              className={cx(
-                "grid size-9 place-items-center rounded-xl border-[1.5px] shadow-[0_2px_0_var(--pbtn-lip)] transition active:translate-y-[2px] active:shadow-none",
-                selected ? on : "border-card-edge bg-card text-muted",
-              )}
-            >
-              <Icon size={17} strokeWidth={2.75} />
-            </button>
-          );
-        })}
-      </div>
-    </li>
-  );
-}
-
-/** A class as Camu has it: time, room and teacher, and the teacher's mark as a stamp. */
-function CamuClassRow({
-  session,
-  subject,
-  live,
-  past,
-}: {
-  session: ViewSession;
-  subject: Subject | undefined;
-  live: boolean;
-  past: boolean;
-}) {
-  const name = subject?.name ?? "Class";
-  return (
-    <li className={cx("ruled-row flex items-center gap-3 py-3 pr-3.5", live && "bg-accent-soft/60")}>
-      <TimeCell start={session.start} />
-      <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[15px] leading-snug font-bold [overflow-wrap:anywhere]">{name}</p>
-        <p className="truncate text-[12.5px] leading-snug text-muted">
-          {session.room || (session.kind === "practical" ? "Lab" : "Lecture")} · to {clock(session.end)}
-          {session.teacher ? ` · ${session.teacher}` : ""}
-        </p>
-        {session.usual && <p className="text-[11px] text-muted">Usual timetable · Camu has not posted this day yet</p>}
-      </div>
-      {session.status === "present" ? (
-        <span className="stamp shrink-0 text-safe">Present</span>
-      ) : session.status === "absent" ? (
-        <span className="stamp shrink-0 text-danger">Absent</span>
-      ) : live ? (
-        <span className="shrink-0 rounded-full bg-accent px-2.5 py-1 text-[11.5px] font-bold text-on-accent">Now</span>
-      ) : past ? (
-        <span className="shrink-0 text-right text-[11px] leading-tight font-semibold text-muted">
-          Not marked
-          <br />
-          yet
-        </span>
-      ) : null}
+        <ChevronRight size={16} className="shrink-0 text-muted" />
+      </Link>
     </li>
   );
 }
@@ -634,7 +598,6 @@ function Updates({
   exam,
   today,
   unmarked,
-  onUnmarked,
   onClose,
 }: {
   attention: { subject: Subject; summary: AttendanceSummary }[];
@@ -642,11 +605,12 @@ function Updates({
   exam: Task | undefined;
   today: string;
   unmarked: { count: number; latest: string | null };
-  onUnmarked: (date: string) => void;
   onClose: () => void;
 }) {
-  const rows: { key: string; icon: typeof Bell; tone: string; title: string; body: string; href?: string; onClick?: () => void }[] = [];
-  for (const { subject, summary } of attention.slice(0, 4)) {
+  // What a notification would say, gathered in one place; each can be read.
+  const [read, setRead] = useState<Set<string>>(new Set());
+  const rows: { key: string; icon: typeof Bell; tone: string; title: string; body: string; href: string }[] = [];
+  for (const { subject, summary } of attention.slice(0, 5)) {
     rows.push({
       key: subject.id,
       icon: TriangleAlert,
@@ -657,72 +621,50 @@ function Updates({
     });
   }
   if (overdue > 0)
-    rows.push({
-      key: "overdue",
-      icon: ClipboardList,
-      tone: "bg-danger-soft text-danger",
-      title: `${overdue} overdue ${overdue === 1 ? "task" : "tasks"}`,
-      body: "Finish them or move the date",
-      href: "/tasks",
-    });
+    rows.push({ key: "overdue", icon: ClipboardList, tone: "bg-danger-soft text-danger", title: `${overdue} overdue ${overdue === 1 ? "task" : "tasks"}`, body: "Finish them or move the date", href: "/tasks" });
   if (exam?.dueDate)
-    rows.push({
-      key: "exam",
-      icon: GraduationCap,
-      tone: "bg-accent-soft text-accent",
-      title: exam.title,
-      body: `Exam · ${countdownText(daysBetween(today, exam.dueDate))}`,
-      href: "/tasks",
-    });
-  if (unmarked.count > 0 && unmarked.latest)
-    rows.push({
-      key: "unmarked",
-      icon: ClipboardList,
-      tone: "bg-warn-soft text-warn",
-      title: `${unmarked.count} past ${unmarked.count === 1 ? "class is" : "classes are"} not marked`,
-      body: "Catch up to keep your numbers right",
-      onClick: () => onUnmarked(unmarked.latest!),
-    });
+    rows.push({ key: "exam", icon: GraduationCap, tone: "bg-accent-soft text-accent", title: exam.title, body: `Exam · ${countdownText(daysBetween(today, exam.dueDate))}`, href: "/tasks" });
+  if (unmarked.count > 0)
+    rows.push({ key: "unmarked", icon: ClipboardList, tone: "bg-warn-soft text-warn", title: `${unmarked.count} past ${unmarked.count === 1 ? "class" : "classes"} not marked`, body: "Catch up to keep your numbers right", href: "/attendance" });
 
-  if (rows.length === 0)
+  const unreadRows = rows.filter((r) => !read.has(r.key));
+
+  if (rows.length === 0 || unreadRows.length === 0)
     return (
       <div className="pb-4 text-center">
         <Cap3D size={72} className="mx-auto" />
         <p className="mt-2 text-[16px] font-extrabold">All caught up</p>
-        <p className="mt-1 text-[13.5px] text-muted">Every subject is above target and nothing is overdue.</p>
+        <p className="mt-1 text-[13.5px] text-muted">{rows.length ? "Everything here is marked read." : "Every subject is above target and nothing is overdue."}</p>
       </div>
     );
 
   return (
-    <ul className="space-y-3 pb-2">
-      {rows.map((r) => {
-        const inner = (
-          <>
+    <>
+      <div className="mb-3 flex justify-end">
+        <button onClick={() => setRead(new Set(rows.map((r) => r.key)))} className="text-[13px] font-bold text-accent">
+          Mark all as read
+        </button>
+      </div>
+      <ul className="space-y-3 pb-2">
+        {unreadRows.map((r) => (
+          <li key={r.key} className="lift flex items-center gap-3 rounded-2xl px-3.5 py-3">
             <span className={cx("grid size-10 shrink-0 place-items-center rounded-xl", r.tone)}>
               <r.icon size={18} strokeWidth={2.3} />
             </span>
-            <span className="min-w-0 flex-1">
+            <Link href={r.href} onClick={onClose} className="min-w-0 flex-1">
               <span className="block truncate text-[14.5px] font-bold">{r.title}</span>
               <span className="block truncate text-[12.5px] text-muted">{r.body}</span>
-            </span>
-            <ChevronRight size={18} className="shrink-0 text-muted" />
-          </>
-        );
-        const cls = "lift flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition active:scale-[0.99]";
-        return (
-          <li key={r.key}>
-            {r.href ? (
-              <Link href={r.href} onClick={onClose} className={cls}>
-                {inner}
-              </Link>
-            ) : (
-              <button type="button" onClick={r.onClick} className={cls}>
-                {inner}
-              </button>
-            )}
+            </Link>
+            <button
+              onClick={() => setRead((s) => new Set(s).add(r.key))}
+              aria-label="Mark as read"
+              className="btn-paper lip-sm grid size-8 shrink-0 place-items-center rounded-full text-muted"
+            >
+              <Check size={15} strokeWidth={2.75} />
+            </button>
           </li>
-        );
-      })}
-    </ul>
+        ))}
+      </ul>
+    </>
   );
 }

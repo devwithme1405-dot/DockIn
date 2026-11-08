@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } fr
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  Camera,
   Check,
   Cloud,
   Download,
@@ -225,16 +224,16 @@ export default function ProfilePage() {
 
       <div className="space-y-5 px-5 pt-3">
         {/* identity */}
-        <section className="lift rounded-3xl bg-surface p-4">
+        <section className="notebook rings px-4 pb-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSheet("avatar")}
               aria-label="Change profile picture"
               className="relative shrink-0 rounded-full transition active:scale-95"
             >
-              <Avatar name={profile.name} avatar={profile.avatar} size={64} />
-              <span className="absolute -right-0.5 -bottom-0.5 grid size-6 place-items-center rounded-full bg-surface text-muted shadow-[0_0_0_1px_var(--line)]">
-                <Camera size={13} />
+              <Avatar name={profile.name} avatar={profile.avatar} size={66} />
+              <span className="absolute -right-0.5 -bottom-0.5 grid size-[22px] place-items-center rounded-full bg-accent text-on-accent shadow-[0_0_0_2px_var(--card)]">
+                <Pencil size={12} strokeWidth={2.6} />
               </span>
             </button>
             <div className="min-w-0 flex-1">
@@ -251,7 +250,7 @@ export default function ProfilePage() {
             <button
               onClick={openDetails}
               aria-label="Edit your details"
-              className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-2 text-text"
+              className="btn-paper lip-sm grid size-10 shrink-0 place-items-center rounded-full text-text"
             >
               <Pencil size={17} />
             </button>
@@ -272,7 +271,7 @@ export default function ProfilePage() {
 
         {/* appearance */}
         <Card title="Appearance">
-          <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1" role="radiogroup" aria-label="Theme">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">
             {THEMES.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -280,8 +279,8 @@ export default function ProfilePage() {
                 aria-checked={profile.theme === id}
                 onClick={() => pickTheme(id)}
                 className={cx(
-                  "flex h-11 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition",
-                  profile.theme === id ? "bg-surface text-text shadow-sm" : "text-muted",
+                  "lip-sm flex h-11 items-center justify-center gap-1.5 rounded-full text-sm",
+                  profile.theme === id ? "btn-leather" : "btn-paper",
                 )}
               >
                 <Icon size={16} />
@@ -292,7 +291,7 @@ export default function ProfilePage() {
           <p className="mt-2 text-[12.5px] text-muted">System follows your phone and switches on its own.</p>
 
           <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Text size</p>
-          <div className="grid grid-cols-4 gap-1 rounded-xl bg-surface-2 p-1" role="radiogroup" aria-label="Text size">
+          <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Text size">
             {TEXT_SCALES.map((scale, i) => (
               <button
                 key={scale}
@@ -300,8 +299,8 @@ export default function ProfilePage() {
                 aria-checked={(profile.textScale ?? 1) === scale}
                 onClick={() => pickTextScale(scale)}
                 className={cx(
-                  "flex h-11 items-center justify-center rounded-lg font-medium transition",
-                  (profile.textScale ?? 1) === scale ? "bg-surface text-text shadow-sm" : "text-muted",
+                  "lip-sm flex h-11 items-center justify-center rounded-full",
+                  (profile.textScale ?? 1) === scale ? "btn-leather" : "btn-paper",
                 )}
                 style={{ fontSize: 11 + i * 1.5 }}
               >
@@ -563,7 +562,7 @@ function SetPassword({ onDone }: { onDone: () => void }) {
 function Card({ title, children, flush }: { title: string; children: ReactNode; flush?: boolean }) {
   return (
     <section className="lift rounded-3xl bg-surface p-4">
-      <h2 className="mb-3 text-[13px] font-semibold tracking-wide text-muted uppercase">{title}</h2>
+      <h2 className="mb-3 text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">{title}</h2>
       <div className={cx(flush && "-mx-1 divide-y divide-line")}>{children}</div>
     </section>
   );
@@ -571,9 +570,9 @@ function Card({ title, children, flush }: { title: string; children: ReactNode; 
 
 function Stat({ label, value, ink }: { label: string; value: string; ink: string }) {
   return (
-    <div className="min-w-0 rounded-2xl bg-surface px-3 py-3 shadow-[0_0_0_1px_var(--line)]">
-      <p className={cx("truncate text-[20px] font-semibold leading-tight tabular-nums", ink)}>{value}</p>
-      <p className="mt-0.5 text-[12px] leading-tight text-muted">{label}</p>
+    <div className="lift min-w-0 rounded-2xl px-3 py-3">
+      <p className={cx("font-display truncate text-[20px] font-extrabold leading-tight tabular-nums", ink)}>{value}</p>
+      <p className="mt-0.5 text-[12px] leading-tight font-semibold text-muted">{label}</p>
     </div>
   );
 }
@@ -662,7 +661,7 @@ function CollegeCard() {
   if (!native) return null;
   return (
     <section className="lift rounded-3xl bg-surface px-4 pt-3.5 pb-1" aria-label="College accounts">
-      <h2 className="text-[13px] font-semibold tracking-wide text-muted uppercase">College</h2>
+      <h2 className="text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">College</h2>
       <div className="border-b border-line">
         <ConnectCamu compact />
       </div>

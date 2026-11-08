@@ -23,7 +23,7 @@ import {
   parseQuick,
   subtaskProgress,
 } from "@/lib/tasks";
-import { addDays, fmtDay, fmtTime, fromDateStr, toDateStr } from "@/lib/dates";
+import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Task } from "@/lib/types";
 import { EmptyState, Sheet, SubjectTile, cx, useToast } from "@/components/ui";
 import { TaskForm, TaskRow, KIND_ICON } from "@/components/TaskParts";
@@ -70,11 +70,10 @@ export default function TasksPage() {
 
   const stats = useMemo(() => {
     const pending = list.filter((t) => !t.done);
-    const weekAgo = fromDateStr(addDays(today, -6)).getTime();
     return {
       overdue: pending.filter((t) => bucketOf(t, today) === "overdue").length,
       today: pending.filter((t) => bucketOf(t, today) === "today").length,
-      doneWeek: list.filter((t) => t.done && (t.doneAt ?? 0) >= weekAgo).length,
+      due: pending.filter((t) => t.dueDate).length,
       pending: pending.length,
     };
   }, [list, today]);
@@ -148,8 +147,8 @@ export default function TasksPage() {
         aria-label="Summary"
       >
         <Stat label="Overdue" value={stats.overdue} ink={stats.overdue ? "text-danger" : undefined} />
-        <Stat label="Due today" value={stats.today} />
-        <Stat label="Done this week" value={stats.doneWeek} ink={stats.doneWeek ? "text-safe" : undefined} />
+        <Stat label="Due today" value={stats.today} ink={stats.today ? "text-orange" : undefined} />
+        <Stat label="Total due" value={stats.due} />
       </section>
 
       {nextExam && nextExam.dueDate && (

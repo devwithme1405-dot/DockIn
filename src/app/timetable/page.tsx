@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarClock, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { ConnectCamu } from "@/components/College";
@@ -94,18 +93,7 @@ export default function TimetablePage() {
 
   return (
     <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
-      <PageHeader
-        title="Timetable"
-        right={
-          <Link
-            href="/attendance/timetable"
-            aria-label="Edit timetable"
-            className="grid size-10 place-items-center rounded-full bg-surface text-accent shadow-[0_0_0_1px_var(--line)]"
-          >
-            <CalendarClock size={19} />
-          </Link>
-        }
-      />
+      <PageHeader title="Timetable" />
 
       {!camu && native && !hasManual ? (
         <div className="mx-5 mt-2">

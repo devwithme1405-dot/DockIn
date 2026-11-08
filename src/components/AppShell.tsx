@@ -182,6 +182,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // reason — and the first thing anybody notices about an app is how long it
   // takes to show them something.
   const [minShown, setMinShown] = useState(false);
+  // The launch screen is a one-time thing. Once content has shown, a slow Dexie
+  // read or an auth flicker while moving between tabs must never bring it back —
+  // that looked like the whole app reopening on every navigation.
+  const [bootedOnce, setBootedOnce] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setMinShown(true), Math.max(0, 260 - performance.now()));
     return () => clearTimeout(t);
@@ -200,6 +204,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const onboarding = pathname === "/onboarding" || pathname === "/setup";
   const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
+  if (ready && minShown && !bootedOnce) setBootedOnce(true);
+  const showBoot = (!ready || !minShown) && !bootedOnce;
 
   return (
     <ToastProvider>
@@ -237,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </button>
       )}
-      <BootSplash show={!ready || !minShown} message={restoring && userId ? "Getting your data…" : undefined} />
+      <BootSplash show={showBoot} message={restoring && userId ? "Getting your data…" : undefined} />
     </ToastProvider>
   );
 }
