@@ -195,3 +195,11 @@ export function useCategories(): Category[] | undefined {
     [],
   );
 }
+
+/** Your notes on unmarked classes, as a map from class key to status. */
+export function useClassNotes(): Map<string, "cancelled" | "pending"> | undefined {
+  return useLiveQuery(async () => {
+    const all = await db.classNotes.toArray();
+    return new Map(all.map((n) => [n.id, n.status]));
+  }, []);
+}

@@ -320,3 +320,15 @@ export interface MyProfile {
   code: string;
   shareAttendance: boolean;
 }
+
+/**
+ * Your own note on a Camu class the teacher has not marked: either the class was
+ * cancelled, or the teacher simply hasn't submitted yet. Camu's real mark, when
+ * it arrives, always wins. Local only — not synced.
+ */
+export interface ClassNote {
+  /** `${date}|${from}|${subId}` — the class this note is about. */
+  id: string;
+  status: "cancelled" | "pending";
+  setAt: number;
+}

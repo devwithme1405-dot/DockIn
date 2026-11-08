@@ -7,11 +7,12 @@ import { PageHeader } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { ConnectCamu } from "@/components/College";
 import { getProfile } from "@/lib/repo";
-import { useSlots, useSubjects } from "@/lib/hooks";
+import { useClassNotes, useSlots, useSubjects } from "@/lib/hooks";
 import { classesOn, cleanName, colorFor, subjectOf, useAttendanceData } from "@/lib/college";
-import { addDays, fmtTime, toDateStr, weekdayOf, WEEKDAYS_SHORT } from "@/lib/dates";
-import { appliesOn } from "@/lib/repo";
-import { EmptyState, cx } from "@/components/ui";
+import { addDays, fmtTime, nowHM, toDateStr, weekdayOf, WEEKDAYS_SHORT } from "@/lib/dates";
+import { appliesOn, classKey, setClassNote } from "@/lib/repo";
+import { Ban, Clock3, X } from "lucide-react";
+import { EmptyState, cx, useToast } from "@/components/ui";
 import { Segmented } from "@/components/Paper";
 import { BunkCalculator, HolidayCalendar } from "@/components/Calendar";
 import { classesOn as camuClassesOn } from "@/lib/college";
@@ -32,6 +33,8 @@ interface Row {
   color: string;
   /** What Camu recorded for this class, when it is in the past. */
   status: "present" | "absent" | null;
+  /** Camu subject id, for noting an unmarked class. */
+  subId?: string;
 }
 
 export default function TimetablePage() {
@@ -40,6 +43,7 @@ export default function TimetablePage() {
   const { data, camu, native } = useAttendanceData(target);
   const slots = useSlots();
   const subjects = useSubjects();
+  const notes = useClassNotes();
   const today = toDateStr();
   const [date, setDate] = useState(today);
   const [view, setView] = useState<"week" | "calendar">("week");
@@ -67,6 +71,7 @@ export default function TimetablePage() {
             teacher: p.teacher,
             color: colorFor(sub?.id ?? p.subId ?? p.name),
             status: statusAt(p.subId, p.from),
+            subId: p.subId,
           };
         })
         .sort((a, b) => a.from.localeCompare(b.from));
@@ -257,6 +262,12 @@ export default function TimetablePage() {
                     </span>
                   )}
                 </div>
+                {camu && !r.status && r.subId && isPast(date, r.to, today) && (
+                  <UnmarkedControl
+                    k={classKey(date, r.from, r.subId)}
+                    note={notes?.get(classKey(date, r.from, r.subId))}
+                  />
+                )}
               </div>
             </li>
           ))}
@@ -264,6 +275,56 @@ export default function TimetablePage() {
       )}
       </>
       )}
+    </div>
+  );
+}
+
+/** A class is in the past if its day is gone, or it is today and the end time has passed. */
+function isPast(date: string, to: string, today: string): boolean {
+  if (date < today) return true;
+  if (date > today) return false;
+  return to <= nowHM();
+}
+
+/**
+ * When the teacher hasn't marked a class, say what happened: the class was
+ * cancelled, or the teacher just hasn't submitted yet. Camu's real mark, when
+ * it comes, replaces this on its own.
+ */
+function UnmarkedControl({ k, note }: { k: string; note?: "cancelled" | "pending" }) {
+  const toast = useToast();
+  async function set(status: "cancelled" | "pending" | null) {
+    await setClassNote(k, status);
+    if (status) toast.show(status === "cancelled" ? "Marked cancelled" : "Noted — teacher yet to mark");
+  }
+  if (note)
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <span
+          className={cx(
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-bold",
+            note === "cancelled" ? "bg-surface-2 text-muted" : "bg-warn-soft text-warn",
+          )}
+        >
+          {note === "cancelled" ? <Ban size={13} /> : <Clock3 size={13} />}
+          {note === "cancelled" ? "Class cancelled" : "Teacher yet to mark"}
+        </span>
+        <button onClick={() => void set(null)} aria-label="Clear" className="grid size-6 place-items-center rounded-full text-muted">
+          <X size={13} />
+        </button>
+      </div>
+    );
+  return (
+    <div className="mt-2">
+      <p className="mb-1.5 text-[12px] font-semibold text-muted">Teacher hasn&apos;t marked this — what happened?</p>
+      <div className="flex gap-2">
+        <button onClick={() => void set("cancelled")} className="btn-paper lip-sm inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px]">
+          <Ban size={13} /> Cancelled
+        </button>
+        <button onClick={() => void set("pending")} className="btn-paper lip-sm inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px]">
+          <Clock3 size={13} /> Will mark later
+        </button>
+      </div>
     </div>
   );
 }

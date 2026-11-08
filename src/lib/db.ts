@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type {
+  ClassNote,
   CalEvent,
   Category,
   Due,
@@ -46,6 +47,8 @@ export class DockinDB extends Dexie {
   dues!: Table<Due, string>;
   /** Money in that was not a friend paying back. */
   incomes!: Table<Income, string>;
+  /** Your own note on a class Camu left unmarked: cancelled, or teacher yet to mark. */
+  classNotes!: Table<ClassNote, string>;
 
   constructor() {
     super("dockin");
@@ -80,6 +83,9 @@ export class DockinDB extends Dexie {
     this.version(8).stores({
       dues: "id, person, dir",
       incomes: "id, date",
+    });
+    this.version(9).stores({
+      classNotes: "id",
     });
   }
 }

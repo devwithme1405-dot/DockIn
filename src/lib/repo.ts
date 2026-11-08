@@ -347,6 +347,17 @@ export async function updateTask(
  * (its checklist reset), so an unfinished task can be carried forward or a
  * repeating one set up again in a tap. An LMS task copies as a plain one.
  */
+/** The stable key for a note on a particular class. */
+export function classKey(date: string, from: string, subId: string): string {
+  return `${date}|${from}|${subId}`;
+}
+
+/** Note (or clear) what happened to a class Camu left unmarked. */
+export async function setClassNote(id: string, status: "cancelled" | "pending" | null): Promise<void> {
+  if (status === null) await db.classNotes.delete(id);
+  else await db.classNotes.put({ id, status, setAt: now() });
+}
+
 export async function copyTask(id: string, date: string | null): Promise<Task | null> {
   const src = await db.tasks.get(id);
   if (!src) return null;
