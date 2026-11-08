@@ -6,14 +6,13 @@ import { PageHeader } from "@/components/PageHeader";
 import { MoneySkeleton } from "@/components/Skeleton";
 import { ArrowDownLeft, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { addExpense, deleteExpense, deleteIncome, getProfile, restoreIncome, saveProfile } from "@/lib/repo";
-import { useCategories, useExpenses, useIncomes } from "@/lib/hooks";
+import { useCategories, useDues, useExpenses, useIncomes } from "@/lib/hooks";
 import {
   metaFor,
   budgetStatus,
   frequentSpends,
   pace,
   byCategory,
-  dailyTotals,
   daysInMonth,
   fmtMoney,
   groupByDay,
@@ -29,7 +28,9 @@ import type { Expense } from "@/lib/types";
 import { Button, Chip, EmptyState, Sheet, cx, useToast } from "@/components/ui";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { MoneyHero } from "@/components/MoneyHero";
+import { MoneyHistory } from "@/components/MoneyHistory";
 import { DetectedTray } from "@/components/DetectedTray";
+import { ReviewTray } from "@/components/ReviewTray";
 import { PhoneSetupNudge } from "@/components/PhoneSetup";
 import { UdhaarCard } from "@/components/Udhaar";
 import { Notebook, Segmented } from "@/components/Paper";
@@ -39,6 +40,7 @@ export default function MoneyPage() {
   const toast = useToast();
   const all = useExpenses();
   const incomes = useIncomes();
+  const dues = useDues();
   const today = toDateStr();
   const [month, setMonth] = useState(monthKey(today));
   const [adding, setAdding] = useState(false);
@@ -55,7 +57,6 @@ export default function MoneyPage() {
   const catList = useCategories();
   const cats = useMemo(() => byCategory(list, catList ?? [], 6), [list, catList]);
   const allCats = useMemo(() => byCategory(list, catList ?? []), [list, catList]);
-  const daily = useMemo(() => dailyTotals(list, month), [list, month]);
   const isCurrent = month === monthKey(today);
   const budget = profile?.budget ?? 0;
   const status = budget > 0 ? budgetStatus(budget, spent, month, today) : null;
@@ -94,6 +95,7 @@ export default function MoneyPage() {
         title="Money"
         subtitle="Every rupee, in and out"
         right={
+          view === "history" ? undefined : (
           <>
           <button
             aria-label="Previous month"
@@ -114,6 +116,7 @@ export default function MoneyPage() {
             <ChevronRight size={18} />
           </button>
                   </>
+          )
         }
       />
       <Segmented
@@ -158,6 +161,7 @@ export default function MoneyPage() {
         <>
           <PhoneSetupNudge />
           <DetectedTray />
+          <ReviewTray />
         </>
       )}
 
@@ -221,11 +225,14 @@ export default function MoneyPage() {
         </section>
       )}
 
-      {view === "history" && list.length > 0 && (
-        <section className="mt-2 px-5" aria-label="Daily spending">
-          <h2 className="mb-3 font-display text-[19px] font-extrabold tracking-[-0.02em]">Daily spending</h2>
-          <DailyBars values={daily} month={month} today={today} />
-        </section>
+      {view === "history" && (
+        <MoneyHistory
+          expenses={all ?? []}
+          incomes={incomes ?? []}
+          dues={dues ?? []}
+          cats={catList ?? []}
+          today={today}
+        />
       )}
 
       {view === "overview" && allCats.length >= 1 && (
@@ -309,11 +316,7 @@ export default function MoneyPage() {
       </section>
       )}
 
-      {view === "history" && list.length === 0 && cameIn.length === 0 && (
-        <p className="px-5 py-10 text-center text-[14px] text-muted">Nothing this month yet.</p>
-      )}
-
-      {view !== "expenses" && cameIn.length > 0 && (
+      {view === "overview" && cameIn.length > 0 && (
         <section className="mt-6 px-5" aria-label="Money in">
           <h2 className="mb-3 font-display text-[19px] font-extrabold">Money in</h2>
           <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
@@ -412,39 +415,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
     <div className="min-w-0 px-3 py-3 text-center">
       <p className={cx("truncate font-display text-[19px] font-extrabold tabular-nums", tone)}>{value}</p>
       <p className="mt-0.5 text-[12px] text-muted">{label}</p>
-    </div>
-  );
-}
-
-function DailyBars({ values, month, today }: { values: number[]; month: string; today: string }) {
-  const max = Math.max(...values, 1);
-  const isCurrent = month === monthKey(today);
-  const todayIdx = isCurrent ? Number(today.slice(8, 10)) - 1 : -1;
-  const peak = values.indexOf(Math.max(...values));
-  return (
-    <div className="lift rounded-3xl bg-surface p-4">
-      <div className="flex h-24 items-end gap-[3px]" role="img" aria-label="Spending per day this month">
-        {values.map((v, i) => (
-          <span
-            key={i}
-            className={cx(
-              "flex-1 rounded-t-[3px]",
-              v === 0 ? "bg-surface-2" : i === todayIdx ? "bg-accent" : "bg-accent/45",
-            )}
-            style={{ height: v === 0 ? 3 : `${Math.max((v / max) * 100, 6)}%` }}
-          />
-        ))}
-      </div>
-      <div className="mt-2 flex justify-between text-[11px] text-muted tabular-nums">
-        <span>1</span>
-        <span>{Math.ceil(values.length / 2)}</span>
-        <span>{values.length}</span>
-      </div>
-      {values[peak] > 0 && (
-        <p className="mt-2 text-xs text-muted">
-          Highest: {fmtMoney(values[peak])} on day {peak + 1}
-        </p>
-      )}
     </div>
   );
 }

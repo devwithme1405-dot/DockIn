@@ -121,6 +121,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * The entrance animations (the stagger that rises each card in) are a first
+   * impression, not something to replay on every tab tap — that replay was what
+   * made moving between pages feel like the whole app reloading. Once the first
+   * screen has settled, a flag on <html> turns the stagger off, so from then on
+   * switching tabs is instant, the way a native app's tabs are.
+   */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      document.documentElement.dataset.navved = "1";
+    }, 650);
+    return () => clearTimeout(t);
+  }, []);
+
+  /**
    * DockIn's own notifications say which screen to open ("Spent ₹250 at
    * Zomato" opens Money). The phone holds on to the request until this
    * listener exists, so it works from a cold start as well as from the
@@ -228,8 +242,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className={cx("paper-page mx-auto min-h-dvh w-full max-w-md", !onboarding && "page-curl")}>
         {ready && (
           <main
-            key={pathname}
-            className={cx("page-enter", !onboarding && "pb-[calc(6.5rem+env(safe-area-inset-bottom))]")}
+            className={cx(!onboarding && "pb-[calc(6.5rem+env(safe-area-inset-bottom))]")}
           >
             {children}
           </main>

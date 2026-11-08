@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   dedupe,
   detectedFrom,
+  looksFinancial,
   merchantKey,
   parseNotice,
   redact,
+  reviewFrom,
   strayIds,
   type Notice,
 } from "@/lib/payments";
@@ -211,6 +213,63 @@ describe("building the tray from the inbox", () => {
       n("b", GPAY, "You paid ₹20", "to Quench", 900_000),
     ]);
     expect(tray.map((t) => t.amount)).toEqual([20, 10]);
+  });
+});
+
+describe("the review tray: money we saw but could not read", () => {
+  const n = (id: string, app: string, title: string, body: string, posted_at = 1000) => ({
+    id,
+    app,
+    title,
+    body,
+    posted_at,
+  });
+
+  it("holds back a message with both directions instead of dropping it", () => {
+    // ₹500 credited AND ₹60 debited in one SMS — the parser refuses to guess.
+    const list = [n("a", SMS, "HDFCBK", "Rs.500 credited and Rs.60 debited today A/c XXXX1")];
+    expect(detectedFrom(list)).toHaveLength(0);
+    const review = reviewFrom(list);
+    expect(review).toHaveLength(1);
+    expect(review[0].dir).toBeNull(); // ambiguous
+    // and it is NOT swept away as junk
+    expect(strayIds(list)).not.toContain("a");
+  });
+
+  it("guesses the amount to pre-fill, even when the direction is unclear", () => {
+    // Two directions in one line: the parser bails, but 240 is still worth offering.
+    const review = reviewFrom([n("a", SMS, "SBIINB", "Rs.240 debited, Rs.10 credited to A/c XXXX1")]);
+    expect(review[0].amount).toBe(240);
+    expect(review[0].dir).toBeNull();
+  });
+
+  it("catches a terse UPI line with no verb", () => {
+    const review = reviewFrom([n("a", SMS, "UPI", "Rs 60 to kathi@okaxis ref 99")]);
+    expect(review[0].amount).toBe(60);
+  });
+
+  it("does not review an OTP, a balance or an offer", () => {
+    expect(reviewFrom([n("a", SMS, "VM", "123456 is your OTP for Rs.500")])).toHaveLength(0);
+    expect(reviewFrom([n("b", SMS, "VM", "Avl bal in A/c XXXX1 is Rs.5000")])).toHaveLength(0);
+    expect(reviewFrom([n("c", GPAY, "Offer", "Cashback up to ₹100")])).toHaveLength(0);
+    // and all three are still swept as junk
+    const list = [n("a", SMS, "VM", "123456 is your OTP for Rs.500"), n("b", SMS, "VM", "Avl bal is Rs.5000")];
+    expect(strayIds(list).sort()).toEqual(["a", "b"]);
+  });
+
+  it("ignores a chat even if it names an amount", () => {
+    expect(reviewFrom([n("a", "com.whatsapp", "Rahul", "bro I paid ₹200 for you")])).toHaveLength(0);
+  });
+
+  it("does not review what already parsed cleanly", () => {
+    expect(reviewFrom([n("a", GPAY, "You paid ₹60", "to 24/7 Kathi")])).toHaveLength(0);
+  });
+
+  it("looksFinancial keeps verbs and handles, drops noise", () => {
+    expect(looksFinancial("Rs.60 debited")).toBe(true);
+    expect(looksFinancial("₹60 to kathi@okaxis")).toBe(true);
+    expect(looksFinancial("Avl bal is Rs.5000")).toBe(false);
+    expect(looksFinancial("Hello there")).toBe(false);
   });
 });
 

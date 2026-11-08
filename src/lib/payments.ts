@@ -324,9 +324,80 @@ export function detectedFrom(notices: StoredNotice[]): Detected[] {
   return merged.sort((a, b) => b.at - a.at);
 }
 
-/** Notices that parsed as nothing are still rubbish in the inbox; clear them. */
+// ---------------------------------------------------------------------------
+// The review tray: money we saw but could not read
+// ---------------------------------------------------------------------------
+
+/** A VPA or UPI handle anywhere in the text — a terse "₹60 to kathi@okaxis" with no verb. */
+const MOVED = /\b(?:to|from)\b[^@\n]{0,40}@|\b(?:upi|imps|neft|rtgs)\b/i;
+
+/**
+ * A message that is clearly about money moving but that the parser could not
+ * pin down — two amounts, both directions at once, an odd wording, a new bank
+ * format. It has a rupee amount and either a spend/credit word or a UPI handle,
+ * and it is not an OTP, a balance or an offer. These are the ones worth a
+ * second look rather than silently dropping, because a dropped debit is a rupee
+ * that never gets tracked — exactly what the Money screen promises not to do.
+ */
+export function looksFinancial(body: string): boolean {
+  if (NOISE.test(body)) return false;
+  if (!AMOUNT.test(body)) return false;
+  return DEBIT.test(body) || CREDIT.test(body) || NEUTRAL.test(body) || MOVED.test(body);
+}
+
+/** One message in the review tray: shown as-is, with a best guess to pre-fill. */
+export interface Unread {
+  id: string;
+  source: string;
+  /** Redacted, for display. */
+  text: string;
+  at: number;
+  amount: number | null;
+  dir: "out" | "in" | null;
+}
+
+/**
+ * Everything financial that the parser could not place with confidence, ready
+ * for a one-tap manual add. The amount and direction are a guess to save typing,
+ * never recorded on their own.
+ */
+export function reviewFrom(notices: StoredNotice[]): Unread[] {
+  const out: Unread[] = [];
+  for (const n of notices) {
+    const from = sourceOf(n.app);
+    if (!from) continue;
+    if (parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at })) continue;
+    const body = redact(`${n.title ?? ""} ${n.body ?? ""}`.replace(/\s+/g, " ").trim());
+    if (!looksFinancial(body)) continue;
+    const m = AMOUNT.exec(body);
+    const amount = m ? Number((m[1] ?? m[2]).replace(/,/g, "")) : null;
+    const credit = CREDIT.test(body);
+    const debit = DEBIT.test(body);
+    out.push({
+      id: n.id,
+      source: from.name,
+      text: body.slice(0, 160),
+      at: n.posted_at,
+      amount: amount && Number.isFinite(amount) && amount > 0 && amount <= 1_000_000 ? amount : null,
+      dir: credit && !debit ? "in" : debit && !credit ? "out" : null,
+    });
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+/** The ids currently in the review tray, so junk-clearing never sweeps them away. */
+function reviewIds(notices: StoredNotice[]): Set<string> {
+  return new Set(reviewFrom(notices).map((u) => u.id));
+}
+
+/**
+ * Notices that parsed as nothing and are not worth reviewing either — OTPs,
+ * balance pings, adverts. Those are swept; anything that looks financial is held
+ * back for the review tray instead.
+ */
 export function strayIds(notices: StoredNotice[]): string[] {
+  const keep = reviewIds(notices);
   return notices
-    .filter((n) => !parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at }))
+    .filter((n) => !keep.has(n.id) && !parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at }))
     .map((n) => n.id);
 }
