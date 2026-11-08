@@ -1,9 +1,12 @@
 package com.dockin.student;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.webkit.WebView;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.splashscreen.SplashScreen;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -16,11 +19,32 @@ public class MainActivity extends BridgeActivity {
     /** Which screen to open, set by DockIn's own notifications. */
     static final String EXTRA_OPEN = "com.dockin.student.OPEN";
 
+    /**
+     * The launch splash (the cap docking onto the cover) is held on screen until
+     * the web app has drawn its first real screen, so the opening reads as one
+     * motion — splash straight into Today, with no blank brown gap while the site
+     * loads. The web calls DockIn.appReady() the moment it is ready.
+     */
+    private boolean contentReady = false;
+
+    /** Called from the web (via DockInPlugin) when the first screen is up. */
+    void markContentReady() {
+        runOnUiThread(() -> contentReady = true);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Plugins written inside the app are not found automatically; they are
         // registered before the bridge is built.
         registerPlugin(DockInPlugin.class);
+
+        // Hold the system splash until the web signals it has painted — but never
+        // forever: a slow network still gives up and shows the app after a few
+        // seconds rather than staring at the cap.
+        SplashScreen splash = SplashScreen.installSplashScreen(this);
+        splash.setKeepOnScreenCondition(() -> !contentReady);
+        new Handler(Looper.getMainLooper()).postDelayed(this::markContentReady, 6000);
+
         super.onCreate(savedInstanceState);
 
         // Back goes back a screen, the way it does in every other app. Without

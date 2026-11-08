@@ -143,6 +143,7 @@ interface DockInPlugin {
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
+  appReady(): Promise<void>;
   addListener(event: "notice", fn: (n: NativeNotice) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
@@ -159,6 +160,16 @@ export interface ReminderItem {
 }
 
 export const DockIn = registerPlugin<DockInPlugin>("DockIn");
+
+/**
+ * Tell the phone the first screen is up, so it can drop the launch splash it has
+ * been holding. Best-effort: on the web, or if the call fails, nothing happens —
+ * the splash there is a web overlay that fades on its own.
+ */
+export function appReady(): void {
+  if (!isNativeApp()) return;
+  DockIn.appReady().catch(() => {});
+}
 
 /** Hand the phone the whole upcoming set of reminders; it replaces the last set. */
 export async function scheduleReminders(items: ReminderItem[]): Promise<void> {

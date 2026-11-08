@@ -12,7 +12,7 @@ import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
 import { useAuth } from "@/lib/auth";
-import { isNativeApp, onPhone } from "@/lib/native";
+import { appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
@@ -133,6 +133,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     }, 650);
     return () => clearTimeout(t);
   }, []);
+
+  // The moment there is a real screen to show, tell the phone to drop the launch
+  // splash it has been holding — so the cap animation hands straight over to the
+  // app with no blank brown gap in between. This mirrors the `ready` gate below
+  // that actually renders the screen, so the splash lifts exactly as it appears.
+  const onboardingRoute = pathname === "/onboarding" || pathname === "/setup";
+  const screenReady = !bare && !restoring && profile !== undefined && (onboardingRoute || !!profile?.onboarded);
+  useEffect(() => {
+    if (screenReady) appReady();
+  }, [screenReady]);
 
   /**
    * DockIn's own notifications say which screen to open ("Spent ₹250 at
@@ -273,7 +283,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
         </button>
       )}
-      <BrandHold show={showBoot} />
+      {/* In the app the phone's own launch splash covers the load, so a second
+          brown web overlay would only bring back the very gap it holds through.
+          The web overlay is for the browser/PWA, where there is no native splash. */}
+      <BrandHold show={showBoot && !isNativeApp()} />
     </ToastProvider>
   );
 }

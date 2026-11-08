@@ -105,6 +105,7 @@ await page.addInitScript(
         build: 1,
       }),
       openListenerSettings: () => ({}),
+      appReady: () => ({}),
       openAppSettings: () => ({}),
       openNotificationSettings: () => ({}),
       requestNotifications: () => {

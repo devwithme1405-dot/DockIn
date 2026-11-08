@@ -177,6 +177,20 @@ public class DockInPlugin extends Plugin {
         launch(call, i, fallback);
     }
 
+    /**
+     * The web app has drawn its first real screen. Until this, the launch splash
+     * is held on screen, so the cap animation hands straight over to the app with
+     * no blank screen in between.
+     */
+    @PluginMethod
+    public void appReady(PluginCall call) {
+        android.app.Activity a = getActivity();
+        if (a instanceof MainActivity) {
+            ((MainActivity) a).markContentReady();
+        }
+        call.resolve();
+    }
+
     private void launch(PluginCall call, Intent first, Intent fallback) {
         try {
             if (first != null) {
