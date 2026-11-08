@@ -116,6 +116,10 @@ await page.addInitScript(
         phone.college = { ...phone.college, syncedAt: Date.now() };
         return phone.college;
       },
+      scheduleReminders: ({ items }) => {
+        phone.reminders = items ?? [];
+        return {};
+      },
       connectCamu: () => {
         phone.college = { ...phone.college, camu: { ...phone.camuReady, connected: true, syncedAt: Date.now() } };
         return phone.college;
@@ -443,6 +447,16 @@ await step("Today shows Camu's classes with the room, and nothing to mark", asyn
   if (await page.getByRole("button", { name: "Present" }).count()) throw new Error("there are marking buttons on a Camu class");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-camu-today.png`, fullPage: true });
+});
+
+await step("the app hands the phone a list of reminders to fire", async () => {
+  await page.waitForFunction(() => Array.isArray(window.__phone.get().reminders), null, { timeout: 8000 });
+  const r = await page.evaluate(() => window.__phone.get().reminders);
+  if (!Array.isArray(r)) throw new Error("no reminders were scheduled");
+  // Each reminder carries a future time, a title and the screen to open.
+  for (const it of r) {
+    if (typeof it.at !== "number" || !it.title || !it.path) throw new Error("a reminder is malformed");
+  }
 });
 
 await step("an expired Camu session renews itself without being asked", async () => {

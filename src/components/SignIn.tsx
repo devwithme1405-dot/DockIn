@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { ALLOWED_DOMAIN } from "@/lib/supabase";
+import { useEffect, useState } from "react";
+import { ArrowRight, Eye, EyeOff, Lock, User } from "lucide-react";
 import {
   fetchProviders,
   readAuthRedirectError,
-  sendEmailCode,
-  signInWithPassword,
-  updatePassword,
-  verifyEmailCode,
+  signInWithUsername,
+  signUpWithUsername,
   signInWithAzure,
   signInWithGoogle,
   type Providers,
@@ -39,31 +36,20 @@ function MicrosoftSquares() {
   );
 }
 
-type Mode = "in" | "send" | "verify" | "pw";
-
 /**
- * Signing in with an email and a password you set once.
- *
- * Password is the everyday way in — no code to wait for. Setting that password,
- * whether the first time or after forgetting it, is done with a six-digit code
- * typed right here. A link is deliberately not used: inside the Android app an
- * email link opens a separate browser and the sign-in it does there never
- * reaches the app, which is why the old link "did nothing". A code lands the
- * session in the app, every time.
+ * Signing in with a username and password, kept by Supabase. No email, no code —
+ * the username is all it needs. Creating an account and signing in are the same
+ * two fields; a small switch chooses which. Nothing is ever deleted: a device
+ * that signs in joins the account and its data syncs up.
  */
 export function SignIn({ dark = false }: { dark?: boolean }) {
-  const [mode, setMode] = useState<Mode>("in");
-  const [redirectError] = useState(readAuthRedirectError);
-  const [error, setError] = useState<string | null>(redirectError);
-  const [note, setNote] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(readAuthRedirectError);
   const [busy, setBusy] = useState(false);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [show, setShow] = useState(false);
   const [providers, setProviders] = useState<Providers | null>(null);
-  const codeRef = useRef<HTMLInputElement>(null);
-  const pwRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -73,10 +59,14 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
     };
   }, []);
 
-  function to(next: Mode) {
-    setMode(next);
+  const ready = username.trim().length >= 3 && password.length >= 6;
+
+  async function submit() {
+    if (!ready || busy) return;
+    setBusy(true);
     setError(null);
-    setNote(null);
+    setError(await (creating ? signUpWithUsername(username, password) : signInWithUsername(username, password)));
+    setBusy(false);
   }
 
   async function oauth(run: () => Promise<string | null>) {
@@ -85,171 +75,64 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
     setBusy(false);
   }
 
-  async function signIn() {
-    setBusy(true);
-    setError(null);
-    setError(await signInWithPassword(email, password));
-    setBusy(false);
-  }
-
-  async function send() {
-    setBusy(true);
-    setError(null);
-    const err = await sendEmailCode(email);
-    setBusy(false);
-    if (err) return setError(err);
-    setNote(null);
-    to("verify");
-    setTimeout(() => codeRef.current?.focus(), 50);
-  }
-
-  async function verify() {
-    setBusy(true);
-    setError(null);
-    const err = await verifyEmailCode(email, code);
-    setBusy(false);
-    if (err) return setError(err);
-    to("pw");
-    setTimeout(() => pwRef.current?.focus(), 50);
-  }
-
-  async function savePassword() {
-    setBusy(true);
-    setError(null);
-    const err = await updatePassword(password);
-    setBusy(false);
-    if (err) return setError(err);
-    // The code already signed them in; the password is now set for next time.
-  }
-
   const field =
-    "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
+    "h-12 w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
   const muted = dark ? "text-white/70" : "text-muted";
   const strong = dark ? "text-white" : "text-text";
   const oneTap = !isNativeApp() && (providers?.google || providers?.azure);
 
   return (
     <div>
-      {mode === "in" && (
-        <>
-          <label className={cx("mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-email">
-            Email
-          </label>
-          <input
-            id="dockin-email"
-            className={field}
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder={ALLOWED_DOMAIN ? `name@${ALLOWED_DOMAIN}` : "you@example.com"}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <label className={cx("mt-3 mb-1.5 block text-[13px] font-medium", muted)} htmlFor="dockin-pass">
-            Password
-          </label>
-          <div className="relative">
-            <input
-              id="dockin-pass"
-              className={cx(field, "pr-11")}
-              type={show ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder="Your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && email.includes("@") && password.length >= 6 && void signIn()}
-            />
-            <ShowButton show={show} onToggle={() => setShow((s) => !s)} />
-          </div>
-          <Button className="mt-4 w-full" onClick={signIn} disabled={busy || !email.includes("@") || password.length < 6}>
-            <Lock size={17} /> Sign in <ArrowRight size={17} />
-          </Button>
-          <button onClick={() => to("send")} className={cx("mx-auto mt-3 block text-[13px] font-medium", strong)}>
-            First time, or forgot password?
-          </button>
-        </>
-      )}
+      <label className={cx("mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-user">
+        Username
+      </label>
+      <div className="relative">
+        <User size={18} className="pointer-events-none absolute inset-y-0 left-3.5 my-auto text-muted" />
+        <input
+          id="dockin-user"
+          className={cx(field, "pl-10")}
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="pick a username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+      </div>
 
-      {mode === "send" && (
-        <>
-          <p className={cx("mb-3 text-[14px]", muted)}>
-            Enter your email and we send a six-digit code to set your password. Works with Outlook, and
-            the code is typed right here — no links.
-          </p>
-          <input
-            className={field}
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder={ALLOWED_DOMAIN ? `name@${ALLOWED_DOMAIN}` : "you@example.com"}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && email.includes("@") && void send()}
-            autoFocus
-          />
-          <Button className="mt-4 w-full" onClick={send} disabled={busy || !email.includes("@")}>
-            <Mail size={17} /> Email me a code
-          </Button>
-          <BackLink onClick={() => to("in")} className={strong} />
-        </>
-      )}
+      <label className={cx("mt-3 mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-pass">
+        Password
+      </label>
+      <div className="relative">
+        <input
+          id="dockin-pass"
+          className={cx(field, "pr-11")}
+          type={show ? "text" : "password"}
+          autoComplete={creating ? "new-password" : "current-password"}
+          placeholder={creating ? "at least 6 characters" : "your password"}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && ready && void submit()}
+        />
+        <ShowButton show={show} onToggle={() => setShow((s) => !s)} />
+      </div>
 
-      {mode === "verify" && (
-        <>
-          <p className={cx("mb-3 text-[14px]", muted)}>
-            Code sent to <span className={strong}>{email}</span>. Check your inbox, and the junk folder too.
-          </p>
-          <input
-            ref={codeRef}
-            className={cx(field, "text-center text-[22px] tracking-[0.35em] tabular-nums")}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="000000"
-            maxLength={8}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            onKeyDown={(e) => e.key === "Enter" && code.length >= 6 && void verify()}
-            aria-label="Code from your email"
-          />
-          <Button className="mt-3 w-full" onClick={verify} disabled={busy || code.length < 6}>
-            Verify <ArrowRight size={17} />
-          </Button>
-          <div className="mt-3 flex items-center justify-between text-[13px]">
-            <button onClick={() => to("send")} className={muted}>
-              Use a different email
-            </button>
-            <button onClick={send} disabled={busy} className={cx("font-medium", strong)}>
-              Resend code
-            </button>
-          </div>
-        </>
-      )}
+      <Button className="mt-4 w-full" onClick={submit} disabled={busy || !ready}>
+        <Lock size={17} /> {creating ? "Create account" : "Sign in"} <ArrowRight size={17} />
+      </Button>
 
-      {mode === "pw" && (
-        <>
-          <p className={cx("mb-3 text-[14px]", muted)}>
-            You are in. Set a password so next time it is just email and password.
-          </p>
-          <div className="relative">
-            <input
-              ref={pwRef}
-              className={cx(field, "pr-11")}
-              type={show ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="At least 6 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && password.length >= 6 && void savePassword()}
-            />
-            <ShowButton show={show} onToggle={() => setShow((s) => !s)} />
-          </div>
-          <Button className="mt-4 w-full" onClick={savePassword} disabled={busy || password.length < 6}>
-            <Lock size={17} /> Save password
-          </Button>
-        </>
-      )}
+      <button
+        onClick={() => {
+          setCreating((c) => !c);
+          setError(null);
+        }}
+        className={cx("mx-auto mt-3 block text-[13px] font-bold", strong)}
+      >
+        {creating ? "Already have an account? Sign in" : "New here? Create an account"}
+      </button>
 
-      {oneTap && mode === "in" && (
+      {oneTap && (
         <>
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-line" />
@@ -282,7 +165,6 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
         </>
       )}
 
-      {note && <p className="mt-4 rounded-xl bg-safe-soft px-3.5 py-2.5 text-[13.5px] text-safe">{note}</p>}
       {error && (
         <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13.5px] text-danger">
           {error}
@@ -301,14 +183,6 @@ function ShowButton({ show, onToggle }: { show: boolean; onToggle: () => void })
       className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted"
     >
       {show ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  );
-}
-
-function BackLink({ onClick, className }: { onClick: () => void; className: string }) {
-  return (
-    <button onClick={onClick} className={cx("mx-auto mt-3 block text-[13px] font-medium", className)}>
-      ← Back to sign in
     </button>
   );
 }

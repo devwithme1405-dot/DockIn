@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, CloudUpload } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, accountName } from "@/lib/auth";
 import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { markSetupSeen } from "@/lib/setup";
@@ -82,7 +82,7 @@ export default function SetupPage() {
               <p className="text-[15px] font-medium">{session ? "Backed up" : "Back up your data"}</p>
               <p className="mt-0.5 text-[12.5px] text-muted">
                 {session
-                  ? `Signed in as ${session.user.email}`
+                  ? `Signed in as ${accountName(session.user.email)}`
                   : "Sign in with your email, so a new phone gets everything back."}
               </p>
             </div>

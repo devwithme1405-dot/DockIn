@@ -86,6 +86,61 @@ export const matchesAllowedDomain = (email: string) =>
 const clean = (email: string) => email.trim().toLowerCase();
 const network = (m: string) => /Failed to fetch|NetworkError|fetch failed/i.test(m);
 
+/**
+ * Username + password, backed by Supabase. There is no email to confirm or a
+ * code to wait for: the username becomes a private address Supabase stores the
+ * account under. Nothing is deleted — signing in only adds this device to the
+ * same account and syncs the data that is already on the phone.
+ *
+ * Needs "Confirm email" turned OFF in Supabase → Authentication → Providers →
+ * Email (there is no real inbox to confirm).
+ */
+/** The username to show for an account — the bare name for a username login,
+ * the email for an older email/OAuth account. */
+export function accountName(email: string | undefined | null): string {
+  if (!email) return "Signed in";
+  return email.endsWith("@dockin.app") ? email.slice(0, -"@dockin.app".length) : email;
+}
+
+export function usernameEmail(username: string): string {
+  const u = username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  return `${u}@dockin.app`;
+}
+
+export async function signInWithUsername(username: string, password: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  if (username.trim().length < 3) return "Username needs at least 3 characters.";
+  const { error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
+  if (!error) return null;
+  if (network(error.message)) return "No internet right now.";
+  if (/Invalid login credentials/i.test(error.message)) return "Wrong username or password.";
+  if (/Email not confirmed/i.test(error.message))
+    return "Turn off \"Confirm email\" in Supabase to use usernames.";
+  return error.message;
+}
+
+export async function signUpWithUsername(username: string, password: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  if (username.trim().length < 3) return "Username needs at least 3 characters.";
+  if (password.length < 6) return "Password needs at least 6 characters.";
+  const { data, error } = await sb.auth.signUp({ email: usernameEmail(username), password });
+  if (error) {
+    if (network(error.message)) return "No internet right now.";
+    if (/already registered|already exists|User already/i.test(error.message))
+      return "That username is taken. Sign in instead, or pick another.";
+    return error.message;
+  }
+  // With confirmation off, signUp returns a session straight away. Otherwise try
+  // to sign in (works once confirmation is off) and guide if it still can't.
+  if (!data.session) {
+    const err = await signInWithUsername(username, password);
+    if (err) return "Account made. Turn off \"Confirm email\" in Supabase, then sign in.";
+  }
+  return null;
+}
+
 /** Signs in with an email and password. Returns an error to show, or null on success. */
 export async function signInWithPassword(email: string, password: string): Promise<string | null> {
   const sb = getSupabase();

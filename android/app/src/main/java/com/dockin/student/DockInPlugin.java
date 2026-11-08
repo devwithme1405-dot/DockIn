@@ -364,6 +364,18 @@ public class DockInPlugin extends Plugin {
         call.resolve();
     }
 
+    /** The app hands over the upcoming reminders (class, task, attendance); the
+     * phone sets the alarms. The whole list replaces the last one. */
+    @PluginMethod
+    public void scheduleReminders(PluginCall call) {
+        JSArray items = call.getArray("items");
+        try {
+            Reminders.schedule(getContext(), items != null ? items : new org.json.JSONArray());
+        } catch (RuntimeException ignored) {
+        }
+        call.resolve();
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
 

@@ -7,7 +7,7 @@ import { saveProfile } from "@/lib/repo";
 import { Button, Chip, Field, cx, inputCls } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { SignIn } from "@/components/SignIn";
-import { useAuth } from "@/lib/auth";
+import { useAuth, accountName } from "@/lib/auth";
 
 /**
  * Three screens: the welcome, signing in (skippable), and your name with the
@@ -64,7 +64,7 @@ export default function OnboardingPage() {
               {session ? (
                 <div className="rounded-2xl bg-safe-soft px-4 py-3.5">
                   <p className="text-[13px] text-muted">Signed in as</p>
-                  <p className="font-semibold text-safe">{session.user.email}</p>
+                  <p className="font-semibold text-safe">{accountName(session.user.email)}</p>
                 </div>
               ) : (
                 <SignIn />

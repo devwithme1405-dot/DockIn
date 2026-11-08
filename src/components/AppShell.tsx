@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { BootSplash } from "./BootSplash";
+import { RemindersSync } from "./RemindersSync";
 import { useAuth } from "@/lib/auth";
 import { isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -219,6 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
+        {ready && !onboarding && isNativeApp() && <RemindersSync />}
       </div>
       {notice && (
         <button

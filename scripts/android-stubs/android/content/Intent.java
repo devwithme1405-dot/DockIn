@@ -10,6 +10,9 @@ public class Intent {
   public Intent addFlags(int f) { return this; }
   public Intent putExtra(String k, String v) { return this; }
   public Intent putExtra(String k, boolean v) { return this; }
+  public Intent putExtra(String k, int v) { return this; }
+  public Intent setAction(String a) { return this; }
+  public int getIntExtra(String k, int d) { return d; }
   public boolean getBooleanExtra(String k, boolean d) { return d; }
   public String getStringExtra(String k) { return null; }
   public void removeExtra(String k) {}

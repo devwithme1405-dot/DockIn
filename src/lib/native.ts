@@ -139,13 +139,33 @@ interface DockInPlugin {
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
+  scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
   addListener(event: "notice", fn: (n: NativeNotice) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
 }
 
+/** A reminder for the phone to fire at `at` (epoch ms): class, task, attendance. */
+export interface ReminderItem {
+  id: number;
+  at: number;
+  title: string;
+  body: string;
+  path: string;
+}
+
 export const DockIn = registerPlugin<DockInPlugin>("DockIn");
+
+/** Hand the phone the whole upcoming set of reminders; it replaces the last set. */
+export async function scheduleReminders(items: ReminderItem[]): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await DockIn.scheduleReminders({ items });
+  } catch {
+    /* older app without the method: ignore */
+  }
+}
 
 /** True inside the Android app, false in any browser. */
 export function isNativeApp(): boolean {

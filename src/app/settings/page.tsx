@@ -48,7 +48,7 @@ import { ConnectCamu, ConnectLms } from "@/components/College";
 import { useAttendanceData, useCollege } from "@/lib/college";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
-import { signOutCloud, updatePassword, useAuth } from "@/lib/auth";
+import { accountName, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
@@ -243,7 +243,7 @@ export default function ProfilePage() {
               <p className="truncate text-[13px] text-muted">
                 {[profile.branch, profile.year ? `Year ${profile.year}` : null, profile.section]
                   .filter(Boolean)
-                  .join(" · ") || (signedIn ? session.user.email : "Saved on this phone only")}
+                  .join(" · ") || (signedIn ? accountName(session.user.email) : "Saved on this phone only")}
               </p>
               <p className="mt-0.5 text-[12px] text-muted">Using DockIn since {since}</p>
             </div>
@@ -320,7 +320,7 @@ export default function ProfilePage() {
                 <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
                   <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{session.user.email}</span>
+                    <span className="block truncate font-medium">{accountName(session.user.email)}</span>
                     <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
                       {syncLine}
                     </span>
