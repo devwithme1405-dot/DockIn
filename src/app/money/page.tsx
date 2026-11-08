@@ -87,7 +87,7 @@ export default function MoneyPage() {
     );
 
   return (
-    <div className="page-wash">
+    <div className="page-wash stagger pb-24">
       <PageHeader
         title="Money"
         subtitle="Every rupee, in and out"
@@ -191,15 +191,16 @@ export default function MoneyPage() {
         </section>
       )}
 
-      {list.length > 0 && (
-        <>
-          <section className="mt-6 px-5" aria-label="Daily spending">
-            <h2 className="mb-3 text-[17px] font-semibold">Daily spending</h2>
-            <DailyBars values={daily} month={month} today={today} />
-          </section>
+      {list.length >= 5 && (
+        <section className="mt-6 px-5" aria-label="Daily spending">
+          <h2 className="mb-3 font-display text-[17px] font-bold tracking-[-0.02em]">Daily spending</h2>
+          <DailyBars values={daily} month={month} today={today} />
+        </section>
+      )}
 
+      {allCats.length >= 2 && (
           <section className="mt-6 px-5" aria-label="Where it went">
-            <h2 className="mb-3 text-[17px] font-semibold">Where it went</h2>
+            <h2 className="mb-3 font-display text-[17px] font-bold tracking-[-0.02em]">Where it went</h2>
             <div className="lift rounded-3xl bg-surface p-4">
               <ul className="space-y-3.5">
                 {cats.map((c) => (
@@ -227,11 +228,10 @@ export default function MoneyPage() {
               </ul>
             </div>
           </section>
-        </>
       )}
 
       <section className="mt-6" aria-label="Transactions">
-        <h2 className="mb-3 px-5 text-[17px] font-semibold">Transactions</h2>
+        <h2 className="mb-3 px-5 font-display text-[17px] font-bold tracking-[-0.02em]">Transactions</h2>
         {list.length > 0 && (
           <div className="mb-3 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
             <Chip active={catFilter === "all"} onClick={() => setCatFilter("all")}>All</Chip>
@@ -320,7 +320,7 @@ export default function MoneyPage() {
       <button
         onClick={() => setAdding(true)}
         aria-label="Add expense"
-        className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
+        className="no-rise fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_12px_30px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] transition active:scale-95"
       >
         <Plus size={26} />
       </button>

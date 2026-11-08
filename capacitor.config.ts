@@ -23,8 +23,8 @@ const config: CapacitorConfig = {
   },
   android: {
     // What shows in the instant between Android's animated splash and the
-    // site's first paint: the same blue, so the opening reads as one motion.
-    backgroundColor: "#1F5FD6",
+    // site's first paint: the same leather, so the opening reads as one motion.
+    backgroundColor: "#864220",
   },
 };
 

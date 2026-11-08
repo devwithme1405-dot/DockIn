@@ -261,3 +261,34 @@ export function weekForm(
   }
   return out;
 }
+
+/**
+ * How the overall figure moved over the last seven days: today's percentage
+ * minus what it was before this week's classes, both rounded the way they are
+ * shown. Null when there is nothing this week, or nothing before it, to compare.
+ */
+export function weekChange(
+  sessions: Pick<Session, "status" | "weight" | "date">[],
+  overall: { attended: number; total: number },
+  today: string,
+): number | null {
+  if (overall.total <= 0) return null;
+  const from = addDays(today, -6);
+  let present = 0;
+  let held = 0;
+  for (const s of sessions) {
+    if (s.date < from || s.date > today) continue;
+    const w = s.weight ?? 1;
+    if (s.status === "present") {
+      present += w;
+      held += w;
+    } else if (s.status === "absent") {
+      held += w;
+    }
+  }
+  const before = overall.total - held;
+  if (held === 0 || before <= 0) return null;
+  const now = Math.round((overall.attended / overall.total) * 100);
+  const then = Math.round(((overall.attended - present) / before) * 100);
+  return now - then;
+}

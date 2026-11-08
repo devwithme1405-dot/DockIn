@@ -28,6 +28,8 @@ interface Row {
   room: string;
   teacher: string;
   color: string;
+  /** What Camu recorded for this class, when it is in the past. */
+  status: "present" | "absent" | null;
 }
 
 export default function TimetablePage() {
@@ -44,6 +46,12 @@ export default function TimetablePage() {
 
   const rows = useMemo<Row[]>(() => {
     if (camu) {
+      // Camu's own record for this day (present / absent per class), matched by time.
+      const marks = (data?.sessions ?? []).filter((s) => s.date === date);
+      const statusAt = (subId: string, from: string): Row["status"] => {
+        const m = marks.find((x) => x.start === from && (x.subjectId === `camu:${subId}` || x.subjectId.endsWith(subId)));
+        return m && (m.status === "present" || m.status === "absent") ? m.status : null;
+      };
       return classesOn(camu, date)
         .map((p) => {
           const sub = subjectOf(p, camu.subjects ?? []);
@@ -55,6 +63,7 @@ export default function TimetablePage() {
             room: p.room,
             teacher: p.teacher,
             color: colorFor(sub?.id ?? p.subId ?? p.name),
+            status: statusAt(p.subId, p.from),
           };
         })
         .sort((a, b) => a.from.localeCompare(b.from));
@@ -74,16 +83,17 @@ export default function TimetablePage() {
           room: s.room ?? "",
           teacher: "",
           color: sub?.color ?? colorFor(s.subjectId),
+          status: null,
         };
       });
-  }, [camu, date, slots, subjects]);
+  }, [camu, date, slots, subjects, data]);
 
   if (!profile || (native && !data)) return <TodaySkeleton />;
 
   const hasManual = (slots?.length ?? 0) > 0;
 
   return (
-    <div className="page-wash min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+    <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
       <PageHeader
         title="Timetable"
         right={
@@ -177,12 +187,26 @@ export default function TimetablePage() {
                   <p className="min-w-0 text-[15.5px] font-semibold leading-snug [overflow-wrap:anywhere]">
                     {r.name}
                   </p>
-                  {r.teacher && (
-                    <span className="shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-muted">
-                      {r.teacher}
+                  {r.status ? (
+                    <span
+                      className={cx(
+                        "shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-semibold",
+                        r.status === "present" ? "bg-safe-soft text-safe" : "bg-danger-soft text-danger",
+                      )}
+                    >
+                      {r.status === "present" ? "Present" : "Absent"}
                     </span>
+                  ) : (
+                    r.teacher && (
+                      <span className="shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium text-muted">
+                        {r.teacher}
+                      </span>
+                    )
                   )}
                 </div>
+                {r.status && r.teacher && (
+                  <p className="mt-0.5 text-[12px] text-muted">{r.teacher}</p>
+                )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
                   <span className="inline-flex items-center gap-1.5 tnum">
                     <Clock size={14} /> {fmtTime(r.from)} – {fmtTime(r.to)}

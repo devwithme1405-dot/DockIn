@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The launch animation: the dot drops into the tray and the tray takes the
-    weight — DockIn's mark, "docking in". Android 12+ plays it on the system
-    splash; older phones show the still mark (splash_icon.xml).
-
-    Same geometry as splash_icon.xml. The dot starts above, faded, and lands
-    with a bounce; the tray squashes a touch as it lands and springs back.
+    The launch animation: the cap drops onto the leather cover and settles,
+    its shadow spreading as it lands — the same moment the web launch screen
+    plays. Android 12+ shows it on the system splash; older phones show the
+    still mark (splash_icon.xml).
 -->
 <animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt">
@@ -16,97 +14,80 @@
             android:viewportWidth="288"
             android:viewportHeight="288">
             <group
-                android:scaleX="2.1"
-                android:scaleY="2.1"
-                android:translateX="76.8"
-                android:translateY="78.5">
-                <group
-                    android:name="dot"
-                    android:translateY="-18">
-                    <path
-                        android:name="dotFill"
-                        android:fillAlpha="0"
-                        android:fillColor="#FFFFFF"
-                        android:pathData="M25.8,17.5 A6.2,6.2 0 1 1 38.2,17.5 A6.2,6.2 0 1 1 25.8,17.5 Z" />
-                </group>
-                <group
-                    android:name="tray"
-                    android:pivotX="32"
-                    android:pivotY="51">
-                    <path
-                        android:fillColor="#FFFFFF"
-                        android:pathData="M20,29 H44 A8,8 0 0 1 52,37 V43 A8,8 0 0 1 44,51 H20 A8,8 0 0 1 12,43 V37 A8,8 0 0 1 20,29 Z" />
-                    <path
-                        android:fillColor="#1F5FD6"
-                        android:pathData="M23.0,22.5 H41.0 A5.5,5.5 0 0 1 46.5,28.0 V40.0 A5.5,5.5 0 0 1 41.0,45.5 H23.0 A5.5,5.5 0 0 1 17.5,40.0 V28.0 A5.5,5.5 0 0 1 23.0,22.5 Z" />
-                </group>
+                android:name="shadow"
+                android:pivotX="144"
+                android:pivotY="200"
+                android:scaleX="0.5">
+                    <path android:name="shadowFill" android:fillColor="#1E0A00" android:fillAlpha="0.35" android:pathData="M94.6,199.9 A49.4,8.84 0 1 1 193.4,199.9 A49.4,8.84 0 1 1 94.6,199.9 Z" />
+            </group>
+            <group
+                android:name="cap"
+                android:translateY="-40">
+                    <path android:pathData="M 105,128.4 V 159.6 C 105,175.2 123.2,184.3 144,184.3 C 164.8,184.3 183,175.2 183,159.6 V 128.4 Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="105" android:startY="55.6" android:endX="183" android:endY="55.6">
+                                <item android:offset="0" android:color="#3F1C9C" />
+                                <item android:offset="0.42" android:color="#7A50EF" />
+                                <item android:offset="1" android:color="#3A1890" />
+                            </gradient>
+                        </aapt:attr>
+                    </path>
+                    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.3" android:strokeWidth="4.16" android:strokeLineCap="round" android:pathData="M 114.1,163.5 C 119.3,172.6 131,176.76 144,176.76" />
+                    <path android:pathData="M 73.8,119.3 L 144,151.8 L 214.2,119.3 V 128.4 L 144,160.9 L 73.8,128.4 Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="60.8" android:startY="119.3" android:endX="60.8" android:endY="160.9">
+                                <item android:offset="0" android:color="#4E26BB" />
+                                <item android:offset="1" android:color="#37188C" />
+                            </gradient>
+                        </aapt:attr>
+                    </path>
+                    <path android:pathData="M 144,85.5 L 214.2,119.3 L 144,151.8 L 73.8,119.3 Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="101.88" android:startY="85.5" android:endX="172.08" android:endY="151.8">
+                                <item android:offset="0" android:color="#BBA4FF" />
+                                <item android:offset="0.5" android:color="#8B64F5" />
+                                <item android:offset="1" android:color="#6436E2" />
+                            </gradient>
+                        </aapt:attr>
+                    </path>
+                    <path android:fillColor="#FFFFFF" android:fillAlpha="0.16" android:pathData="M 144,85.5 L 214.2,119.3 L 205.1,123.72 L 144,94.6 Z" />
+                    <path android:strokeColor="#E9A93A" android:strokeWidth="4.94" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M 144,119.3 L 192.1,132.56 V 162.2" />
+                    <path android:fillColor="#F0B84A" android:pathData="M137.5,119.3 A6.5,6.5 0 1 1 150.5,119.3 A6.5,6.5 0 1 1 137.5,119.3 Z" />
+                    <path android:pathData="M 185.6,160.9 H 198.6 L 202.76,183.52 H 181.44 Z">
+                        <aapt:attr name="android:fillColor">
+                            <gradient android:type="linear" android:startX="181.44" android:startY="160.9" android:endX="202.76" android:endY="183.52">
+                                <item android:offset="0" android:color="#FFE08F" />
+                                <item android:offset="1" android:color="#D9901A" />
+                            </gradient>
+                        </aapt:attr>
+                    </path>
             </group>
         </vector>
     </aapt:attr>
 
-    <target android:name="dot">
+    <target android:name="cap">
         <aapt:attr name="android:animation">
             <objectAnimator
-                android:duration="620"
+                android:duration="680"
                 android:interpolator="@android:anim/bounce_interpolator"
                 android:propertyName="translateY"
-                android:startOffset="80"
-                android:valueFrom="-18"
+                android:startOffset="60"
+                android:valueFrom="-40"
                 android:valueTo="0"
                 android:valueType="floatType" />
         </aapt:attr>
     </target>
 
-    <target android:name="dotFill">
+    <target android:name="shadow">
         <aapt:attr name="android:animation">
             <objectAnimator
-                android:duration="220"
-                android:propertyName="fillAlpha"
-                android:startOffset="80"
-                android:valueFrom="0"
+                android:duration="680"
+                android:interpolator="@android:anim/bounce_interpolator"
+                android:propertyName="scaleX"
+                android:startOffset="60"
+                android:valueFrom="0.5"
                 android:valueTo="1"
                 android:valueType="floatType" />
-        </aapt:attr>
-    </target>
-
-    <target android:name="tray">
-        <aapt:attr name="android:animation">
-            <set android:ordering="sequentially">
-                <set android:ordering="together">
-                    <objectAnimator
-                        android:duration="110"
-                        android:interpolator="@android:anim/decelerate_interpolator"
-                        android:propertyName="scaleY"
-                        android:startOffset="300"
-                        android:valueFrom="1"
-                        android:valueTo="0.9"
-                        android:valueType="floatType" />
-                    <objectAnimator
-                        android:duration="110"
-                        android:interpolator="@android:anim/decelerate_interpolator"
-                        android:propertyName="scaleX"
-                        android:startOffset="300"
-                        android:valueFrom="1"
-                        android:valueTo="1.05"
-                        android:valueType="floatType" />
-                </set>
-                <set android:ordering="together">
-                    <objectAnimator
-                        android:duration="260"
-                        android:interpolator="@android:anim/overshoot_interpolator"
-                        android:propertyName="scaleY"
-                        android:valueFrom="0.9"
-                        android:valueTo="1"
-                        android:valueType="floatType" />
-                    <objectAnimator
-                        android:duration="260"
-                        android:interpolator="@android:anim/overshoot_interpolator"
-                        android:propertyName="scaleX"
-                        android:valueFrom="1.05"
-                        android:valueTo="1"
-                        android:valueType="floatType" />
-                </set>
-            </set>
         </aapt:attr>
     </target>
 </animated-vector>

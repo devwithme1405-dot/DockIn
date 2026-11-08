@@ -304,7 +304,7 @@ final class College {
                 c, id, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_dockin)
-                .setColor(0xFF1F5FD6)
+                .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(text))

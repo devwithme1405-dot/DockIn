@@ -381,10 +381,12 @@ await step("connecting Camu turns Attendance into Camu's numbers", async () => {
   await waitFor("Connect Camu");
   await page.getByRole("button", { name: "Connect", exact: true }).first().click();
   await waitFor("From Camu");
+  // 71 of 87 is 81.6%, shown rounded like Camu (the figure counts up to it).
+  await waitFor("82%").catch(() => {
+    throw new Error("the overall figure is not Camu's 71 of 87 (rounded)");
+  });
   const t = await text();
   if (!t.includes("Database Management Systems")) throw new Error("Camu's subjects are missing");
-  // 71 of 87 is 81.6%, shown rounded like Camu.
-  if (!/82%/.test(t)) throw new Error("the overall figure is not Camu's 71 of 87 (rounded)");
   if (t.includes("Open timetable")) throw new Error("still asks for a hand-made timetable");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-camu-attendance.png`, fullPage: true });
@@ -403,6 +405,7 @@ await step("a subject opens every class Camu recorded", async () => {
 await step("the Log lists classes by present/absent across subjects", async () => {
   await page.goto(`${BASE}/attendance`, { waitUntil: "domcontentloaded" });
   await waitFor("From Camu");
+  await page.getByRole("tab", { name: "History" }).click();
   await page.getByRole("tab", { name: "Log" }).click();
   await waitFor("Database Management Systems");
   // Filter to just absences, and the present-only class should drop out.
@@ -423,8 +426,8 @@ await step("the Calendar marks a day and opens it", async () => {
   await page.getByRole("button", { name: new RegExp(`${d.getDate()}[^0-9]`) }).first().click();
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/native-camu-calendar.png`, fullPage: true });
-  await page.getByRole("tab", { name: "Subjects" }).click();
-  await waitFor("Target attendance");
+  await page.getByRole("tab", { name: "Overview" }).click();
+  await waitFor("Your target");
 });
 
 await step("Today shows Camu's classes with the room, and nothing to mark", async () => {

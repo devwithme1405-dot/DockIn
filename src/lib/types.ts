@@ -38,6 +38,8 @@ export interface Profile {
   roll?: string;
   /** Your UPI id, put in udhaar reminders as a pay link. */
   upi?: string;
+  /** Friends you add once so their names are one tap when splitting or lending. */
+  friends?: string[];
   /** The shape of a college day; see lib/periods.ts. */
   grid?: { start: string; length: number; gap: number; count: number };
   createdAt: number;

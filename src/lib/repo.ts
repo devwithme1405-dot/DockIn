@@ -73,6 +73,7 @@ export async function saveProfile(
       | "bio"
       | "roll"
       | "upi"
+      | "friends"
     >
   >,
 ): Promise<void> {
@@ -92,7 +93,7 @@ export async function saveProfile(
   await db.profile.put(next);
 }
 
-const THEME_COLOR = { light: "#f6f5f1", dark: "#0e0f11" } as const;
+const THEME_COLOR = { light: "#f2e4cb", dark: "#1c140e" } as const;
 
 export const TEXT_SCALES = [0.9, 1, 1.1, 1.25] as const;
 export const TEXT_SCALE_LABELS = ["Small", "Default", "Large", "Larger"] as const;

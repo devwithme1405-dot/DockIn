@@ -3,6 +3,7 @@
 import { Pencil, Wallet } from "lucide-react";
 import type { BudgetStatus } from "@/lib/money";
 import { fmtMoney } from "@/lib/money";
+import { useCountUp } from "./ui";
 
 /**
  * The month at a glance: a violet card with what's been spent, the budget it is
@@ -23,9 +24,10 @@ export function MoneyHero({
   onSetBudget: () => void;
 }) {
   const used = status ? Math.min(status.used, 1) : 0;
+  const shownSpent = useCountUp(spent);
 
   return (
-    <section className="ink-card relative mx-5 overflow-hidden rounded-[22px]" aria-label="Month summary">
+    <section className="ink-card hero-sheen relative mx-5 overflow-hidden rounded-[22px]" aria-label="Month summary">
       <div className="relative p-5">
         <div className="flex items-start justify-between gap-3">
           <p className="text-[13px] font-medium text-white/80">{label}</p>
@@ -41,7 +43,7 @@ export function MoneyHero({
         </div>
 
         <p className="font-display mt-1.5 text-[34px] leading-none font-bold tnum">
-          {fmtMoney(spent)}
+          {fmtMoney(Math.round(shownSpent))}
           {status && <span className="text-[18px] font-semibold text-white/70"> / {fmtMoney(status.budget)}</span>}
         </p>
 

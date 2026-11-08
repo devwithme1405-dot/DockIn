@@ -129,7 +129,7 @@ export default function TasksPage() {
   const open = (t: Task) => setEditing(t);
 
   return (
-    <div className="page-wash">
+    <div className="page-wash stagger">
       <PageHeader
         title="Tasks"
         subtitle={
@@ -361,7 +361,7 @@ export default function TasksPage() {
       <button
         onClick={() => setAdding(true)}
         aria-label="Add task"
-        className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
+        className="no-rise fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_12px_30px_-8px_color-mix(in_srgb,var(--accent)_70%,transparent)] transition active:scale-95"
       >
         <Plus size={26} />
       </button>

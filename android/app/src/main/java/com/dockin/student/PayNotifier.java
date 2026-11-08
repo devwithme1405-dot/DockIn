@@ -159,7 +159,7 @@ final class PayNotifier {
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_dockin)
-                .setColor(0xFF1F5FD6)
+                .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
                 .setContentText("What was it for? Tap to place it.")
                 .setAutoCancel(true)
@@ -188,7 +188,7 @@ final class PayNotifier {
         String place = "/money?got=" + amountParam(amount) + "&at=" + at;
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_dockin)
-                .setColor(0xFF1F5FD6)
+                .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
                 .setContentText("Money someone owed you? Tap to tick it off.")
                 .setAutoCancel(true)

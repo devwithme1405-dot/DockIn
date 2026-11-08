@@ -46,6 +46,38 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "md" | "sm";
 };
 
+/**
+ * Eases a number up to its value when it changes, so a figure lands rather than
+ * snapping — the small bit of life that makes a screen feel awake. Honours the
+ * reduce-motion setting by jumping straight to the value.
+ */
+export function useCountUp(value: number, ms = 650): number {
+  const [n, setN] = useState(value);
+  const prev = useRef(value);
+  useEffect(() => {
+    const from = prev.current;
+    const to = value;
+    prev.current = value;
+    const reduce =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (from === to || reduce) {
+      setN(to);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - start) / ms);
+      const e = 1 - Math.pow(1 - k, 3);
+      setN(from + (to - from) * e);
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, ms]);
+  return n;
+}
+
 export function Button({
   variant = "primary",
   size = "md",
@@ -56,14 +88,16 @@ export function Button({
     <button
       {...props}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-2xl font-medium tracking-[-0.01em] transition active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100",
+        "inline-flex items-center justify-center gap-2 rounded-2xl tracking-[-0.01em] disabled:opacity-45",
         size === "md" ? "h-12 px-5 text-[15px]" : "h-9 px-3.5 text-[13.5px]",
-        // Primary is ink — the premium, confident default action.
-        variant === "primary" && "bg-ink text-on-ink shadow-[0_6px_18px_-8px_rgba(16,18,22,0.5)]",
-        variant === "accent" && "bg-accent text-on-accent shadow-[0_6px_18px_-8px_color-mix(in_srgb,var(--accent)_60%,transparent)]",
-        variant === "secondary" && "bg-surface-2 text-text",
-        variant === "ghost" && "text-accent",
-        variant === "danger" && "bg-danger text-white",
+        // Primary is stitched leather — the one thing on a screen to press.
+        variant === "primary" && "btn-leather",
+        variant === "accent" &&
+          "bg-accent font-bold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.3),0_4px_0_#4a24b0] transition active:translate-y-[3px] active:shadow-[0_1px_0_#4a24b0]",
+        variant === "secondary" && "btn-paper",
+        variant === "ghost" && "font-semibold text-accent transition active:scale-[0.98]",
+        variant === "danger" &&
+          "bg-danger font-bold text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_4px_0_#8a2418] transition active:translate-y-[3px] active:shadow-[0_1px_0_#8a2418]",
         className,
       )}
     />
@@ -92,16 +126,16 @@ export function Sheet({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="no-rise fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
       <div className="anim-fade absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="anim-sheet absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-surface px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
+      <div className="anim-sheet paper-page absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t-[1.5px] border-card-edge px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h2 className="font-display text-[19px] font-extrabold">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="grid size-9 place-items-center rounded-full bg-surface-2 text-muted"
+            className="btn-paper grid size-9 place-items-center rounded-full text-muted"
           >
             <X size={18} />
           </button>
@@ -185,9 +219,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {toast && (
         <div
           key={toast.id}
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md justify-center px-4"
+          className="pointer-events-none fixed inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md justify-center px-4"
         >
-          <div className="anim-toast pointer-events-auto flex items-center gap-4 rounded-xl bg-text px-4 py-2.5 text-sm text-bg shadow-lg">
+          <div className="anim-toast pointer-events-auto flex items-center gap-4 rounded-xl bg-text px-4 py-2.5 text-sm font-medium text-bg shadow-[0_10px_24px_-8px_rgb(40_20_5/0.6)]">
             <span>{toast.message}</span>
             {toast.onUndo && (
               <button
@@ -219,7 +253,7 @@ export function ProgressBar({
   state: AttendanceState;
 }) {
   return (
-    <div className="relative h-2 w-full overflow-hidden rounded-full bg-surface-2">
+    <div className="groove relative h-2 w-full overflow-hidden rounded-full">
       <div
         className={cx("h-full rounded-full transition-[width] duration-500", STATE_BAR[state])}
         style={{ width: `${Math.min(Math.max(pct ?? 0, 0), 100)}%` }}
@@ -245,8 +279,8 @@ export function Chip({
   className?: string;
 }) {
   const base = cx(
-    "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-sm font-medium transition",
-    active ? "bg-accent text-on-accent" : "bg-surface-2 text-text",
+    "inline-flex h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13.5px]",
+    active ? "btn-leather lip-sm" : "btn-paper lip-sm",
     className,
   );
   if (!onClick) return <span className={base}>{children}</span>;

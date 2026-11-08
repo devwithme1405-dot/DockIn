@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, HandCoins, MessageCircle, Plus } from "lucide-react";
+import { Check, HandCoins, MessageCircle, Plus, Users, X } from "lucide-react";
 import { useDues } from "@/lib/hooks";
 import { addDue, deleteDue, getProfile, restoreDue, saveProfile, settleDue, settleWith } from "@/lib/repo";
-import { fmtMoney, knownPeople, ledger, ledgerTotals, reminderText, whatsappUrl, type PersonLedger } from "@/lib/money";
+import { fmtMoney, knownPeople, ledger, ledgerTotals, reminderText, samePerson, whatsappUrl, type PersonLedger } from "@/lib/money";
 import { fmtDay, toDateStr } from "@/lib/dates";
 import type { Due } from "@/lib/types";
 import { Button, Sheet, cx, inputCls, useToast } from "./ui";
@@ -19,24 +19,36 @@ import { Button, Sheet, cx, inputCls, useToast } from "./ui";
  */
 export function UdhaarCard() {
   const dues = useDues();
+  const profile = useLiveQuery(() => getProfile(), []);
   const rows = useMemo(() => ledger(dues ?? []), [dues]);
   const totals = ledgerTotals(rows);
   const [adding, setAdding] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [person, setPerson] = useState<string | null>(null);
   const open = rows.find((r) => r.person === person) ?? null;
+  const friends = profile?.friends ?? [];
 
   if (!dues) return null;
 
   return (
     <section id="dues" className="mt-6 scroll-mt-20 px-5" aria-label="Lena-dena">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[17px] font-semibold">Lena-dena</h2>
-        <button
-          onClick={() => setAdding(true)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-surface px-3.5 text-[13px] font-medium shadow-[0_0_0_1px_var(--line)]"
-        >
-          <Plus size={15} /> Add
-        </button>
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em]">Lena-dena</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setManaging(true)}
+            aria-label="People"
+            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium shadow-[0_0_0_1px_var(--line)]"
+          >
+            <Users size={15} /> People
+          </button>
+          <button
+            onClick={() => setAdding(true)}
+            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[13px] font-medium text-on-ink"
+          >
+            <Plus size={15} /> Add
+          </button>
+        </div>
       </div>
 
       <div className="lift overflow-hidden rounded-3xl bg-surface">
@@ -92,10 +104,70 @@ export function UdhaarCard() {
       </div>
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="Add udhaar">
-        <DueForm onDone={() => setAdding(false)} />
+        <DueForm friends={friends} onDone={() => setAdding(false)} />
+      </Sheet>
+      <Sheet open={managing} onClose={() => setManaging(false)} title="Your people">
+        <PeopleManager friends={friends} />
       </Sheet>
       <PersonSheet row={open} onClose={() => setPerson(null)} />
     </section>
+  );
+}
+
+/** Add friends once so their names are one tap when splitting or lending. */
+function PeopleManager({ friends }: { friends: string[] }) {
+  const [name, setName] = useState("");
+  const clean = name.trim();
+  const exists = friends.some((f) => samePerson(f, clean));
+
+  async function add() {
+    if (!clean || exists) return;
+    await saveProfile({ friends: [...friends, clean] });
+    setName("");
+  }
+  async function remove(f: string) {
+    await saveProfile({ friends: friends.filter((x) => x !== f) });
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <input
+          className={inputCls}
+          placeholder="Add a friend (Yash, Harshit…)"
+          value={name}
+          autoCapitalize="words"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void add()}
+          aria-label="Friend's name"
+        />
+        <Button size="sm" className="h-11 shrink-0" disabled={!clean || exists} onClick={() => void add()}>
+          <Plus size={16} /> Add
+        </Button>
+      </div>
+      {friends.length === 0 ? (
+        <p className="mt-4 text-[13.5px] text-muted">
+          Add the friends you usually split or lend with. Then their name is one tap when you add money.
+        </p>
+      ) : (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {friends.map((f) => (
+            <li key={f}>
+              <span className="inline-flex h-9 items-center gap-1.5 rounded-full bg-surface-2 pr-1.5 pl-3 text-[14px] font-medium">
+                {f}
+                <button
+                  onClick={() => void remove(f)}
+                  aria-label={`Remove ${f}`}
+                  className="grid size-6 place-items-center rounded-full text-muted hover:bg-line"
+                >
+                  <X size={14} />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -209,13 +281,20 @@ function PersonSheet({ row, onClose }: { row: PersonLedger | null; onClose: () =
 export function DueForm({
   onDone,
   preset,
+  friends = [],
 }: {
   onDone: () => void;
   preset?: { amount?: number; note?: string; dir?: Due["dir"]; date?: string };
+  friends?: string[];
 }) {
   const toast = useToast();
   const dues = useDues();
-  const people = useMemo(() => knownPeople(dues ?? []), [dues]);
+  // Friends you added, then anyone else you have settled up with before.
+  const people = useMemo(() => {
+    const out = [...friends];
+    for (const p of knownPeople(dues ?? [])) if (!out.some((x) => samePerson(x, p))) out.push(p);
+    return out.slice(0, 12);
+  }, [dues, friends]);
   const [dir, setDir] = useState<Due["dir"]>(preset?.dir ?? "owed");
   const [person, setPerson] = useState("");
   const [amount, setAmount] = useState(preset?.amount ? String(preset.amount) : "");
@@ -226,6 +305,10 @@ export function DueForm({
   async function save() {
     if (!valid) return;
     const d = await addDue({ person, amount: value, dir, note, date: preset?.date ?? toDateStr() });
+    // A name used for the first time is remembered as a friend for next time.
+    if (!friends.some((f) => samePerson(f, person)) && !knownPeople(dues ?? []).some((f) => samePerson(f, person))) {
+      await saveProfile({ friends: [...friends, person.trim()] });
+    }
     toast.show(`${fmtMoney(value)} ${dir === "owed" ? "from" : "to"} ${d.person} added`, () => void deleteDue(d.id));
     onDone();
   }

@@ -113,7 +113,7 @@ public class CamuLoginActivity extends Activity {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(0xFF1F5FD6);
+        bar.setBackgroundColor(0xFF864220);
         int pad = dp(14);
         bar.setPadding(pad, dp(10), dp(6), dp(10));
 
@@ -184,7 +184,7 @@ public class CamuLoginActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER);
-        panel.setBackgroundColor(0xFF1F5FD6);
+        panel.setBackgroundColor(0xFF864220);
         panel.setClickable(true);
 
         TextView mark = new TextView(this);

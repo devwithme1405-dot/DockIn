@@ -1,79 +1,108 @@
 @import "tailwindcss";
 
 /*
- * DockIn — "Ivory & Evergreen", a premium editorial system.
+ * DockIn — "The Notebook".
  *
- * Warm ivory paper under a near-black ink, white cards with a whisper of
- * shadow, and a deep emerald as the one brand colour — money, growth, "above
- * target". Primary actions are ink, not a colour fill, the way a considered app
- * keeps its surface calm. Emerald also carries "present / safe / money in";
- * red is absent / over / money out; amber is the warning in between.
+ * A student's desk, not a dashboard: parchment pages with faint ruling, spiral
+ * notebook cards, brown leather for anything you press, and one ink colour —
+ * a deep purple — for the figures that matter. Green, amber and red still say
+ * present / careful / absent, always next to words, never colour alone.
  */
 :root {
-  --bg: #f4f2ea;
-  --surface: #ffffff;
-  --surface-2: #ebe8dd;
-  --text: #17180f;
-  --muted: #6f7064;
-  --line: #e6e2d4;
-  --accent: #0e6e50;
-  --accent-2: #12815e;
-  --accent-soft: #e0efe7;
+  --bg: #f2e4cb;
+  --rule: rgb(150 108 64 / 15%);
+  --card: #fcf5e7;
+  --card-edge: #d8b98d;
+  --surface: #fdf7ec;
+  --surface-2: #efe0c4;
+  --text: #3a2314;
+  --muted: #86684d;
+  --line: #e3cba5;
+  --accent: #6a3de8;
+  --accent-2: #8c66f6;
+  --accent-soft: #ebe2fc;
   --on-accent: #ffffff;
-  /* Ink: the warm near-black used for primary buttons and the dark card. */
-  --ink: #1a1b14;
-  --ink-2: #2a2b22;
-  --on-ink: #f4f2ea;
-  --ink-muted: #a9ab9c;
-  --safe: #0e7a53;
-  --safe-soft: #e0efe7;
-  --warn: #b07d12;
-  --warn-soft: #f4ead0;
-  --danger: #c5463b;
-  --danger-soft: #f6e5e0;
-  --hero: #0e6e50;
+  /* Leather: what you press. */
+  --ink: #7c3d1b;
+  --ink-2: #5e2d12;
+  --on-ink: #fff3e0;
+  --ink-muted: #e6c6a2;
+  --leather-hi: #b56b36;
+  --leather-mid: #8f4a22;
+  --leather-lo: #73381a;
+  --leather-lip: #57270e;
+  --orange: #f2871f;
+  /* A raised paper button. */
+  --pbtn-top: #fffaf1;
+  --pbtn-bottom: #f3e3c6;
+  --pbtn-edge: #c99d6c;
+  --pbtn-lip: #d6b68a;
+  --groove: #e9d6b6;
+  --safe: #2e8a47;
+  --safe-soft: #dcefd6;
+  --warn: #b8700f;
+  --warn-soft: #f7e3bd;
+  --danger: #c23b2b;
+  --danger-soft: #f6d9cf;
+  --hero: #6a3de8;
   --hero-fg: #ffffff;
-  --hero-muted: #bcd9cc;
-  --violet: #3f6a78;
-  --violet-soft: #e1edf0;
+  --hero-muted: #d9ccff;
+  --violet: #47708a;
+  --violet-soft: #dbe7ec;
   --rose: #b23a5b;
-  --rose-soft: #f6e4ea;
+  --rose-soft: #f5dde3;
+  --shadow-ink: 90 50 20;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .1 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  --leather: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .12 0 0 0 0 .05 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  --ring: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='26' viewBox='0 0 24 26'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%234f4f52'/%3E%3Cstop offset='.3' stop-color='%23d9d9dc'/%3E%3Cstop offset='.45' stop-color='%23ffffff'/%3E%3Cstop offset='.7' stop-color='%23a9a9ad'/%3E%3Cstop offset='1' stop-color='%233f3f42'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='12' cy='19' rx='3.6' ry='3.1' fill='%233a2212' fill-opacity='.8'/%3E%3Cpath d='M9.4 19.6 V7.2 a2.6 2.6 0 0 1 5.2 0 V19.6' fill='none' stroke='%232a1608' stroke-opacity='.28' stroke-width='3.4' transform='translate(.9 .9)'/%3E%3Cpath d='M9.4 19.4 V7.2 a2.6 2.6 0 0 1 5.2 0 V19.4' fill='none' stroke='url(%23g)' stroke-width='2.7' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+/* Night: the same notebook by lamplight — dark kraft, cream ink. */
 [data-theme="dark"] {
-  --bg: #0d100c;
-  --surface: #171a14;
-  --surface-2: #20231d;
-  --text: #f1f2ea;
-  --muted: #9a9c8e;
-  --line: #2a2e25;
-  --accent: #35b183;
-  --accent-2: #45c091;
-  --accent-soft: #112a20;
-  --on-accent: #05140d;
-  --ink: #f1f2ea;
-  --ink-2: #e6e7dd;
-  --on-ink: #16180f;
-  --ink-muted: #8a8c7e;
-  --safe: #35b183;
-  --safe-soft: #112a20;
-  --warn: #e0a534;
-  --warn-soft: #302612;
-  --danger: #ef6a5f;
-  --danger-soft: #331a17;
-  --hero: #0e6e50;
+  --bg: #1c140e;
+  --rule: rgb(255 222 180 / 5%);
+  --card: #2a1f16;
+  --card-edge: #4b3526;
+  --surface: #2a1f16;
+  --surface-2: #35281d;
+  --text: #f3e4cc;
+  --muted: #b69c80;
+  --line: #45331f;
+  --accent: #a88cff;
+  --accent-2: #bba5ff;
+  --accent-soft: #2d2346;
+  --on-accent: #170d2c;
+  --ink: #8a4520;
+  --ink-2: #6e3517;
+  --on-ink: #fff3e0;
+  --ink-muted: #d9b590;
+  --pbtn-top: #3a2c20;
+  --pbtn-bottom: #2e2218;
+  --pbtn-edge: #5a4230;
+  --pbtn-lip: #1a120c;
+  --groove: #3b2c20;
+  --safe: #62c47f;
+  --safe-soft: #173021;
+  --warn: #e6a640;
+  --warn-soft: #33260f;
+  --danger: #f06d5c;
+  --danger-soft: #3a1b15;
+  --hero: #6a3de8;
   --hero-fg: #ffffff;
-  --hero-muted: #bcd9cc;
-  --violet: #78a6b4;
-  --violet-soft: #16272c;
+  --hero-muted: #d9ccff;
+  --violet: #85b0c6;
+  --violet-soft: #172a33;
   --rose: #e68aa3;
   --rose-soft: #2e1a21;
+  --shadow-ink: 0 0 0;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-card-edge: var(--card-edge);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-line: var(--line);
@@ -98,6 +127,7 @@
   --color-on-ink: var(--on-ink);
   --color-ink-muted: var(--ink-muted);
   --color-accent-2: var(--accent-2);
+  --color-orange: var(--orange);
   --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans Variable", system-ui, sans-serif;
   --font-mono: "Plus Jakarta Sans Variable", ui-monospace, monospace;
@@ -147,6 +177,99 @@ textarea {
   font-size: 16px; /* stops iOS zooming into fields */
 }
 
+/* ---------- motion: the app should feel alive ---------- */
+
+/* A screen fades in when you arrive (opacity only: a transform on the page
+   would make every fixed control inside it jump while it plays), and its
+   blocks rise into place one after another. `backwards` fill means nothing is
+   left transformed once the animation is over. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes notice-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-enter {
+  animation: page-fade 0.28s ease-out backwards;
+}
+.stagger > * {
+  animation: rise 0.48s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 20ms; }
+.stagger > *:nth-child(2) { animation-delay: 55ms; }
+.stagger > *:nth-child(3) { animation-delay: 90ms; }
+.stagger > *:nth-child(4) { animation-delay: 125ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 195ms; }
+.stagger > *:nth-child(7) { animation-delay: 230ms; }
+.stagger > *:nth-child(8) { animation-delay: 265ms; }
+.stagger > *:nth-child(9) { animation-delay: 300ms; }
+.stagger > *:nth-child(n + 10) { animation-delay: 335ms; }
+/* Overlays, sticky bars and fixed controls manage their own motion. */
+.stagger > .no-rise,
+.stagger > header {
+  animation: none;
+}
+.pop-in {
+  animation: pop 0.34s cubic-bezier(0.2, 1.25, 0.4, 1) backwards;
+}
+/* A pressable surface that gives a touch of spring back under a finger. */
+.press {
+  transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* A slow sheen drifting across a hero card. */
+@keyframes sheen-sweep {
+  0% { transform: translateX(-120%) skewX(-18deg); }
+  100% { transform: translateX(320%) skewX(-18deg); }
+}
+.hero-sheen::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 14%), transparent);
+  animation: sheen-sweep 5.5s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+
 @keyframes sheet-in {
   from {
     transform: translateY(24px);
@@ -187,10 +310,17 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .stagger > *,
+  .pop-in,
+  .hero-sheen::before,
   .anim-sheet,
   .anim-fade,
   .anim-toast {
     animation: none;
+  }
+  .press:active {
+    transform: none;
   }
 }
 
@@ -214,11 +344,22 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(130% 80% at 50% 30%, #12815e 0%, #0e6e50 55%, #0a5a41 100%);
+  /* The notebook's leather cover. */
+  background-color: #8a4520;
+  background-image: var(--leather),
+    radial-gradient(120% 75% at 50% 32%, #a65c2d 0%, #864220 55%, #66310f 100%);
   color: #fff;
   --boot-hole: 0px;
   -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
   mask: radial-gradient(circle at 50% 46%, transparent var(--boot-hole), #000 calc(var(--boot-hole) + 1px));
+}
+.boot::after {
+  content: "";
+  position: absolute;
+  inset: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  border-radius: 26px;
+  border: 2px dashed rgb(255 226 190 / 42%);
+  pointer-events: none;
 }
 .boot-out {
   pointer-events: none;
@@ -256,9 +397,11 @@ textarea {
 .boot-word {
   margin-top: 16px;
   font-family: var(--font-display);
-  font-size: 25px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: #fff4e3;
+  text-shadow: 0 2px 2px rgb(40 15 0 / 45%);
   animation: boot-rise 600ms 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .boot-msg {
@@ -290,8 +433,14 @@ textarea {
   background: radial-gradient(circle, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 65%);
   animation: boot-breathe 1600ms 700ms ease-in-out infinite both;
 }
+.boot-pop {
+  transform-origin: 50% 80%;
+  animation: boot-land 760ms 120ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  filter: drop-shadow(0 10px 14px rgb(40 15 0 / 45%));
+}
 .in-app .boot-dot,
-.in-app .boot-tray {
+.in-app .boot-tray,
+.in-app .boot-pop {
   animation: none;
 }
 .in-app .boot-word {
@@ -374,6 +523,7 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton,
+  .boot-pop,
   .boot-dot,
   .boot-tray,
   .boot-word,
@@ -411,68 +561,98 @@ textarea {
   }
 }
 
-/* ---------------------------------------------------------------------------
-   A page that feels made, not printed.
+/* ===========================================================================
+   The notebook.
 
-   The app was a white wall: flat background, white cards, nothing to rest the
-   eye on. These are the two cheapest ways to fix that without turning the
-   screens into a colour chart — a soft wash of brand colour behind the top of a
-   page, and cards that sit on the page rather than being cut out of it. Both
-   are deliberately faint: the job is depth, not decoration.
---------------------------------------------------------------------------- */
+   Everything below draws the desk: the ruled page behind every screen, the
+   spiral-bound card, leather for what you press, raised paper for the quieter
+   choices. Textures are tiny inline SVGs (a fractal-noise grain, a metal ring)
+   so nothing extra is downloaded and it all works offline.
+=========================================================================== */
 
-/* Painted as the wrapper's own background, not a pseudo-element: an absolutely
-   positioned layer behind the content ends up behind the page background too,
-   where nobody can see it. */
-/* Flat premium paper — no coloured glow. The ink hero cards carry the drama;
-   the background stays quiet so figures and type do the talking. */
+/* The page itself: parchment with a faint grain, a soft light from the top,
+   and the ruling of a notebook running behind everything. */
+.paper-page {
+  background-color: var(--bg);
+  background-image:
+    var(--grain),
+    radial-gradient(140% 70% at 50% 0%, rgb(255 252 242 / 50%), transparent 62%),
+    repeating-linear-gradient(180deg, transparent 0 33px, var(--rule) 33px 34px);
+}
+[data-theme="dark"] .paper-page {
+  background-image:
+    var(--grain),
+    radial-gradient(140% 70% at 50% 0%, rgb(255 220 170 / 5%), transparent 62%),
+    repeating-linear-gradient(180deg, transparent 0 33px, var(--rule) 33px 34px);
+}
+
+/* The corner of the page lifting, top right. */
+.page-curl {
+  position: relative;
+}
+.page-curl::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 29;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+  background: linear-gradient(225deg, #d9c19a 0 49%, transparent 50%),
+    linear-gradient(225deg, transparent 50%, #fff9ee 51%, #efdcbc 78%, #d9bf96 100%);
+  border-bottom-left-radius: 8px;
+  box-shadow: -3px 3px 6px -2px rgb(90 50 20 / 30%);
+}
+[data-theme="dark"] .page-curl::before {
+  background: linear-gradient(225deg, #120c08 0 49%, transparent 50%),
+    linear-gradient(225deg, transparent 50%, #3e2f22 51%, #2e2218 100%);
+}
+
+/* Screens used to paint their own flat colour; the page shows through now. */
 .page-wash {
-  background: var(--bg);
+  background: transparent;
 }
 
-/* A card that rests on the paper: a warm hairline plus one soft, tight shadow —
-   premium, not the big blurry pastel halo. Dark mode lifts the surface a touch
-   instead, because a shadow on near-black is invisible. */
+/* A plain card resting on the page: cream paper with a pressed brown edge. */
 .lift {
+  background-color: var(--card);
   box-shadow:
-    0 1px 1px rgb(40 34 20 / 3%),
-    0 5px 14px -8px rgb(40 34 20 / 12%),
-    0 0 0 1px color-mix(in srgb, var(--line) 75%, transparent);
+    inset 0 1px 0 rgb(255 255 255 / 55%),
+    0 0 0 1.5px var(--card-edge),
+    0 3px 0 0 color-mix(in srgb, var(--card-edge) 70%, transparent),
+    0 12px 20px -14px rgb(var(--shadow-ink) / 45%);
+}
+[data-theme="dark"] .lift {
+  box-shadow:
+    0 0 0 1.5px var(--card-edge),
+    0 3px 0 0 #120c08,
+    0 12px 20px -14px rgb(0 0 0 / 70%);
 }
 
-:root[data-theme="dark"] .lift {
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 40%),
-    0 10px 28px -18px rgb(0 0 0 / 70%),
-    0 0 0 1px var(--line);
-}
-
-/* The brand card: a violet slab with a soft top sheen, used for the money
-   summary and other headline moments. */
+/* The brand card (Money's month): purple ink. */
 .ink-card {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(120% 90% at 85% -15%, color-mix(in srgb, #ffffff 24%, var(--accent)) 0%, transparent 50%),
-    linear-gradient(155deg, var(--accent-2), var(--accent) 70%);
+    radial-gradient(120% 90% at 85% -15%, color-mix(in srgb, #ffffff 24%, var(--hero)) 0%, transparent 50%),
+    linear-gradient(155deg, #8a62f5, var(--hero) 70%);
   color: #ffffff;
-  box-shadow: 0 16px 34px -20px color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 4px 0 #4a24b0, 0 16px 26px -16px rgb(74 36 176 / 70%);
 }
 .ink-card::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
   pointer-events: none;
 }
 
-/* The faint sheen on a hero card, so a flat colour reads as a surface. */
 .sheen {
   position: relative;
   isolation: isolate;
 }
-
 .sheen::after {
   content: "";
   position: absolute;
@@ -480,4 +660,205 @@ textarea {
   pointer-events: none;
   border-radius: inherit;
   background: linear-gradient(160deg, rgb(255 255 255 / 14%), transparent 46%);
+}
+
+/* ---------- the spiral notebook card ---------- */
+/* Cream paper with a brown edge and two more sheets peeking out underneath,
+   so it reads as a pad rather than a rectangle. `.rings` binds it with a row
+   of metal spiral rings through punched holes along the top. */
+.notebook {
+  position: relative;
+  border-radius: 18px;
+  background-color: var(--card);
+  background-image: var(--grain), linear-gradient(180deg, rgb(255 255 255 / 40%), transparent 45%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 70%),
+    0 0 0 1.5px var(--card-edge),
+    0 4px 0 -1px var(--card),
+    0 4px 0 0.5px var(--card-edge),
+    0 8px 0 -2px var(--card),
+    0 8px 0 -0.5px var(--card-edge),
+    0 18px 24px -14px rgb(var(--shadow-ink) / 50%);
+}
+[data-theme="dark"] .notebook {
+  background-image: var(--grain);
+  box-shadow:
+    0 0 0 1.5px var(--card-edge),
+    0 4px 0 -1px var(--card),
+    0 4px 0 0.5px var(--card-edge),
+    0 8px 0 -2px var(--card),
+    0 8px 0 -0.5px var(--card-edge),
+    0 18px 24px -14px rgb(0 0 0 / 75%);
+}
+.notebook.rings {
+  padding-top: 18px;
+}
+.notebook.rings::before {
+  content: "";
+  position: absolute;
+  top: -13px;
+  left: 14px;
+  right: 14px;
+  height: 26px;
+  background-image: var(--ring);
+  background-repeat: space no-repeat;
+  background-size: 24px 26px;
+  pointer-events: none;
+}
+/* The red margin rule of an exercise book, for lists written "by hand". */
+.margin-rule {
+  position: relative;
+}
+.margin-rule::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 46px;
+  width: 1.5px;
+  background: rgb(214 92 92 / 32%);
+  pointer-events: none;
+}
+.ruled-row + .ruled-row {
+  border-top: 1px dashed color-mix(in srgb, var(--card-edge) 75%, transparent);
+}
+
+/* ---------- leather: anything you press ---------- */
+.btn-leather {
+  position: relative;
+  isolation: isolate;
+  color: #fff4e3;
+  font-weight: 700;
+  background-color: var(--leather-mid);
+  background-image: var(--leather),
+    linear-gradient(180deg, var(--leather-hi) 0%, var(--leather-mid) 52%, var(--leather-lo) 100%);
+  border: 1px solid var(--leather-lip);
+  box-shadow:
+    inset 0 1px 0 rgb(255 214 170 / 45%),
+    inset 0 -2px 3px rgb(50 20 5 / 35%),
+    0 4px 0 var(--leather-lip),
+    0 10px 14px -7px rgb(60 28 8 / 55%);
+  text-shadow: 0 1px 1px rgb(50 20 5 / 55%);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.btn-leather::after,
+.stitched::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  border: 1.5px dashed rgb(255 226 190 / 55%);
+  pointer-events: none;
+}
+.btn-leather:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 214 170 / 35%),
+    inset 0 -1px 2px rgb(50 20 5 / 30%),
+    0 1px 0 var(--leather-lip),
+    0 3px 6px -3px rgb(60 28 8 / 50%);
+}
+.btn-leather:disabled {
+  opacity: 0.5;
+}
+
+/* Raised paper: the quieter button, and an unselected tab. */
+.btn-paper {
+  position: relative;
+  color: var(--text);
+  font-weight: 700;
+  background-color: var(--pbtn-bottom);
+  background-image: var(--grain), linear-gradient(180deg, var(--pbtn-top), var(--pbtn-bottom));
+  border: 1.5px solid var(--pbtn-edge);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 70%),
+    0 3px 0 var(--pbtn-lip),
+    0 7px 10px -7px rgb(var(--shadow-ink) / 45%);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+[data-theme="dark"] .btn-paper {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 6%),
+    0 3px 0 var(--pbtn-lip);
+}
+.btn-paper:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 60%),
+    0 1px 0 var(--pbtn-lip);
+}
+.btn-paper:disabled {
+  opacity: 0.5;
+}
+
+/* A leather surface, for the tab bar. */
+.leather {
+  position: relative;
+  background-color: var(--leather-mid);
+  background-image: var(--leather),
+    radial-gradient(120% 160% at 50% -40%, rgb(255 200 150 / 22%), transparent 60%),
+    linear-gradient(180deg, #9c5328 0%, #844020 55%, #6c3416 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 210 160 / 35%),
+    inset 0 -2px 4px rgb(40 15 0 / 35%),
+    0 -1px 0 rgb(90 45 15 / 40%),
+    0 12px 26px -8px rgb(50 22 5 / 60%);
+}
+.leather.stitched::after {
+  inset: 5px;
+}
+
+/* The glowing tile under the current tab. */
+.tab-glow {
+  color: #ffffff;
+  background-image: linear-gradient(180deg, #ffb350 0%, #f68a22 55%, #e2720f 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 236 200 / 75%),
+    inset 0 -2px 2px rgb(150 60 0 / 35%),
+    0 0 16px 1px rgb(255 150 40 / 55%),
+    0 3px 6px rgb(50 20 0 / 35%);
+  text-shadow: 0 1px 1px rgb(120 50 0 / 45%);
+}
+
+/* A groove pressed into the paper: the track of a bar or a ring. */
+.groove {
+  background-color: var(--groove);
+  box-shadow: inset 0 1px 2px rgb(var(--shadow-ink) / 28%);
+}
+
+/* A teacher's ink stamp: Present, Absent. */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1.75px solid currentColor;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-4deg);
+  opacity: 0.88;
+}
+
+/* Chips sit in scrolling rows, where a deep lip would be clipped. */
+.btn-leather.lip-sm {
+  box-shadow:
+    inset 0 1px 0 rgb(255 214 170 / 45%),
+    inset 0 -1px 2px rgb(50 20 5 / 30%),
+    0 2px 0 var(--leather-lip);
+}
+.btn-leather.lip-sm::after {
+  inset: 3px;
+  border-width: 1.25px;
+}
+.btn-paper.lip-sm {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 70%),
+    0 2px 0 var(--pbtn-lip);
 }

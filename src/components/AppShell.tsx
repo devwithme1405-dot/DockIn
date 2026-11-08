@@ -136,6 +136,26 @@ export function AppShell({ children }: { children: ReactNode }) {
     [router],
   );
 
+  /**
+   * A payment landed while the app is open: a small banner slides down from the
+   * top so it is caught without leaving the screen. Tapping it opens Money.
+   */
+  const [notice, setNotice] = useState<{ amount?: number; merchant?: string } | null>(null);
+  useEffect(() => {
+    return onPhone("notice", (n) => {
+      const text = `${n.title ?? ""} ${n.body ?? ""}`;
+      const amt = text.match(/(?:₹|rs\.?|inr)\s?([\d,]+(?:\.\d{1,2})?)/i);
+      const amount = amt ? Number(amt[1].replace(/,/g, "")) : undefined;
+      const to = text.match(/(?:to|at)\s+([A-Za-z0-9&'. -]{2,30})/i);
+      setNotice({ amount, merchant: to?.[1]?.trim() });
+      window.clearTimeout((window as unknown as { __dockinNoticeT?: number }).__dockinNoticeT);
+      (window as unknown as { __dockinNoticeT?: number }).__dockinNoticeT = window.setTimeout(
+        () => setNotice(null),
+        6000,
+      );
+    });
+  }, []);
+
   useEffect(() => {
     if (
       process.env.NODE_ENV === "production" &&
@@ -173,7 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (bare) {
     return (
       <ToastProvider>
-        <div className="mx-auto min-h-dvh w-full max-w-md bg-bg">{children}</div>
+        <div className="paper-page mx-auto min-h-dvh w-full max-w-md">{children}</div>
       </ToastProvider>
     );
   }
@@ -183,14 +203,40 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="mx-auto min-h-dvh w-full max-w-md bg-bg">
+      <div className={cx("paper-page mx-auto min-h-dvh w-full max-w-md", !onboarding && "page-curl")}>
         {ready && (
-          <main className={cx(!onboarding && "pb-[calc(5.5rem+env(safe-area-inset-bottom))]")}>
+          <main
+            key={pathname}
+            className={cx("page-enter", !onboarding && "pb-[calc(6.5rem+env(safe-area-inset-bottom))]")}
+          >
             {children}
           </main>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
       </div>
+      {notice && (
+        <button
+          onClick={() => {
+            setNotice(null);
+            router.push("/money");
+          }}
+          className="fixed inset-x-0 top-0 z-[60] mx-auto flex w-full max-w-md items-center gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
+          style={{ animation: "notice-drop .4s cubic-bezier(.2,.9,.2,1) both" }}
+        >
+          <span className="leather stitched flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-on-ink">
+            <span className="tab-glow grid size-9 shrink-0 place-items-center rounded-xl">
+              <Wallet size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold">
+                {notice.amount ? `Spent ₹${notice.amount}` : "Payment detected"}
+                {notice.merchant ? ` at ${notice.merchant}` : ""}
+              </span>
+              <span className="block text-[12px] text-on-ink/70">Tap to add it — what was it for?</span>
+            </span>
+          </span>
+        </button>
+      )}
       <BootSplash show={!ready || !minShown} message={restoring && userId ? "Getting your data…" : undefined} />
     </ToastProvider>
   );
@@ -199,21 +245,23 @@ export function AppShell({ children }: { children: ReactNode }) {
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
   return (
+    // A strip of stitched leather floating over the page; the current tab is a
+    // glowing orange tile, the way a lit key looks on a desk.
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
     >
-      <ul className={cx("grid", TABS.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+      <ul className="leather stitched grid h-[70px] grid-cols-5 items-center gap-1 rounded-[24px] px-2">
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
-            <li key={href}>
+            <li key={href} className="relative z-[1]">
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
-                  active ? "text-accent" : "text-muted",
+                  "flex h-[54px] flex-col items-center justify-center gap-0.5 rounded-[16px] text-[10.5px] font-bold tracking-[0.01em] transition-[color,transform] duration-200 active:scale-95",
+                  active ? "tab-glow" : "text-[#f6dcbd]/85",
                 )}
               >
                 <Tab
@@ -271,10 +319,10 @@ function Tab({
   return (
     <>
       <span className={cx("relative transition-opacity", pending && "opacity-50")}>
-        <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
+        <Icon size={21} strokeWidth={active ? 2.4 : 2} />
         {badge > 0 && (
           <span
-            className="absolute -top-1 -right-2 grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white tabular-nums"
+            className="absolute -top-1.5 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full border border-[#6c3416] bg-danger px-1 text-[10px] font-bold text-white tabular-nums"
             aria-label={`${badge} need attention`}
           >
             {badge > 9 ? "9+" : badge}

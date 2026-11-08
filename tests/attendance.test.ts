@@ -9,6 +9,7 @@ import {
   fmtPct,
   ifYouMiss,
   summarize,
+  weekChange,
   weekForm,
   weeklyTrend,
   withBase,
@@ -320,5 +321,22 @@ describe("the last seven days, as squares", () => {
   it("does not call a cancelled class a missed one", () => {
     const week = weekForm([s("2026-10-04", "cancelled")], "2026-10-04");
     expect(week[6].form).toBe("none");
+  });
+});
+
+describe("weekChange", () => {
+  const day = (date: string, status: SessionStatus) => ({ date, status, weight: 1 });
+  it("compares today's figure with the one before this week's classes", () => {
+    // 8 of 10 before the week (80%), then 5 of 5 this week: 13 of 15 is 87%.
+    const week = Array.from({ length: 5 }, (_, i) => day(`2026-11-0${i + 3}`, "present"));
+    expect(weekChange(week, { attended: 13, total: 15 }, "2026-11-08")).toBe(7);
+  });
+  it("goes down after a week of bunking", () => {
+    const week = [day("2026-11-06", "absent"), day("2026-11-07", "absent")];
+    expect(weekChange(week, { attended: 8, total: 12 }, "2026-11-08")).toBe(-13);
+  });
+  it("is null with no classes this week, or none before it", () => {
+    expect(weekChange([day("2026-10-01", "present")], { attended: 5, total: 6 }, "2026-11-08")).toBeNull();
+    expect(weekChange([day("2026-11-07", "present")], { attended: 1, total: 1 }, "2026-11-08")).toBeNull();
   });
 });

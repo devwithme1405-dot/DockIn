@@ -21,39 +21,6 @@ function marked(sessions: ViewSession[]): Marked[] {
   return sessions.filter((s): s is Marked => s.status === "present" || s.status === "absent");
 }
 
-/** The three ways DockIn shows attendance now that Camu feeds it. */
-export function AttendanceViewSwitch({
-  view,
-  onChange,
-}: {
-  view: "subjects" | "log" | "calendar";
-  onChange: (v: "subjects" | "log" | "calendar") => void;
-}) {
-  const tabs: [typeof view, string][] = [
-    ["subjects", "Subjects"],
-    ["log", "Log"],
-    ["calendar", "Calendar"],
-  ];
-  return (
-    <div className="mx-5 mt-4 grid grid-cols-3 gap-1 rounded-2xl bg-surface-2 p-1" role="tablist">
-      {tabs.map(([id, label]) => (
-        <button
-          key={id}
-          role="tab"
-          aria-selected={view === id}
-          onClick={() => onChange(id)}
-          className={cx(
-            "h-9 rounded-xl text-[13.5px] font-medium transition",
-            view === id ? "bg-surface text-text shadow-[0_0_0_1px_var(--line)]" : "text-muted",
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /**
  * Camu's own "Log", rebuilt: every class across every subject, filtered by
  * what the teacher marked. This is where a lab or a morning class a teacher
@@ -90,7 +57,7 @@ export function AttendanceLog({
 
   return (
     <div className="mt-4 px-5 pb-4">
-      <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1" role="tablist" aria-label="Show">
+      <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Show">
         {(["absent", "present", "both"] as const).map((v) => (
           <button
             key={v}
@@ -98,14 +65,14 @@ export function AttendanceLog({
             aria-selected={show === v}
             onClick={() => setShow(v)}
             className={cx(
-              "h-9 rounded-lg text-[13px] font-medium capitalize transition",
+              "lip-sm h-9 rounded-full text-[13px] capitalize",
               show === v
                 ? v === "absent"
-                  ? "bg-danger text-white"
+                  ? "border-[1.5px] border-danger bg-danger font-bold text-white shadow-[0_2px_0_#8a2418]"
                   : v === "present"
-                    ? "bg-safe text-white"
-                    : "bg-text text-bg"
-                : "text-muted",
+                    ? "border-[1.5px] border-safe bg-safe font-bold text-white shadow-[0_2px_0_#1d5c2f]"
+                    : "btn-leather"
+                : "btn-paper",
             )}
           >
             {v}
@@ -117,7 +84,7 @@ export function AttendanceLog({
         value={subId}
         onChange={(e) => setSubId(e.target.value)}
         aria-label="Subject"
-        className="mt-3 h-11 w-full rounded-xl border border-line bg-surface px-3 text-[14.5px] text-text outline-none focus:border-accent"
+        className="mt-3 h-11 w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3 text-[14.5px] font-semibold text-text outline-none focus:border-accent"
       >
         <option value="all">All subjects</option>
         {subjects.map((s) => (
@@ -137,27 +104,14 @@ export function AttendanceLog({
         <div className="mt-4 space-y-4">
           {rows.map((g) => (
             <section key={g.month}>
-              <h3 className="mb-1.5 text-[12px] font-semibold tracking-wide text-muted uppercase">{g.month}</h3>
-              <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <h3 className="mb-2 text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">{g.month}</h3>
+              <ul className="lift overflow-hidden rounded-2xl">
                 {g.items.map((s) => {
                   const sub = names.get(s.subjectId);
                   return (
-                    <li key={s.id} className="flex items-center gap-3 px-3.5 py-2.5">
-                      <span
-                        className={cx(
-                          "grid size-7 shrink-0 place-items-center rounded-full",
-                          s.status === "present" ? "bg-safe-soft text-safe" : "bg-danger-soft text-danger",
-                        )}
-                        aria-hidden
-                      >
-                        {s.status === "present" ? (
-                          <Check size={15} strokeWidth={2.75} />
-                        ) : (
-                          <X size={15} strokeWidth={2.75} />
-                        )}
-                      </span>
+                    <li key={s.id} className="ruled-row flex items-center gap-3 px-4 py-3">
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[14px] font-medium [overflow-wrap:anywhere]">
+                        <span className="block truncate text-[14px] font-bold [overflow-wrap:anywhere]">
                           {sub?.name ?? "Class"}
                         </span>
                         <span className="block text-[12.5px] text-muted">
@@ -165,12 +119,7 @@ export function AttendanceLog({
                           {s.start ? ` · ${fmtTime(s.start)}` : ""}
                         </span>
                       </span>
-                      <span
-                        className={cx(
-                          "text-[13px] font-medium",
-                          s.status === "present" ? "text-safe" : "text-danger",
-                        )}
-                      >
+                      <span className={cx("stamp shrink-0", s.status === "present" ? "text-safe" : "text-danger")}>
                         {s.status === "present" ? "Present" : "Absent"}
                       </span>
                     </li>
@@ -261,24 +210,25 @@ export function AttendanceCalendar({
           onClick={() => canPrev && step(-1)}
           disabled={!canPrev}
           aria-label="Previous month"
-          className="grid size-9 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)] disabled:opacity-30"
+          className="btn-paper lip-sm grid size-9 place-items-center rounded-full disabled:opacity-30"
         >
           <ChevronLeft size={18} />
         </button>
-        <p className="text-[15px] font-semibold">
+        <p className="font-display text-[16px] font-extrabold">
           {MONTHS[ym.m]} {ym.y}
         </p>
         <button
           onClick={() => canNext && step(1)}
           disabled={!canNext}
           aria-label="Next month"
-          className="grid size-9 place-items-center rounded-full bg-surface shadow-[0_0_0_1px_var(--line)] disabled:opacity-30"
+          className="btn-paper lip-sm grid size-9 place-items-center rounded-full disabled:opacity-30"
         >
           <ChevronRight size={18} />
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] text-muted">
+      <div className="notebook mt-3 px-2.5 pt-3 pb-3">
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-muted">
         {WD.map((d, i) => (
           <span key={i}>{d}</span>
         ))}
@@ -300,16 +250,17 @@ export function AttendanceCalendar({
           ),
         )}
       </div>
+      </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-muted">
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] font-semibold text-muted">
         <Dot className="bg-safe" /> All present
         <Dot className="bg-danger" /> Missed one
         <Dot className="bg-violet" /> Holiday
       </div>
 
       {picked && (
-        <section className="mt-4 rounded-2xl bg-surface p-4 shadow-[0_0_0_1px_var(--line)]">
-          <p className="text-[14px] font-semibold">{fmtDay(picked)}</p>
+        <section className="lift mt-4 rounded-2xl p-4">
+          <p className="text-[14.5px] font-extrabold">{fmtDay(picked)}</p>
           {holidaySet.has(picked) && !sel ? (
             <p className="mt-1 text-[13px] text-violet">Holiday — nothing counts.</p>
           ) : !sel ? (
@@ -374,10 +325,10 @@ function DayCell({
       onClick={onPick}
       aria-label={`${fmtDay(date)}${info ? `, ${info.present} present, ${info.absent} absent` : ""}`}
       className={cx(
-        "relative grid aspect-square place-items-center rounded-xl text-[13px] font-medium transition active:scale-95",
+        "relative grid aspect-square place-items-center rounded-xl text-[13px] font-bold transition active:scale-95",
         tone,
         picked && "ring-2 ring-accent",
-        today && !picked && "ring-1 ring-line",
+        today && !picked && "ring-[1.5px] ring-card-edge",
       )}
     >
       {day}
