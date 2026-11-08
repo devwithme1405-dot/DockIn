@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Minus, PartyPopper, Plus, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, PartyPopper, Sparkles } from "lucide-react";
 import { holidayInfo, holidaysBetween, nextHolidayAfter, type HolidayKind } from "@/lib/academic";
 import { addDays, toDateStr } from "@/lib/dates";
 import { fmtPct } from "@/lib/attendance";
@@ -210,97 +210,175 @@ function Dot({ className }: { className: string }) {
   return <span className={cx("mr-1 inline-block size-2.5 rounded-full align-middle", className)} />;
 }
 
+/** One subject's standing and how a trip would change it. */
+export interface SubjectStanding {
+  id: string;
+  name: string;
+  color: string;
+  present: number;
+  total: number;
+}
+
 /**
- * The bunk calculator: start from where attendance stands, add classes you plan
- * to skip, and watch the figure fall — with how far you can go before it drops
- * below target.
+ * The trip calculator: say when you will be away, and it counts the classes that
+ * actually fall in those days — skipping Saturdays, Sundays and festival
+ * holidays, because the college is closed and nothing is cut then — and shows
+ * what your attendance becomes, overall and subject by subject.
  */
 export function BunkCalculator({
-  attended,
-  total,
+  subjects,
   target,
-  canMiss,
-  state,
+  classesByDate,
 }: {
-  attended: number;
-  total: number;
+  subjects: SubjectStanding[];
   target: number;
-  /** How many more can be missed while staying at target (Infinity for none-set). */
-  canMiss: number;
-  state: AttendanceState;
+  /** Stat subject-ids that have a class on a (working) date. */
+  classesByDate: (date: string) => string[];
 }) {
-  const [skip, setSkip] = useState(0);
-  if (total === 0)
-    return (
-      <div className="mx-5 rounded-2xl border-[1.5px] border-dashed border-card-edge px-4 py-6 text-center text-[13.5px] text-muted">
-        Mark a few classes first and the bunk calculator works out how much you can afford to skip.
-      </div>
-    );
+  const today = toDateStr();
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
 
-  const newTotal = total + skip;
-  const pct = (attended / newTotal) * 100;
-  const safe = pct + 1e-9 >= target;
-  const barState: AttendanceState = pct + 1e-9 < target ? "danger" : pct - target < 3 ? "warn" : "safe";
-  const maxSafe = Number.isFinite(canMiss) ? canMiss : null;
+  const haveData = subjects.some((s) => s.total > 0);
+
+  const plan = useMemo(() => {
+    const lo = from <= to ? from : to;
+    const hi = from <= to ? to : from;
+    const skip = new Map<string, number>();
+    const holidays: { date: string; name: string; kind: HolidayKind }[] = [];
+    let classDays = 0;
+    let totalSkip = 0;
+    for (let d = lo, i = 0; d <= hi && i < 120; d = addDays(d, 1), i++) {
+      const h = holidayInfo(d);
+      if (h) {
+        holidays.push({ date: d, ...h });
+        continue;
+      }
+      const ids = classesByDate(d);
+      if (ids.length) classDays += 1;
+      for (const id of ids) {
+        skip.set(id, (skip.get(id) ?? 0) + 1);
+        totalSkip += 1;
+      }
+    }
+    return { skip, holidays, classDays, totalSkip, days: dayCount(lo, hi) };
+  }, [from, to, classesByDate]);
+
+  const totals = subjects.reduce((a, s) => ({ present: a.present + s.present, total: a.total + s.total }), { present: 0, total: 0 });
+  const beforePct = totals.total ? (totals.present / totals.total) * 100 : null;
+  const afterTotal = totals.total + plan.totalSkip;
+  const afterPct = afterTotal ? (totals.present / afterTotal) * 100 : null;
+  const afterState: AttendanceState = afterPct === null ? "none" : afterPct + 1e-9 < target ? "danger" : afterPct - target < 3 ? "warn" : "safe";
+  const safe = afterPct === null || afterPct + 1e-9 >= target;
+
+  const festivalHols = plan.holidays.filter((h) => h.kind === "festival");
+  const weekendCount = plan.holidays.filter((h) => h.kind === "weekend").length;
 
   return (
     <div className="mx-5">
       <div className="notebook px-5 pb-5">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-accent" />
-          <h3 className="font-display text-[16px] font-extrabold">Bunk calculator</h3>
+          <h3 className="font-display text-[16px] font-extrabold">Trip calculator</h3>
         </div>
-        <p className="mt-1 text-[13px] text-muted">
-          You are at <b className="text-text tnum">{fmtPct((attended / total) * 100)}</b> ({attended}/{total}).
-        </p>
+        <p className="mt-1 text-[13px] text-muted">Going away? See what your attendance becomes.</p>
 
-        <div className="mt-4 flex items-center justify-center gap-5">
-          <button
-            onClick={() => setSkip((s) => Math.max(0, s - 1))}
-            aria-label="One fewer"
-            disabled={skip === 0}
-            className="btn-paper grid size-12 place-items-center rounded-full disabled:opacity-40"
-          >
-            <Minus size={20} strokeWidth={2.5} />
-          </button>
-          <div className="text-center">
-            <p className="font-display text-[40px] leading-none font-extrabold tnum">{skip}</p>
-            <p className="mt-1 text-[12px] font-bold text-muted">classes to skip</p>
-          </div>
-          <button
-            onClick={() => setSkip((s) => Math.min(60, s + 1))}
-            aria-label="One more"
-            className="btn-leather grid size-12 place-items-center rounded-full"
-          >
-            <Plus size={20} strokeWidth={2.5} />
-          </button>
+        {/* when */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-bold text-muted">From</span>
+            <input
+              type="date"
+              value={from}
+              min={today}
+              onChange={(e) => setFrom(e.target.value || today)}
+              className="h-11 w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3 text-[14.5px] font-semibold text-text outline-none focus:border-accent"
+              aria-label="Trip start"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-bold text-muted">To</span>
+            <input
+              type="date"
+              value={to}
+              min={from}
+              onChange={(e) => setTo(e.target.value || from)}
+              className="h-11 w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3 text-[14.5px] font-semibold text-text outline-none focus:border-accent"
+              aria-label="Trip end"
+            />
+          </label>
         </div>
 
-        <div className="mt-5 rounded-2xl bg-surface-2/50 p-4 text-center">
-          <p className="text-[12.5px] font-bold text-muted">Attendance would become</p>
-          <p className={cx("font-display mt-0.5 text-[34px] leading-none font-extrabold tnum", safe ? "text-safe" : "text-danger")}>
-            {fmtPct(pct)}
+        {!haveData ? (
+          <p className="mt-4 rounded-2xl border-[1.5px] border-dashed border-card-edge px-4 py-5 text-center text-[13px] text-muted">
+            Mark a few classes first and this works out how much a trip would cost you.
           </p>
-          <InkBar pct={pct} target={target} state={barState} className="mt-3" />
-          <p className={cx("mt-2.5 text-[13px] font-bold", safe ? "text-safe" : "text-danger")}>
-            {safe ? `Still above your ${target}%.` : `Below your ${target}% — careful.`}
-          </p>
-        </div>
-
-        {maxSafe !== null && (
-          <p className="mt-3 text-center text-[13px] text-muted">
-            {maxSafe > 0 ? (
-              <>
-                You can skip up to <b className="text-accent tnum">{maxSafe}</b> {maxSafe === 1 ? "class" : "classes"} and stay above target.
-              </>
-            ) : state === "danger" ? (
-              "You are already below target — attend everything you can."
-            ) : (
-              "No room to bunk right now — the next skip drops you below target."
+        ) : (
+          <>
+            {/* holidays in the range don't cost attendance */}
+            {(festivalHols.length > 0 || weekendCount > 0) && (
+              <div className="mt-4 flex items-start gap-2.5 rounded-2xl border-[1.5px] border-dashed border-violet/40 bg-violet-soft px-3.5 py-3">
+                <PartyPopper size={17} className="mt-0.5 shrink-0 text-violet" />
+                <p className="text-[12.5px] leading-snug text-violet">
+                  {weekendCount > 0 && <b>{weekendCount} weekend {weekendCount === 1 ? "day" : "days"}</b>}
+                  {weekendCount > 0 && festivalHols.length > 0 && " and "}
+                  {festivalHols.length > 0 && <b>{festivalHols.map((h) => h.name).join(", ")}</b>}
+                  {" "}fall in this range — college is closed, so no attendance is cut there.
+                </p>
+              </div>
             )}
-          </p>
+
+            {/* overall */}
+            <div className="mt-4 rounded-2xl bg-surface-2/50 p-4 text-center">
+              <p className="text-[12.5px] font-bold text-muted">
+                {plan.totalSkip === 0 ? "No classes in these days" : `Skipping ${plan.totalSkip} ${plan.totalSkip === 1 ? "class" : "classes"} over ${plan.classDays} ${plan.classDays === 1 ? "day" : "days"}`}
+              </p>
+              <p className="mt-1.5 flex items-center justify-center gap-2.5">
+                <span className="font-display text-[22px] font-extrabold text-muted tnum">{fmtPct(beforePct)}</span>
+                <span className="text-muted">→</span>
+                <span className={cx("font-display text-[36px] leading-none font-extrabold tnum", safe ? "text-safe" : "text-danger")}>
+                  {fmtPct(afterPct)}
+                </span>
+              </p>
+              <InkBar pct={afterPct} target={target} state={afterState} className="mt-3" />
+              <p className={cx("mt-2.5 text-[13px] font-bold", safe ? "text-safe" : "text-danger")}>
+                {plan.totalSkip === 0 ? "Nothing changes." : safe ? `Still above your ${target}%.` : `Below your ${target}% — careful.`}
+              </p>
+            </div>
+
+            {/* subject by subject */}
+            {plan.totalSkip > 0 && (
+              <ul className="mt-4 space-y-2.5">
+                {subjects
+                  .filter((s) => (plan.skip.get(s.id) ?? 0) > 0)
+                  .map((s) => {
+                    const sk = plan.skip.get(s.id) ?? 0;
+                    const before = s.total ? (s.present / s.total) * 100 : null;
+                    const after = (s.present / (s.total + sk)) * 100;
+                    const dropBelow = after + 1e-9 < target;
+                    return (
+                      <li key={s.id} className="flex items-center gap-3 rounded-xl bg-surface-2/40 px-3 py-2.5">
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{s.name}</span>
+                        <span className="shrink-0 text-[12px] font-semibold text-muted tnum">−{sk}</span>
+                        <span className="w-[86px] shrink-0 text-right text-[13px] font-extrabold tnum">
+                          <span className="text-muted">{fmtPct(before)}</span>
+                          <span className="text-muted"> → </span>
+                          <span className={dropBelow ? "text-danger" : "text-safe"}>{fmtPct(after)}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </div>
   );
+}
+
+/** Inclusive day count between two date strings. */
+function dayCount(lo: string, hi: string): number {
+  return Math.round((new Date(hi + "T00:00:00").getTime() - new Date(lo + "T00:00:00").getTime()) / 86400000) + 1;
 }

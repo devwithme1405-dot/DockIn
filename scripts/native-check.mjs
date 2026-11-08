@@ -416,16 +416,21 @@ await step("the Log lists classes by present/absent across subjects", async () =
   await page.screenshot({ path: `${SHOTS}/native-camu-log.png`, fullPage: true });
 });
 
-await step("the holiday calendar and bunk calculator live on the timetable", async () => {
+await step("the holiday calendar and trip calculator live on the timetable", async () => {
   await page.goto(`${BASE}/timetable`, { waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "Calendar" }).click();
-  await waitFor("Bunk calculator");
+  await waitFor("Trip calculator");
   const t = await text();
   if (!/Next holiday/.test(t)) throw new Error("the next-holiday card is missing");
   if (!/next two weeks/i.test(t)) throw new Error("the fortnight section is missing");
-  // Skipping a class lowers the figure the calculator shows.
-  await page.getByRole("button", { name: "One more" }).click();
-  await page.waitForTimeout(300);
+  // A trip over the next few days shows the resulting figure and the subjects it hits.
+  const pad = (n) => String(n).padStart(2, "0");
+  const to = new Date();
+  to.setDate(to.getDate() + 5);
+  await page.getByLabel("Trip end").fill(`${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}`);
+  await page.waitForTimeout(400);
+  const t2 = await text();
+  if (!/would become|Nothing changes/.test(t2)) throw new Error("the trip result is missing");
   await page.screenshot({ path: `${SHOTS}/native-calendar.png`, fullPage: true });
 });
 

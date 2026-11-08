@@ -3,7 +3,7 @@
 import { Pencil, Wallet } from "lucide-react";
 import type { BudgetStatus } from "@/lib/money";
 import { fmtMoney } from "@/lib/money";
-import { useCountUp } from "./ui";
+import { cx, useCountUp } from "./ui";
 
 /**
  * The month at a glance: a notebook card with what's been spent, the budget it is
@@ -42,7 +42,12 @@ export function MoneyHero({
           )}
         </div>
 
-        <p className="font-display mt-1.5 text-[40px] leading-none font-extrabold tracking-[-0.04em] tnum">
+        <p
+          className={cx(
+            "font-display mt-1.5 text-[40px] leading-none font-extrabold tracking-[-0.04em] tnum",
+            !status ? "text-safe" : status.state === "danger" ? "text-danger" : status.state === "warn" ? "text-warn" : "text-safe",
+          )}
+        >
           {fmtMoney(Math.round(shownSpent))}
           {status && <span className="text-[18px] font-bold text-muted"> / {fmtMoney(status.budget)}</span>}
         </p>
@@ -56,9 +61,9 @@ export function MoneyHero({
               />
             </div>
             <p className="mt-2.5 text-[13.5px] font-bold tnum">
-              {status.left >= 0
-                ? `${fmtMoney(status.left)} safe to spend`
-                : `${fmtMoney(-status.left)} over budget`}
+              <span className={status.left >= 0 ? "text-safe" : "text-danger"}>
+                {status.left >= 0 ? `${fmtMoney(status.left)} safe to spend` : `${fmtMoney(-status.left)} over budget`}
+              </span>
               {status.daysLeft > 0 && status.left >= 0 && status.perDay > 0 && (
                 <span className="font-semibold text-muted"> · about {fmtMoney(Math.floor(status.perDay))}/day left</span>
               )}

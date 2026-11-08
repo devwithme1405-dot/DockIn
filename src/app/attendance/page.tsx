@@ -9,6 +9,7 @@ import { ArrowLeft, CalendarDays, ChevronRight, PartyPopper, Search, Target, Tre
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useEvents, useSessionsOn } from "@/lib/hooks";
 import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
+import { monthKey } from "@/lib/money";
 import { CamuStatus, ConnectCamu } from "@/components/College";
 import { CamuHistorySheet } from "@/components/CamuHistory";
 import { AttendanceLog } from "@/components/AttendanceViews";
@@ -115,6 +116,20 @@ export default function AttendancePage() {
   }, [data, query, filter]);
 
   const trend = useMemo(() => (data ? weekChange(data.sessions, data.overall, today) : null), [data, today]);
+  // This month's attendance, from the same sessions — works on Camu too.
+  const monthly = useMemo(() => {
+    const mk = monthKey(today);
+    let present = 0;
+    let total = 0;
+    for (const sn of data?.sessions ?? []) {
+      if (monthKey(sn.date) !== mk) continue;
+      if (sn.status === "present") {
+        present += 1;
+        total += 1;
+      } else if (sn.status === "absent") total += 1;
+    }
+    return total ? { pct: (present / total) * 100, present, total } : null;
+  }, [data, today]);
 
   if (!profile || !data)
     return (
@@ -167,35 +182,34 @@ export default function AttendancePage() {
 
       {view === "overview" && (
         <>
-          <Notebook className="mx-5 mt-8 px-4 pb-4" label="Overall attendance">
-            <div className="flex items-center gap-4">
-              <InkRing pct={overall.pct} state={overall.state} size={128} target={target}>
+          <Notebook className="mx-5 mt-6 px-4 pb-3.5" label="Overall attendance">
+            <div className="flex items-center gap-3.5">
+              <InkRing pct={overall.pct} state={overall.state} size={96} stroke={11} target={target}>
                 <div>
-                  <CountPct pct={overall.pct} className="font-display block text-[28px] leading-none font-extrabold tracking-[-0.04em] tnum" />
-                  <span className="mt-1 block text-[11px] font-bold text-muted">overall</span>
+                  <CountPct pct={overall.pct} className="font-display block text-[22px] leading-none font-extrabold tracking-[-0.04em] tnum" />
+                  <span className="mt-0.5 block text-[10px] font-bold text-muted">overall</span>
                 </div>
               </InkRing>
               <div className="min-w-0 flex-1">
-                <p className="text-[17px] leading-tight font-extrabold">Overall attendance</p>
-                {trend !== null && trend !== 0 && (
-                  <p className="mt-2 flex flex-wrap items-center gap-1.5 text-[12px] font-semibold text-muted">
-                    <TrendPill delta={trend} /> this week
-                  </p>
-                )}
-                <p className={cx("mt-2 text-[13px] leading-snug font-semibold", overall.state === "safe" ? "text-muted" : TONE[overall.state])}>
+                <div className="flex items-center gap-2">
+                  <p className="text-[15.5px] leading-tight font-extrabold">Overall attendance</p>
+                  {trend !== null && trend !== 0 && <TrendPill delta={trend} />}
+                </div>
+                <p className={cx("mt-1 text-[12.5px] leading-snug font-semibold", overall.state === "safe" ? "text-muted" : TONE[overall.state])}>
                   {overallLine(overall.state, target, overall.mustAttend, overall.canMiss)}
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11.5px] font-semibold text-muted tnum">
+                  <span>
+                    <span className="text-safe">{overallCounts.present}</span> present · <span className="text-danger">{overallCounts.absent}</span> absent
+                  </span>
+                  {monthly && (
+                    <span>
+                      This month <b className="text-text">{fmtPct(monthly.pct)}</b>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-            <dl className="mt-4 grid grid-cols-3 border-t border-dashed border-card-edge pt-3 text-center">
-              <Count label="Present" value={overallCounts.present} tone="text-safe" />
-              <Count label="Absent" value={overallCounts.absent} tone="text-danger" />
-              {camu ? (
-                <Count label="Classes" value={overallCounts.present + overallCounts.absent} tone="text-text" />
-              ) : (
-                <Count label="Cancelled" value={overallCounts.cancelled} tone="text-muted" />
-              )}
-            </dl>
           </Notebook>
 
           <section className="mt-5 grid grid-cols-2 gap-3 px-5">
@@ -420,11 +434,3 @@ function SubjectLink({
   );
 }
 
-function Count({ label, value, tone }: { label: string; value: number; tone: string }) {
-  return (
-    <div className="[&+&]:border-l [&+&]:border-dashed [&+&]:border-card-edge">
-      <dd className={cx("font-display text-[21px] font-extrabold tnum", tone)}>{value}</dd>
-      <dt className="text-[11.5px] font-semibold text-muted">{label}</dt>
-    </div>
-  );
-}

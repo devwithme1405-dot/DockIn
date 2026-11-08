@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -91,6 +91,34 @@ export default function TimetablePage() {
       });
   }, [camu, date, slots, subjects, data]);
 
+  // For the trip calculator: each subject's standing, and the classes a given
+  // working day holds, keyed by the stat subject-id.
+  const standings = useMemo(
+    () =>
+      (data?.stats ?? []).map((st) => ({
+        id: st.subject.id,
+        name: st.subject.name,
+        color: st.subject.color,
+        present: st.counts.present,
+        total: st.counts.present + st.counts.absent,
+      })),
+    [data],
+  );
+  const classesByDate = useCallback(
+    (d: string): string[] => {
+      if (camu)
+        return camuClassesOn(camu, d)
+          .map((p) => {
+            const sub = subjectOf(p, camu.subjects ?? []);
+            return sub ? `camu:${sub.id}` : null;
+          })
+          .filter((x): x is string => x !== null);
+      const wd = weekdayOf(d);
+      return (slots ?? []).filter((s) => s.weekday === wd && appliesOn(s, d)).map((s) => s.subjectId);
+    },
+    [camu, slots],
+  );
+
   if (!profile || (native && !data)) return <TodaySkeleton />;
 
   const hasManual = (slots?.length ?? 0) > 0;
@@ -115,13 +143,7 @@ export default function TimetablePage() {
           <HolidayCalendar
             classCountOn={(d) => (camu ? camuClassesOn(camu, d).length : (slots ?? []).filter((s) => s.weekday === weekdayOf(d) && appliesOn(s, d)).length)}
           />
-          <BunkCalculator
-            attended={data?.overall.attended ?? 0}
-            total={data?.overall.total ?? 0}
-            target={target}
-            canMiss={data?.overall.canMiss ?? 0}
-            state={data?.overall.state ?? "none"}
-          />
+          <BunkCalculator subjects={standings} target={target} classesByDate={classesByDate} />
         </div>
       ) : (
       <>
