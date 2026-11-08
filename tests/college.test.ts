@@ -12,9 +12,11 @@ import {
   holidayOn,
   importLms,
   labStarts,
+  lastPublishedDate,
   lmsTask,
   lmsTaskId,
   nextClass,
+  projectedClassesOn,
   resetImportMemo,
   subjectOf,
 } from "@/lib/college";
@@ -107,6 +109,31 @@ describe("the day's classes", () => {
   it("finds the next class across the holiday", () => {
     expect(nextClass(CAMU, "2026-11-07", "10:00")).toMatchObject({ date: "2026-11-11", from: "08:20" });
     expect(nextClass(CAMU, "2026-11-05", "08:00")).toMatchObject({ date: "2026-11-05", from: "08:20" });
+  });
+});
+
+describe("projecting the timetable to the last teaching day", () => {
+  const SEM_END = "2026-12-11";
+
+  it("knows the last date Camu has published", () => {
+    expect(lastPublishedDate(CAMU)).toBe("2026-11-05");
+  });
+
+  it("projects a future Wednesday past the fortnight classesOn gives up at", () => {
+    // 25 Nov is a Wednesday like 4 Nov; classesOn stops guessing after ~19 Nov.
+    expect(classesOn(CAMU, "2026-11-25")).toEqual([]);
+    const wed = projectedClassesOn(CAMU, "2026-11-25", SEM_END);
+    expect(wed.map((p) => p.from).sort()).toEqual(["08:20", "09:25"]);
+    expect(wed.every((p) => p.usual && p.date === "2026-11-25")).toBe(true);
+  });
+
+  it("counts nothing after the last teaching day", () => {
+    expect(projectedClassesOn(CAMU, "2026-12-15", SEM_END)).toEqual([]);
+  });
+
+  it("leaves a Camu holiday and a genuine blank day empty", () => {
+    expect(projectedClassesOn(CAMU, "2026-11-09", SEM_END)).toEqual([]); // Diwali
+    expect(projectedClassesOn(CAMU, "2026-11-02", SEM_END)).toEqual([]); // blank within range
   });
 });
 

@@ -7,8 +7,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { ConnectCamu } from "@/components/College";
 import { getProfile } from "@/lib/repo";
-import { useClassNotes, useSlots, useSubjects } from "@/lib/hooks";
-import { classesOn, cleanName, colorFor, labStarts, subjectOf, useAttendanceData } from "@/lib/college";
+import { useClassNotes, useEvents, useSlots, useSubjects } from "@/lib/hooks";
+import { classesOn, cleanName, colorFor, labStarts, lastPublishedDate, projectedClassesOn, subjectOf, useAttendanceData } from "@/lib/college";
+import { LAST_TEACHING_DAY } from "@/lib/academic";
+import { dayClosure } from "@/lib/calendar";
 import type { ClassKind } from "@/lib/types";
 import { addDays, fmtTime, nowHM, toDateStr, weekdayOf, WEEKDAYS_SHORT } from "@/lib/dates";
 import { appliesOn, classKey, setClassNote } from "@/lib/repo";
@@ -16,7 +18,6 @@ import { Ban, Clock3, X } from "lucide-react";
 import { EmptyState, cx, useToast } from "@/components/ui";
 import { Segmented } from "@/components/Paper";
 import { BunkCalculator, HolidayCalendar } from "@/components/Calendar";
-import { classesOn as camuClassesOn } from "@/lib/college";
 
 /** Monday of the week that `date` falls in. */
 function mondayOf(date: string): string {
@@ -119,20 +120,27 @@ export default function TimetablePage() {
       })),
     [data],
   );
-  const classesByDate = useCallback(
+  const events = useEvents();
+  // For the trip calculator: project past Camu's published window using the usual
+  // week, all the way to the last teaching day, so a trip a month out is still counted.
+  const tripClassesByDate = useCallback(
     (d: string): string[] => {
       if (camu)
-        return camuClassesOn(camu, d)
+        return projectedClassesOn(camu, d, LAST_TEACHING_DAY)
           .map((p) => {
             const sub = subjectOf(p, camu.subjects ?? []);
             return sub ? `camu:${sub.id}` : null;
           })
           .filter((x): x is string => x !== null);
+      if (d > LAST_TEACHING_DAY) return [];
       const wd = weekdayOf(d);
       return (slots ?? []).filter((s) => s.weekday === wd && appliesOn(s, d)).map((s) => s.subjectId);
     },
     [camu, slots],
   );
+  const closedOn = useCallback((d: string) => dayClosure(events ?? [], d), [events]);
+  // Camu drives the guess label; a manual timetable already repeats weekly, so it isn't a guess.
+  const projectsFrom = camu ? lastPublishedDate(camu) : null;
 
   if (!profile || (native && !data)) return <TodaySkeleton />;
 
@@ -156,9 +164,16 @@ export default function TimetablePage() {
       {view === "calendar" ? (
         <div className="mt-4 space-y-6">
           <HolidayCalendar
-            classCountOn={(d) => (camu ? camuClassesOn(camu, d).length : (slots ?? []).filter((s) => s.weekday === weekdayOf(d) && appliesOn(s, d)).length)}
+            classCountOn={(d) => (camu ? projectedClassesOn(camu, d, LAST_TEACHING_DAY).length : (slots ?? []).filter((s) => s.weekday === weekdayOf(d) && appliesOn(s, d)).length)}
           />
-          <BunkCalculator subjects={standings} target={target} classesByDate={classesByDate} />
+          <BunkCalculator
+            subjects={standings}
+            target={target}
+            classesByDate={tripClassesByDate}
+            closedOn={closedOn}
+            projectsFrom={projectsFrom}
+            semEnd={LAST_TEACHING_DAY}
+          />
         </div>
       ) : (
       <>

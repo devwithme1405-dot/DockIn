@@ -108,6 +108,39 @@ export function classesOn(state: CamuState | undefined, date: string): DayClass[
   return dedupeSort(periods.filter((p) => p.date === sameDay)).map((p) => ({ ...p, date, usual: true }));
 }
 
+/**
+ * Classes on a date for the trip calculator, projected all the way to the last
+ * teaching day.
+ *
+ * `classesOn` stops guessing a fortnight past Camu's last published day, which is
+ * right for the live timetable but wrong here: Camu often doesn't post even next
+ * week, yet the week itself barely changes. So for any working day Camu hasn't
+ * published — up to `semEnd` — this stands in the same weekday from the most
+ * recent published week and marks it `usual` (a guess). Past `semEnd`, exams have
+ * begun and nothing is counted.
+ */
+export function projectedClassesOn(state: CamuState | undefined, date: string, semEnd: string): DayClass[] {
+  if (semEnd && date > semEnd) return [];
+  const periods = state?.periods ?? [];
+  const exact = periods.filter((p) => p.date === date);
+  if (exact.length) return dedupeSort(exact).map((p) => ({ ...p, usual: false }));
+  if (holidayOn(state, date)) return [];
+  const last = periods.reduce((m, p) => (p.date > m ? p.date : m), "");
+  // A blank day inside the published range is a genuine day off, not a gap to fill.
+  if (!last || date <= last) return [];
+  const wd = weekdayOf(date);
+  const sameDay = periods
+    .filter((p) => weekdayOf(p.date) === wd)
+    .reduce((m, p) => (p.date > m ? p.date : m), "");
+  if (!sameDay) return [];
+  return dedupeSort(periods.filter((p) => p.date === sameDay)).map((p) => ({ ...p, date, usual: true }));
+}
+
+/** The latest date Camu has actually published a timetable for (empty string if none). */
+export function lastPublishedDate(state: CamuState | undefined): string {
+  return (state?.periods ?? []).reduce((m, p) => (p.date > m ? p.date : m), "");
+}
+
 function dedupeSort(list: CamuPeriod[]): CamuPeriod[] {
   const seen = new Set<string>();
   const out: CamuPeriod[] = [];

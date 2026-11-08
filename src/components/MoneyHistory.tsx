@@ -23,7 +23,7 @@ const TYPES: [HistType, string][] = [
   ["all", "All"],
   ["spent", "Spent"],
   ["in", "In"],
-  ["lenden", "Lena-dena"],
+  ["lenden", "Lend & Borrow"],
 ];
 
 const SORTS: [HistSort, string][] = [
@@ -53,16 +53,25 @@ export function MoneyHistory({
 }) {
   const [q, setQ] = useState("");
   const [type, setType] = useState<HistType>("all");
+  const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<HistSort>("new");
   const [mode, setMode] = useState<"list" | "place" | "person">("list");
   const [open, setOpen] = useState<PartyGroup | null>(null);
 
   const all = useMemo(() => buildHistory(expenses, incomes, dues, cats), [expenses, incomes, dues, cats]);
   const filtered = useMemo(
-    () => sortHistory(filterHistory(all, { q, type, category: "all" }), sort),
-    [all, q, type, sort],
+    () => sortHistory(filterHistory(all, { q, type, category }), sort),
+    [all, q, type, category, sort],
   );
   const sums = useMemo(() => totals(filtered), [filtered]);
+
+  // Only categories that actually have spending, so the filter isn't a wall of chips.
+  const spentCats = useMemo(() => {
+    const ids = new Set(all.filter((h) => h.category).map((h) => h.category!));
+    return cats.filter((c) => ids.has(c.id));
+  }, [all, cats]);
+  // The category filter only makes sense for spends.
+  const showCats = (type === "all" || type === "spent") && spentCats.length > 1;
 
   if (all.length === 0) {
     return <EmptyState title="Nothing yet" body="Your spending, money in and lena-dena will all show up here." />;
@@ -94,7 +103,14 @@ export function MoneyHistory({
       {/* Type filter + sort */}
       <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
         {TYPES.map(([t, label]) => (
-          <Chip key={t} active={type === t} onClick={() => setType(t)}>
+          <Chip
+            key={t}
+            active={type === t}
+            onClick={() => {
+              setType(t);
+              if (t !== "all" && t !== "spent") setCategory("all");
+            }}
+          >
             {label}
           </Chip>
         ))}
@@ -110,6 +126,20 @@ export function MoneyHistory({
           <ArrowUpDown size={14} /> {SORTS.find(([s]) => s === sort)![1]}
         </button>
       </div>
+
+      {/* Category filter — narrow to one place */}
+      {showCats && (
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+          <Chip active={category === "all"} onClick={() => setCategory("all")}>
+            All places
+          </Chip>
+          {spentCats.map((c) => (
+            <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
+              {c.emoji} {c.label}
+            </Chip>
+          ))}
+        </div>
+      )}
 
       {/* Totals for the current filter */}
       <div className="mt-3 flex gap-2">

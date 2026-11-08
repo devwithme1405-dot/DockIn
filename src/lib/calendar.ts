@@ -1,5 +1,28 @@
 import type { CalEvent, Session, Slot, Task } from "./types";
 import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
+import { holidayInfo } from "./academic";
+
+export type ClosureKind = "festival" | "weekend" | "custom";
+
+/** A holiday you added yourself that covers this date, if any. */
+export function userHolidayOn(events: CalEvent[], date: string): CalEvent | null {
+  return (
+    events.find((e) => !e.deletedAt && e.kind === "holiday" && e.date <= date && date <= e.endDate) ?? null
+  );
+}
+
+/**
+ * Whether the college is closed on a date, from any source: a university festival,
+ * a weekend, or a holiday you marked yourself. Used wherever a class must not count —
+ * the calendar shading and the trip calculator both read this, so a chutti you add
+ * is respected everywhere.
+ */
+export function dayClosure(events: CalEvent[], date: string): { name: string; kind: ClosureKind } | null {
+  const academic = holidayInfo(date);
+  if (academic) return academic;
+  const mine = userHolidayOn(events, date);
+  return mine ? { name: mine.title || "Holiday", kind: "custom" } : null;
+}
 
 /** Six Monday-first weeks covering the month, as date strings. */
 export function monthGrid(key: string): string[] {

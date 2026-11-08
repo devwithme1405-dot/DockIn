@@ -37,6 +37,14 @@ export const ACADEMIC_HOLIDAYS: Holiday[] = [
   { date: "2027-05-20", name: "Buddha Purnima" },
 ];
 
+/**
+ * The last day classes are actually held in the odd semester (Sem 3, 2026–27).
+ * After this, end-term exams begin and nothing new is taught, so projecting a
+ * trip's cost past it would count classes that never happen. This is an assumed
+ * date — adjust it to the one on the university's academic calendar.
+ */
+export const LAST_TEACHING_DAY = "2026-12-11";
+
 const BY_DATE = new Map(ACADEMIC_HOLIDAYS.map((h) => [h.date, h]));
 
 /** The day of week, 0 = Sunday … 6 = Saturday, read from the date string alone. */

@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, PartyPopper, Sparkles } from "lucide-react";
-import { holidayInfo, holidaysBetween, nextHolidayAfter, type HolidayKind } from "@/lib/academic";
+import { CalendarPlus, ChevronLeft, ChevronRight, PartyPopper, Sparkles, Trash2 } from "lucide-react";
+import { holidaysBetween, nextHolidayAfter } from "@/lib/academic";
+import { type ClosureKind, dayClosure, userHolidayOn } from "@/lib/calendar";
 import { addDays, toDateStr } from "@/lib/dates";
 import { fmtPct } from "@/lib/attendance";
+import { deleteEvent } from "@/lib/repo";
+import { useEvents } from "@/lib/hooks";
 import type { AttendanceState } from "@/lib/types";
-import { cx } from "./ui";
+import { Sheet, cx, useToast } from "./ui";
+import { EventForm } from "./EventForm";
 import { InkBar } from "./Paper";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -38,11 +42,14 @@ function dayLabel(date: string): string {
  */
 export function HolidayCalendar({ classCountOn }: { classCountOn?: (date: string) => number }) {
   const today = toDateStr();
+  const toast = useToast();
+  const events = useEvents() ?? [];
   const [ym, setYm] = useState(() => {
     const [y, m] = today.split("-").map(Number);
     return { y, m: m - 1 };
   });
   const [picked, setPicked] = useState<string | null>(today);
+  const [adding, setAdding] = useState(false);
 
   const cells = useMemo(() => buildMonth(ym.y, ym.m), [ym]);
   const next = useMemo(() => nextHolidayAfter(today), [today]);
@@ -51,14 +58,15 @@ export function HolidayCalendar({ classCountOn }: { classCountOn?: (date: string
     () => holidaysBetween(today, addDays(today, 14)).filter((h) => h.kind === "festival"),
     [today],
   );
-  const todayHol = holidayInfo(today);
+  const todayHol = dayClosure(events, today);
 
   const step = (d: number) => {
     const n = ym.m + d;
     setYm({ y: ym.y + Math.floor(n / 12), m: ((n % 12) + 12) % 12 });
   };
 
-  const sel = picked ? holidayInfo(picked) : null;
+  const sel = picked ? dayClosure(events, picked) : null;
+  const mine = picked ? userHolidayOn(events, picked) : null;
   const selClasses = picked && classCountOn ? classCountOn(picked) : 0;
 
   return (
@@ -106,7 +114,7 @@ export function HolidayCalendar({ classCountOn }: { classCountOn?: (date: string
               <DayCell
                 key={date}
                 date={date}
-                info={holidayInfo(date)}
+                info={dayClosure(events, date)}
                 today={date === today}
                 picked={date === picked}
                 onPick={() => setPicked(date)}
@@ -124,18 +132,47 @@ export function HolidayCalendar({ classCountOn }: { classCountOn?: (date: string
       {/* the picked day */}
       {picked && (
         <div className="lift mt-4 rounded-2xl px-4 py-3.5">
-          <p className="text-[14.5px] font-extrabold">{dayLabel(picked)}</p>
-          {sel ? (
-            <p className={cx("mt-1 flex items-center gap-1.5 text-[13.5px] font-bold", sel.kind === "festival" ? "text-violet" : "text-muted")}>
-              <PartyPopper size={15} /> {sel.name} · holiday, nothing counts
-            </p>
-          ) : (
-            <p className="mt-1 text-[13.5px] text-muted">
-              Working day{classCountOn ? ` · ${selClasses} ${selClasses === 1 ? "class" : "classes"}` : ""}
-            </p>
-          )}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[14.5px] font-extrabold">{dayLabel(picked)}</p>
+              {sel ? (
+                <p className={cx("mt-1 flex items-center gap-1.5 text-[13.5px] font-bold", sel.kind === "weekend" ? "text-muted" : "text-violet")}>
+                  <PartyPopper size={15} /> {sel.name}
+                  {sel.kind === "custom" ? " · your holiday" : " · holiday, nothing counts"}
+                </p>
+              ) : (
+                <p className="mt-1 text-[13.5px] text-muted">
+                  Working day{classCountOn ? ` · ${selClasses} ${selClasses === 1 ? "class" : "classes"}` : ""}
+                </p>
+              )}
+            </div>
+            {/* Mark a working day off, or take back one you added. Festivals and
+                weekends come from the calendar and can't be removed here. */}
+            {mine ? (
+              <button
+                onClick={async () => {
+                  await deleteEvent(mine.id);
+                  toast.show("Holiday removed");
+                }}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-semibold text-danger"
+              >
+                <Trash2 size={14} /> Remove
+              </button>
+            ) : !sel ? (
+              <button
+                onClick={() => setAdding(true)}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-violet-soft px-3 text-[12.5px] font-semibold text-violet"
+              >
+                <CalendarPlus size={14} /> Holiday
+              </button>
+            ) : null}
+          </div>
         </div>
       )}
+
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Add holiday">
+        <EventForm defaultDate={picked ?? today} onDone={() => setAdding(false)} />
+      </Sheet>
 
       {/* the fortnight ahead */}
       <div className="mt-6">
@@ -182,13 +219,14 @@ function DayCell({
   onPick,
 }: {
   date: string;
-  info: { name: string; kind: HolidayKind } | null;
+  info: { name: string; kind: ClosureKind } | null;
   today: boolean;
   picked: boolean;
   onPick: () => void;
 }) {
   const day = Number(date.split("-")[2]);
-  const tone = info ? (info.kind === "festival" ? "bg-violet-soft text-violet font-extrabold" : "bg-violet/10 text-violet/80") : "text-text";
+  const dot = info && info.kind !== "weekend"; // festivals and your own holidays carry a mark
+  const tone = info ? (info.kind === "weekend" ? "bg-violet/10 text-violet/80" : "bg-violet-soft text-violet font-extrabold") : "text-text";
   return (
     <button
       onClick={onPick}
@@ -201,7 +239,7 @@ function DayCell({
       )}
     >
       {day}
-      {info?.kind === "festival" && <span className="absolute bottom-1 size-1.5 rounded-full bg-violet" aria-hidden />}
+      {dot && <span className="absolute bottom-1 size-1.5 rounded-full bg-violet" aria-hidden />}
     </button>
   );
 }
@@ -229,11 +267,20 @@ export function BunkCalculator({
   subjects,
   target,
   classesByDate,
+  closedOn,
+  projectsFrom = null,
+  semEnd,
 }: {
   subjects: SubjectStanding[];
   target: number;
-  /** Stat subject-ids that have a class on a (working) date. */
+  /** Stat subject-ids that have a class on a (working) date, already projected to semEnd. */
   classesByDate: (date: string) => string[];
+  /** Whether the college is closed on a date (weekend, festival, or a holiday you added). */
+  closedOn: (date: string) => { name: string; kind: ClosureKind } | null;
+  /** The last date Camu has really published; class days after this are a guess. Null = no guessing. */
+  projectsFrom?: string | null;
+  /** The last teaching day — nothing past it is counted. */
+  semEnd: string;
 }) {
   const today = toDateStr();
   const [from, setFrom] = useState(today);
@@ -245,24 +292,33 @@ export function BunkCalculator({
     const lo = from <= to ? from : to;
     const hi = from <= to ? to : from;
     const skip = new Map<string, number>();
-    const holidays: { date: string; name: string; kind: HolidayKind }[] = [];
+    const holidays: { date: string; name: string; kind: ClosureKind }[] = [];
     let classDays = 0;
     let totalSkip = 0;
-    for (let d = lo, i = 0; d <= hi && i < 120; d = addDays(d, 1), i++) {
-      const h = holidayInfo(d);
+    let guessedDays = 0;
+    let pastSemEnd = false;
+    for (let d = lo, i = 0; d <= hi && i < 200; d = addDays(d, 1), i++) {
+      if (d > semEnd) {
+        pastSemEnd = true;
+        break; // exams have begun; nothing past the last teaching day counts
+      }
+      const h = closedOn(d);
       if (h) {
         holidays.push({ date: d, ...h });
         continue;
       }
       const ids = classesByDate(d);
-      if (ids.length) classDays += 1;
+      if (ids.length) {
+        classDays += 1;
+        if (projectsFrom && d > projectsFrom) guessedDays += 1;
+      }
       for (const id of ids) {
         skip.set(id, (skip.get(id) ?? 0) + 1);
         totalSkip += 1;
       }
     }
-    return { skip, holidays, classDays, totalSkip, days: dayCount(lo, hi) };
-  }, [from, to, classesByDate]);
+    return { skip, holidays, classDays, totalSkip, guessedDays, pastSemEnd, days: dayCount(lo, hi) };
+  }, [from, to, classesByDate, closedOn, projectsFrom, semEnd]);
 
   const totals = subjects.reduce((a, s) => ({ present: a.present + s.present, total: a.total + s.total }), { present: 0, total: 0 });
   const beforePct = totals.total ? (totals.present / totals.total) * 100 : null;
@@ -271,7 +327,7 @@ export function BunkCalculator({
   const afterState: AttendanceState = afterPct === null ? "none" : afterPct + 1e-9 < target ? "danger" : afterPct - target < 3 ? "warn" : "safe";
   const safe = afterPct === null || afterPct + 1e-9 >= target;
 
-  const festivalHols = plan.holidays.filter((h) => h.kind === "festival");
+  const festivalHols = plan.holidays.filter((h) => h.kind !== "weekend");
   const weekendCount = plan.holidays.filter((h) => h.kind === "weekend").length;
 
   return (
@@ -328,6 +384,24 @@ export function BunkCalculator({
               </div>
             )}
 
+            {/* when Camu hasn't posted that far, the usual week stands in — so say so */}
+            {plan.guessedDays > 0 && (
+              <div className="mt-3 flex items-start gap-2.5 rounded-2xl border-[1.5px] border-dashed border-card-edge px-3.5 py-3">
+                <Sparkles size={16} className="mt-0.5 shrink-0 text-muted" />
+                <p className="text-[12.5px] leading-snug text-muted">
+                  Camu hasn&apos;t posted the timetable past {fmtTripDay(projectsFrom!)} yet, so{" "}
+                  {plan.guessedDays} {plan.guessedDays === 1 ? "day is" : "days are"} counted from your usual
+                  weekly timetable. This is an estimate — the real total can be a little more or less.
+                </p>
+              </div>
+            )}
+
+            {plan.pastSemEnd && (
+              <p className="mt-3 text-[12px] text-muted">
+                Only counted up to the last teaching day ({fmtTripDay(semEnd)}, assumed) — exams start after that.
+              </p>
+            )}
+
             {/* overall */}
             <div className="mt-4 rounded-2xl bg-surface-2/50 p-4 text-center">
               <p className="text-[12.5px] font-bold text-muted">
@@ -376,6 +450,11 @@ export function BunkCalculator({
       </div>
     </div>
   );
+}
+
+/** "25 Nov" for the trip notes. */
+function fmtTripDay(date: string): string {
+  return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 /** Inclusive day count between two date strings. */
