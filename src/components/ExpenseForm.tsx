@@ -63,7 +63,7 @@ export function ExpenseForm({
 
   return (
     <div>
-      <div className="rounded-2xl bg-surface-2 px-4 py-4">
+      <div className="notebook px-4 py-4">
         <label className="text-[13px] font-medium text-muted" htmlFor="amt">
           Amount
         </label>
@@ -93,8 +93,8 @@ export function ExpenseForm({
         </div>
       </div>
 
-      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">Where</p>
-      <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Category">
+      <p className="mt-5 mb-2.5 text-[13px] font-bold text-muted">What was it for?</p>
+      <div className="grid grid-cols-4 gap-2.5" role="radiogroup" aria-label="Category">
         {(cats ?? []).map((c) => {
           const on = category === c.id;
           return (
@@ -105,19 +105,19 @@ export function ExpenseForm({
               aria-checked={on}
               onClick={() => setCategory(c.id)}
               className={cx(
-                "flex flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-center transition active:scale-95",
-                on ? "bg-accent-soft shadow-[0_0_0_2px_var(--accent)]" : "bg-surface-2",
+                "lip-sm flex flex-col items-center gap-1.5 rounded-2xl px-1 pt-2.5 pb-2 text-center",
+                on ? "btn-leather" : "btn-paper",
               )}
             >
-              <span className="text-[20px] leading-none">{c.emoji}</span>
-              <span className="text-[11px] leading-tight">{c.label}</span>
+              <span className="text-[22px] leading-none drop-shadow-[0_1px_0_rgb(0_0_0/0.15)]">{c.emoji}</span>
+              <span className="w-full truncate text-[11px] leading-tight">{c.label}</span>
             </button>
           );
         })}
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex flex-col items-center gap-1 rounded-2xl border border-dashed border-line px-1 py-2.5 text-center text-muted transition active:scale-95"
+          className="flex flex-col items-center gap-1 rounded-2xl border-[1.5px] border-dashed border-card-edge px-1 py-2.5 text-center font-bold text-muted transition active:scale-95"
         >
           <Plus size={20} />
           <span className="text-[11px] leading-tight">Add</span>

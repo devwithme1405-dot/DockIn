@@ -53,8 +53,10 @@ export default function Privacy() {
           </p>
           <ul className="mt-2 list-disc space-y-1.5 pl-5">
             <li>
-              Only payment apps are looked at — Google Pay, PhonePe, Paytm, BHIM, CRED, MobiKwik and
-              your bank&rsquo;s messages. Nothing else on your phone is read.
+              Payment apps (Google Pay, PhonePe, Paytm, BHIM, CRED, Slice and others) and your
+              bank&rsquo;s messages are read. Any other app counts only when its notification says
+              outright that money was paid, debited or received. Chats and social apps (WhatsApp,
+              Instagram, Telegram and the like) are never read.
             </li>
             <li>
               A notification is only kept if it mentions an amount and a payment, and it is kept on

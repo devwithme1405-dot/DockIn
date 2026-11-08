@@ -158,7 +158,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
         <div>
           <button
             onClick={onStart}
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[16px] font-semibold text-on-accent shadow-[0_10px_30px_-8px_rgba(31,95,214,0.8)] transition active:scale-[0.98]"
+            className="btn-leather flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16px]"
           >
             Get Started
             <ArrowRight size={19} />

@@ -241,7 +241,7 @@ export default function TimetablePage() {
           </div>
 
           {subjects.length > 0 && (
-            <ul className="mt-4 divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+            <ul className="mt-4 divide-y divide-line overflow-hidden rounded-2xl lift">
               {subjects.map((s) => (
                 <li key={s.id} className="flex items-center gap-3 px-3.5 py-2.5">
                   <SubjectTile name={s.name} code={s.code} color={s.color} size={36} />
@@ -341,7 +341,7 @@ export default function TimetablePage() {
           </div>
 
           {/* the day, period by period */}
-          <ul className="mt-2 divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)] mx-5">
+          <ul className="mt-2 divide-y divide-line overflow-hidden rounded-2xl lift mx-5">
             {periods.map((p) => {
               const here = occupied.get(p.n);
               const isStart = here && here.period === p.n;
@@ -401,7 +401,7 @@ export default function TimetablePage() {
               <h2 className="mb-2 text-[13px] font-semibold tracking-wide text-muted uppercase">
                 Outside the usual periods
               </h2>
-              <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+              <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
                 {offGrid.map((p) => (
                   <li key={p.slot.id} className="flex items-center gap-3 px-3.5 py-3">
                     <SubjectTile

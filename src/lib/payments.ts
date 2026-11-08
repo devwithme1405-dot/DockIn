@@ -43,7 +43,7 @@ export interface Payment {
   dir: "out" | "in";
 }
 
-/** The apps worth listening to. Anything else the phone never forwards. */
+/** Apps money usually moves through, by name. Others are read too (see sourceOf). */
 export const PAY_APPS: Record<string, string> = {
   "com.google.android.apps.nbu.paisa.user": "Google Pay",
   "com.phonepe.app": "PhonePe",
@@ -55,7 +55,40 @@ export const PAY_APPS: Record<string, string> = {
   "com.google.android.apps.messaging": "Messages",
   "com.samsung.android.messaging": "Messages",
   "com.android.mms": "Messages",
+  "indwin.c3.shareapp": "Slice",
+  "money.jupiter": "Jupiter",
+  "com.epifi.paisa": "Fi",
+  "com.naviapp": "Navi",
+  "money.super.payments": "super.money",
+  "com.truecaller": "Messages",
+  "com.oneplus.mms": "Messages",
+  "com.xiaomi.mms": "Messages",
 };
+
+/** Chats and social apps: a friend writing "I paid ₹60" is not your money moving. */
+const NEVER_APPS = new Set([
+  "com.whatsapp",
+  "com.whatsapp.w4b",
+  "org.telegram.messenger",
+  "com.instagram.android",
+  "com.snapchat.android",
+  "com.discord",
+  "com.facebook.orca",
+  "com.facebook.katana",
+  "com.twitter.android",
+  "com.google.android.gm",
+  "com.google.android.youtube",
+]);
+
+/**
+ * Where a payment came from: a known app by name, any other app as "Other app"
+ * (Slice before it was listed, a bank's own app), and never a chat.
+ */
+export function sourceOf(app: string): { name: string; known: boolean } | null {
+  if (PAY_APPS[app]) return { name: PAY_APPS[app], known: true };
+  if (!app || NEVER_APPS.has(app) || app.startsWith("com.dockin")) return null;
+  return { name: "Other app", known: false };
+}
 
 /** Money leaving, said outright. "Rahul paid you" is not one of these; see TO_YOU. */
 const DEBIT = /\b(paid|debited|debit|sent|spent|withdrawn|deducted)\b/i;
@@ -153,15 +186,17 @@ function title(s: string): string {
  * costs one manual entry; a false yes costs trust in the number on the Money screen.
  */
 export function parseNotice(n: Notice): Payment | null {
-  const source = PAY_APPS[n.app];
-  if (!source) return null;
+  const from = sourceOf(n.app);
+  if (!from) return null;
+  const source = from.name;
 
   const body = redact(`${n.title ?? ""} ${n.text ?? ""}`.replace(/\s+/g, " ").trim());
   if (!body) return null;
   if (NOISE.test(body)) return null;
   const mine = body.replace(TO_YOU, " ");
   const credit = CREDIT.test(body);
-  const debit = DEBIT.test(mine) || (!credit && NEUTRAL.test(mine));
+  // An app not on the list has to say it outright; "payment of" alone is not enough.
+  const debit = DEBIT.test(mine) || (from.known && !credit && NEUTRAL.test(mine));
   if (credit === debit) return null;
 
   const m = AMOUNT.exec(body);

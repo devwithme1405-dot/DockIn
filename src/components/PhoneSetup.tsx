@@ -101,7 +101,7 @@ export function PhoneSetup() {
           <p className="mt-0.5 text-[12.5px] text-muted">
             {ready
               ? "Right after you pay, DockIn asks what it was for. Nothing is added until you say so."
-              : "DockIn reads what GPay, PhonePe, Paytm and your bank post, and asks where the money went. It all stays on this phone."}
+              : "DockIn reads payments from GPay, PhonePe, Paytm, Slice, your bank or any app, and asks where the money went. Chats are never read. It all stays on this phone."}
           </p>
         </div>
       </div>

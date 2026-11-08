@@ -23,9 +23,10 @@ import java.util.regex.Pattern;
 public class PayWatchService extends NotificationListenerService {
 
     /**
-     * The apps money actually moves through. Keeping this short is the point: a
-     * listener that read everything would be reading a whole phone to catch a
-     * ₹60 samosa.
+     * The apps money usually moves through. Their notifications are read with a
+     * loose test. Any other app (Slice, a bank's own app, a new wallet) is read
+     * too, but only when it says outright that money left or arrived — so no
+     * payment slips past just because its app was not on a list.
      */
     static final Set<String> WATCHED = new HashSet<>(Arrays.asList(
             "com.google.android.apps.nbu.paisa.user", // Google Pay
@@ -37,8 +38,35 @@ public class PayWatchService extends NotificationListenerService {
             "com.mobikwik_new",                       // MobiKwik
             "com.google.android.apps.messaging",      // bank SMS
             "com.samsung.android.messaging",
-            "com.android.mms"
+            "com.android.mms",
+            "indwin.c3.shareapp",                     // Slice
+            "money.jupiter",                          // Jupiter
+            "com.epifi.paisa",                        // Fi
+            "com.naviapp",                            // Navi
+            "money.super.payments",                   // super.money
+            "com.truecaller",                         // SMS inbox
+            "com.oneplus.mms",
+            "com.xiaomi.mms"
     ));
+
+    /** Chats and social apps: a friend writing "I paid ₹60" is not your money moving. */
+    static final Set<String> NEVER = new HashSet<>(Arrays.asList(
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "org.telegram.messenger",
+            "com.instagram.android",
+            "com.snapchat.android",
+            "com.discord",
+            "com.facebook.orca",
+            "com.facebook.katana",
+            "com.twitter.android",
+            "com.google.android.gm",                  // mail repeats the bank SMS
+            "com.google.android.youtube"
+    ));
+
+    /** For an app not on the list: money said outright to have left or arrived. */
+    private static final Pattern SAYS_MONEY_MOVED = Pattern.compile(
+            "(?i)\\b(paid|debited|spent|sent|withdrawn|deducted|credited|received)\\b");
 
     /**
      * A message has to look like money moving before it is kept: an amount and
@@ -62,7 +90,9 @@ public class PayWatchService extends NotificationListenerService {
 
     private void handle(StatusBarNotification sbn) {
         if (sbn == null || sbn.getPackageName() == null) return;
-        if (!WATCHED.contains(sbn.getPackageName())) return;
+        String app = sbn.getPackageName();
+        if (NEVER.contains(app) || app.equals(getPackageName())) return;
+        boolean known = WATCHED.contains(app);
 
         Notification n = sbn.getNotification();
         if (n == null) return;
@@ -83,6 +113,7 @@ public class PayWatchService extends NotificationListenerService {
         String whole = title + " " + body;
         if (!LOOKS_LIKE_MONEY.matcher(whole).find()) return;
         if (!LOOKS_LIKE_PAYING.matcher(whole).find()) return;
+        if (!known && !SAYS_MONEY_MOVED.matcher(whole).find()) return;
 
         JSONObject kept = PayInbox.add(this, sbn.getPackageName(), title, body, sbn.getPostTime());
         if (kept == null) return;

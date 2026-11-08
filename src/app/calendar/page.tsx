@@ -241,7 +241,7 @@ export default function CalendarPage() {
         )}
 
         {(info.exams.length > 0 || info.due.length > 0) && (
-          <ul className="mb-3 divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+          <ul className="mb-3 divide-y divide-line overflow-hidden rounded-2xl lift">
             {[...info.exams, ...info.due].sort(compareTasks).map((t) => (
               <TaskRow key={t.id} task={t} today={today} subject={t.subjectId ? subjectById.get(t.subjectId) : undefined} onOpen={() => setEditTask(t)} />
             ))}
@@ -251,7 +251,7 @@ export default function CalendarPage() {
         {dayClasses.length > 0 ? (
           <>
             <h3 className="mb-1.5 text-[13px] font-semibold text-muted">Classes</h3>
-            <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+            <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
               {dayClasses.map((c) => {
                 const sub = subjectById.get(c.subjectId);
                 const pill = c.status ? STATUS_PILL[c.status] : null;
@@ -294,7 +294,7 @@ export default function CalendarPage() {
             Nothing in the next two weeks.
           </p>
         ) : (
-          <ul className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-[0_0_0_1px_var(--line)]">
+          <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
             {upcoming.map((u, i) => {
               const isTask = u.kind === "task" && u.task;
               const k = isTask ? KIND_BY_ID[u.task!.kind] : null;

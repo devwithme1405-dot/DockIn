@@ -232,3 +232,19 @@ describe("two names for the same payment", () => {
     expect(one[0].merchant).toBe("Southern Stories");
   });
 });
+
+describe("payments from any app", () => {
+  const at = Date.now();
+  it("reads an app that is not on the list when it says money left", () => {
+    const p = parseNotice({ app: "com.example.newwallet", title: "₹120 paid", text: "to Chai Point via UPI", at });
+    expect(p?.amount).toBe(120);
+    expect(p?.dir).toBe("out");
+    expect(p?.source).toBe("Other app");
+  });
+  it("knows Slice by name", () => {
+    expect(parseNotice({ app: "indwin.c3.shareapp", title: "Payment successful", text: "₹250 paid to Zomato", at })?.source).toBe("Slice");
+  });
+  it("never reads chats", () => {
+    expect(parseNotice({ app: "com.whatsapp", title: "Yash", text: "bhai maine ₹200 paid kar diya", at })).toBeNull();
+  });
+});

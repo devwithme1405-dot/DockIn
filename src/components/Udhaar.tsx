@@ -315,7 +315,7 @@ export function DueForm({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-2 p-1" role="radiogroup" aria-label="Which way">
+      <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label="Which way">
         {(
           [
             ["owed", "I paid for them"],
@@ -328,7 +328,7 @@ export function DueForm({
             role="radio"
             aria-checked={dir === v}
             onClick={() => setDir(v)}
-            className={cx("h-10 rounded-xl text-[13.5px] font-medium", dir === v ? "bg-surface shadow-sm" : "text-muted")}
+            className={cx("lip-sm h-10 rounded-full text-[13.5px]", dir === v ? "btn-leather" : "btn-paper")}
           >
             {label}
           </button>
@@ -390,8 +390,8 @@ export function PersonPicker({
               type="button"
               onClick={() => onChange(p)}
               className={cx(
-                "h-8 rounded-full px-3 text-[13px] font-medium",
-                value === p ? "bg-accent text-on-accent" : "bg-surface-2",
+                "lip-sm h-8 rounded-full px-3 text-[13px]",
+                value === p ? "btn-leather" : "btn-paper",
               )}
             >
               {p}
