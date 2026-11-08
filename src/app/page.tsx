@@ -29,7 +29,7 @@ import { useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib
 import { holidayLastDay, holidayOn, useAttendanceData, type ViewSession } from "@/lib/college";
 import { CamuStatus } from "@/components/College";
 import { eventsOn, holidayLength } from "@/lib/calendar";
-import { bucketOf, compareTasks, countdownText, daysBetween, dueLabel } from "@/lib/tasks";
+import { bucketOf, compareTasks, countdownText, daysBetween, doneToday, dueLabel } from "@/lib/tasks";
 import { budgetStatus, fmtMoney, monthKey, sum } from "@/lib/money";
 import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
 import { describe, fmtPct, weekChange } from "@/lib/attendance";
@@ -89,11 +89,18 @@ export default function TodayPage() {
   }, [events, today, camu]);
 
   const work = useMemo(() => {
-    const pending = (tasks ?? []).filter((t) => !t.done).sort(compareTasks);
-    const soon = pending.filter((t) => {
-      const b = bucketOf(t, today);
-      return b === "overdue" || b === "today" || b === "tomorrow";
-    });
+    const all = tasks ?? [];
+    const pending = all.filter((t) => !t.done).sort(compareTasks);
+    // The list keeps anything ticked off today, struck through where it sat, so
+    // a tap does not make the task disappear from under you — it stays as proof.
+    const soon = all
+      .filter((t) => {
+        if (doneToday(t, today)) return true;
+        if (t.done) return false;
+        const b = bucketOf(t, today);
+        return b === "overdue" || b === "today" || b === "tomorrow";
+      })
+      .sort(compareTasks);
     const dueToday = pending.filter((t) => bucketOf(t, today) === "today").length;
     const overdue = pending.filter((t) => bucketOf(t, today) === "overdue").length;
     const totalDue = pending.filter((t) => t.dueDate).length;
@@ -352,7 +359,7 @@ export default function TodayPage() {
           <h2 className="font-display mb-2.5 text-[16px] font-extrabold tracking-[-0.02em]">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2.5">
             <QuickAction href="/add" icon={<Plus size={18} strokeWidth={2.75} />} label="Add Expense" />
-            <QuickAction href="/money#dues" icon={<ArrowLeftRight size={18} strokeWidth={2.5} />} label="Lena-Dena" />
+            <QuickAction href="/money#dues" icon={<ArrowLeftRight size={18} strokeWidth={2.5} />} label="Lend & Borrow" />
             <QuickAction href="/tasks?new=1" icon={<SquareCheckBig size={18} strokeWidth={2.5} />} label="Add Task" />
             <QuickAction href="/timetable" icon={<CalendarDays size={18} strokeWidth={2.5} />} label="Timetable" />
           </div>
@@ -568,9 +575,11 @@ function MarkRow({ session, name }: { session: Session; name: string }) {
 function TaskLine({ task, today }: { task: Task; today: string }) {
   const toast = useToast();
   const [ticked, setTicked] = useState(false);
+  const done = task.done || ticked;
   const bucket = bucketOf(task, today);
-  const due =
-    bucket === "overdue"
+  const due = task.done
+    ? { text: "Done", tone: "text-safe" }
+    : bucket === "overdue"
       ? { text: "Overdue", tone: "text-danger" }
       : bucket === "today"
         ? { text: "Due Today", tone: "text-orange" }
@@ -579,6 +588,12 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
           : { text: dueLabel(task, today), tone: "text-muted" };
 
   function tick() {
+    // Tapping a done one brings it back; tapping an open one marks it done after
+    // a beat, so the strike-through is seen before it settles.
+    if (task.done) {
+      void setTaskDone(task.id, false);
+      return;
+    }
     if (ticked) return;
     setTicked(true);
     setTimeout(() => {
@@ -599,10 +614,10 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
           aria-label={`Mark "${task.title}" done`}
           className="shrink-0"
         >
-          <PaperCheck checked={ticked} />
+          <PaperCheck checked={done} />
         </button>
         <span className="min-w-0 flex-1">
-          <span className={cx("block truncate text-[14px] font-bold", ticked && "text-muted line-through")}>{task.title}</span>
+          <span className={cx("block truncate text-[14px] font-bold", done && "text-muted line-through")}>{task.title}</span>
           <span className={cx("block text-[12px] font-semibold", due.tone)}>{due.text}</span>
         </span>
         <ChevronRight size={16} className="shrink-0 text-muted" />

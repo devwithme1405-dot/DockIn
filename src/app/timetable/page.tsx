@@ -48,7 +48,11 @@ export default function TimetablePage() {
   const notes = useClassNotes();
   const today = toDateStr();
   const [date, setDate] = useState(today);
-  const [view, setView] = useState<"week" | "calendar">("week");
+  const [view, setView] = useState<"week" | "calendar">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "calendar"
+      ? "calendar"
+      : "week",
+  );
 
   const weekStart = mondayOf(date);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);

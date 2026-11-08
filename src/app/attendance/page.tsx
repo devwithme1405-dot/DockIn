@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { StickyBar } from "@/components/PageHeader";
 import { AttendanceSkeleton } from "@/components/Skeleton";
-import { ArrowLeft, CalendarDays, ChevronRight, PartyPopper, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { ArrowLeft, ChevronRight, PartyPopper, Search, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { useEvents, useSessionsOn } from "@/lib/hooks";
 import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
@@ -57,9 +57,8 @@ function Header() {
           <ArrowLeft size={20} strokeWidth={2.4} />
         </PaperIconButton>
         <h1 className="font-display truncate text-center text-[22px] font-extrabold tracking-[-0.03em]">Attendance</h1>
-        <PaperIconButton label="Calendar and holidays" href="/calendar">
-          <CalendarDays size={19} strokeWidth={2.3} />
-        </PaperIconButton>
+        {/* The calendar lives on the Timetable screen now — one place for it. */}
+        <span aria-hidden />
       </div>
     </StickyBar>
   );
@@ -248,7 +247,7 @@ export default function AttendancePage() {
 
           {(onHoliday || coming) && (
             <Link
-              href="/calendar"
+              href="/timetable?view=calendar"
               className="mx-5 mt-3 flex items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-violet/40 bg-violet-soft px-4 py-3 transition active:scale-[0.99]"
             >
               <PartyPopper size={19} className="shrink-0 text-violet" />

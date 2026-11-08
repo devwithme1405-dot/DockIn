@@ -140,6 +140,7 @@ export default function TasksPage() {
   const open = (t: Task) => setEditing(t);
 
   return (
+    <>
     <div className="page-wash stagger">
       <PageHeader
         title="Tasks"
@@ -374,6 +375,11 @@ export default function TasksPage() {
           ))}
       </div>
 
+      </div>
+
+      {/* The button and the sheets sit outside the staggered page, so opening one
+          never makes the browser restyle every task row behind it — that restyle
+          was the flash on tapping +. */}
       <button
         onClick={() => setAdding(true)}
         aria-label="Add task"
@@ -388,7 +394,7 @@ export default function TasksPage() {
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing ? KIND_BY_ID[editing.kind].label : "Task"}>
         {editing && <TaskForm key={editing.id} task={editing} subjects={subjects} onDone={() => setEditing(null)} />}
       </Sheet>
-    </div>
+    </>
   );
 }
 

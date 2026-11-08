@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   CircleHelp,
@@ -230,6 +230,16 @@ export function TaskForm({
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
 
+  // For a new task, focus the title — but only once the sheet has slid up. Doing
+  // it immediately pops the keyboard mid-animation, and the viewport resizing
+  // under the opening sheet is what read as a flicker on tapping +.
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (task) return;
+    const t = setTimeout(() => titleRef.current?.focus(), 260);
+    return () => clearTimeout(t);
+  }, [task]);
+
   const isExam = kind === "exam" || kind === "quiz";
   const valid = title.trim().length > 0;
 
@@ -322,11 +332,11 @@ export function TaskForm({
       </div>
 
       <input
+        ref={titleRef}
         className={cx(inputBase, "mt-4")}
         placeholder={isExam ? "e.g. DBMS mid-sem" : "What needs to be done?"}
         value={title}
         maxLength={120}
-        autoFocus={!task}
         onChange={(e) => setTitle(e.target.value)}
         aria-label="Title"
       />
