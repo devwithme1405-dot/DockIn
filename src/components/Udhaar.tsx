@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, HandCoins, MessageCircle, Plus, Users, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronRight, HandCoins, MessageCircle, Plus, Users, X } from "lucide-react";
 import { useDues } from "@/lib/hooks";
 import { addDue, deleteDue, getProfile, restoreDue, saveProfile, settleDue, settleWith } from "@/lib/repo";
 import { fmtMoney, knownPeople, ledger, ledgerTotals, reminderText, samePerson, whatsappUrl, type PersonLedger } from "@/lib/money";
@@ -30,72 +30,94 @@ export function UdhaarCard() {
 
   if (!dues) return null;
 
+  const net = Math.round((totals.lena - totals.dena) * 100) / 100;
+
   return (
-    <section id="dues" className="mt-6 scroll-mt-20 px-5" aria-label="Lena-dena">
+    <section id="dues" className="mt-7 scroll-mt-20 px-5" aria-label="Lena-dena">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em]">Lena-dena</h2>
+        <h2 className="font-display text-[19px] font-extrabold tracking-[-0.02em]">Lena-dena</h2>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setManaging(true)}
             aria-label="People"
-            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium shadow-[0_0_0_1px_var(--line)]"
+            className="btn-paper lip-sm inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium"
           >
             <Users size={15} /> People
           </button>
           <button
             onClick={() => setAdding(true)}
-            className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[13px] font-medium text-on-ink"
+            className="btn-leather lip-sm inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium"
           >
             <Plus size={15} /> Add
           </button>
         </div>
       </div>
 
-      <div className="lift overflow-hidden rounded-3xl bg-surface">
-        <div className="grid grid-cols-2 divide-x divide-line border-b border-line">
-          <div className="px-4 py-3">
-            <p className="text-[12px] text-muted">Lena hai</p>
-            <p className="text-[20px] font-semibold tabular-nums text-safe">{fmtMoney(totals.lena)}</p>
+      {/* A little ledger: what's coming to you on the left, what you owe on the
+          right, a hairline rule down the middle like an accounts book. */}
+      <div className="notebook overflow-hidden px-0 pt-0 pb-0">
+        <div className="relative grid grid-cols-2">
+          <span aria-hidden className="absolute inset-y-3 left-1/2 w-px -translate-x-1/2 bg-card-edge" />
+          <div className="px-4 py-3.5">
+            <p className="flex items-center gap-1 text-[11.5px] font-bold tracking-wide text-muted uppercase">
+              <ArrowDownLeft size={13} className="text-safe" /> You&apos;ll get
+            </p>
+            <p className="mt-0.5 font-display text-[22px] font-extrabold tabular-nums text-safe">{fmtMoney(totals.lena)}</p>
           </div>
-          <div className="px-4 py-3">
-            <p className="text-[12px] text-muted">Dena hai</p>
-            <p className="text-[20px] font-semibold tabular-nums text-danger">{fmtMoney(totals.dena)}</p>
+          <div className="px-4 py-3.5 text-right">
+            <p className="flex items-center justify-end gap-1 text-[11.5px] font-bold tracking-wide text-muted uppercase">
+              You owe <ArrowUpRight size={13} className="text-danger" />
+            </p>
+            <p className="mt-0.5 font-display text-[22px] font-extrabold tabular-nums text-danger">{fmtMoney(totals.dena)}</p>
           </div>
         </div>
+
+        {net !== 0 && rows.length > 0 && (
+          <p className="border-t border-dashed border-card-edge px-4 py-2 text-center text-[12.5px] font-semibold">
+            <span className="text-muted">On balance </span>
+            <span className={net > 0 ? "text-safe" : "text-danger"}>
+              {net > 0 ? "you'll get " : "you owe "}
+              {fmtMoney(Math.abs(net))}
+            </span>
+          </p>
+        )}
+
         {rows.length === 0 ? (
-          <p className="px-4 py-4 text-[13.5px] text-muted">
-            Paid for a friend? After a payment tap <b className="text-text">For someone</b>, or add it with +.
-            When they pay you back, DockIn ticks it off.
+          <p className="border-t border-card-edge px-4 py-5 text-center text-[13.5px] leading-relaxed text-muted">
+            Nothing pending. Paid for a friend? Tap <b className="text-text">+ Add</b>, or hit{" "}
+            <b className="text-text">For someone</b> after a payment — when they pay you back it ticks off here.
           </p>
         ) : (
-          <ul className="divide-y divide-line">
+          <ul className="border-t border-card-edge">
             {rows.map((r) => (
               <li key={r.person}>
                 <button
                   onClick={() => setPerson(r.person)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-2"
+                  className="ruled-row flex w-full items-center gap-3 px-4 py-3 text-left transition active:bg-surface-2"
                 >
                   <span
                     className={cx(
-                      "grid size-10 shrink-0 place-items-center rounded-full text-[15px] font-semibold",
-                      r.net >= 0 ? "bg-safe-soft text-safe" : "bg-danger-soft text-danger",
+                      "grid size-10 shrink-0 place-items-center rounded-full text-[15px] font-extrabold ring-2",
+                      r.net >= 0 ? "bg-safe-soft text-safe ring-safe/20" : "bg-danger-soft text-danger ring-danger/20",
                     )}
                     aria-hidden
                   >
                     {(r.person.trim()[0] ?? "?").toUpperCase()}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-medium">{r.person}</span>
+                    <span className="block truncate text-[15.5px] font-semibold">{r.person}</span>
                     <span className="block truncate text-[12.5px] text-muted">
                       {r.open.length === 1 ? r.open[0].note || fmtDay(r.open[0].date) : `${r.open.length} entries`}
                     </span>
                   </span>
                   <span className="text-right">
-                    <span className={cx("block text-[15px] font-semibold tabular-nums", r.net >= 0 ? "text-safe" : "text-danger")}>
+                    <span className={cx("block font-display text-[16px] font-extrabold tabular-nums", r.net >= 0 ? "text-safe" : "text-danger")}>
+                      {r.net >= 0 ? "+" : "−"}
                       {fmtMoney(Math.abs(r.net))}
                     </span>
-                    <span className="block text-[11.5px] text-muted">{r.net >= 0 ? "owes you" : "you owe"}</span>
+                    <span className="block text-[11px] font-medium text-muted">{r.net >= 0 ? "owes you" : "you owe"}</span>
                   </span>
+                  <ChevronRight size={17} className="shrink-0 text-muted/60" />
                 </button>
               </li>
             ))}
