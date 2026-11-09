@@ -117,6 +117,8 @@ await page.addInitScript(
         return { sms: "granted" };
       },
       testPrompt: () => ({ notifications: phone.notifications }),
+      openOemSettings: () => ({}),
+      startGuard: () => ({}),
       college: () => phone.college,
       syncCollege: () => {
         phone.college = { ...phone.college, syncedAt: Date.now() };

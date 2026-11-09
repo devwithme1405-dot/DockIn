@@ -114,8 +114,9 @@ public class DockInPlugin extends Plugin {
         r.put("notifications", notificationState());
         r.put("sms", smsState());
         r.put("pending", PayInbox.size(c));
-        r.put("overlay", PayAskActivity.canPopUp(c));
+        r.put("overlay", PayPopup.allowed(c));
         r.put("battery", unrestricted(c));
+        r.put("guard", PayGuardService.running);
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
         try {
@@ -195,6 +196,36 @@ public class DockInPlugin extends Plugin {
                 Uri.parse("package:" + getContext().getPackageName()));
         Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
         launch(call, i, fallback);
+    }
+
+    /**
+     * The phone maker's own switches that decide whether DockIn may run and pop
+     * up in the background. Xiaomi/Redmi/POCO (MIUI, HyperOS) hide these outside
+     * Android's settings; elsewhere this opens App info.
+     */
+    @PluginMethod
+    public void openOemSettings(PluginCall call) {
+        String which = call.getString("which", "autostart");
+        Context c = getContext();
+        Intent i;
+        if ("popup".equals(which)) {
+            i = new Intent("miui.intent.action.APP_PERM_EDITOR")
+                    .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                    .putExtra("extra_pkgname", c.getPackageName());
+        } else {
+            i = new Intent().setComponent(new ComponentName(
+                    "com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"));
+        }
+        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", c.getPackageName(), null));
+        launch(call, i, fallback);
+    }
+
+    /** Starts the payment watch (after the person switches reading on). */
+    @PluginMethod
+    public void startGuard(PluginCall call) {
+        PayGuardService.start(getContext());
+        call.resolve();
     }
 
     /** The categories and people the payment popup offers, as the app knows them. */
@@ -296,7 +327,10 @@ public class DockInPlugin extends Plugin {
     /** Shows what a payment prompt looks like, so the whole path can be checked without paying. */
     @PluginMethod
     public void testPrompt(PluginCall call) {
-        PayNotifier.post(getContext(), 3999, 1, "DockIn test", System.currentTimeMillis());
+        PayNotifier.post(getContext(), 3999, 1, "DockIn test", "Test", System.currentTimeMillis());
+        // The floating sheet too, so "does it show over other apps?" is answered now.
+        PayPopup.show(getContext(), 1, "DockIn test", "Test", 0, 3999);
+        PayGuardService.start(getContext());
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
         call.resolve(r);

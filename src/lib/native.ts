@@ -44,6 +44,8 @@ export interface PhoneStatus {
   overlay?: boolean;
   /** Left out of battery saving, so detection keeps running with DockIn closed. */
   battery?: boolean;
+  /** The quiet "Watching for payments" service is running. */
+  guard?: boolean;
   /** Android version number, e.g. 34 for Android 14. */
   sdk: number;
   maker: string;
@@ -159,6 +161,9 @@ interface DockInPlugin {
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
   openOverlaySettings(): Promise<void>;
   openBatterySettings(): Promise<void>;
+  /** Xiaomi/Redmi/POCO's own Autostart and background pop-up switches. */
+  openOemSettings(options: { which: "autostart" | "popup" }): Promise<void>;
+  startGuard(): Promise<void>;
   setPayChoices(options: {
     categories: { id: string; label: string; emoji: string }[];
     people: string[];

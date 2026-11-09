@@ -5,4 +5,5 @@ public class NotificationListenerService extends Context {
   public void onNotificationPosted(StatusBarNotification sbn) {}
   public void onListenerDisconnected() {}
   public static void requestRebind(android.content.ComponentName c) {}
+
 }

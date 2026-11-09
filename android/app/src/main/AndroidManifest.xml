@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Lets DockIn ask to be left out of battery saving, so payments are caught when closed. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- The quiet "Watching for payments" service that keeps reading alive when the app is closed. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -55,6 +58,27 @@
             android:noHistory="true"
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
+
+        <!-- Keeps the process (and so the payment listener and SMS receiver) alive when closed. -->
+        <service
+            android:name=".PayGuardService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Reads payment notifications and bank SMS on the phone so each spend can be filed the moment it happens." />
+        </service>
+
+        <!-- Payment reading comes back after a restart or an app update, without opening DockIn. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <!-- Fires scheduled reminders (class starting, task due, attendance low). -->
         <receiver

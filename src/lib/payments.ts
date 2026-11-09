@@ -63,6 +63,17 @@ export const PAY_APPS: Record<string, string> = {
   "com.truecaller": "Messages",
   "com.oneplus.mms": "Messages",
   "com.xiaomi.mms": "Messages",
+  "in.amazon.mShop.android.shopping": "Amazon Pay",
+  "com.fampay.in": "FamPay",
+  "com.freecharge.android": "Freecharge",
+  "com.myairtelapp": "Airtel",
+  "com.enstage.wibmo.hdfc": "PayZapp",
+  "com.sbi.lotusintouch": "YONO SBI",
+  "com.csam.icici.bank.imobile": "iMobile",
+  "com.snapwork.hdfc": "HDFC Bank",
+  "com.axis.mobile": "Axis Mobile",
+  "com.msf.kbank.mobile": "Kotak",
+  "com.google.android.apps.walletnfcrel": "Google Wallet",
 };
 
 /** Chats and social apps: a friend writing "I paid ₹60" is not your money moving. */

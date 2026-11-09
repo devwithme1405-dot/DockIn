@@ -22,6 +22,11 @@ public class NotificationCompat {
     public Builder setShowWhen(boolean b) { return this; }
     public Builder addAction(int icon, CharSequence title, PendingIntent i) { return this; }
     public Builder setStyle(Style s) { return this; }
+    public Builder setOngoing(boolean b) { return this; }
+    public Builder setDefaults(int d) { return this; }
     public Notification build() { return null; }
   }
+  public static final int PRIORITY_MAX = 2;
+  public static final int PRIORITY_MIN = -2;
+  public static final int DEFAULT_ALL = -1;
 }

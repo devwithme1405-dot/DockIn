@@ -48,7 +48,18 @@ public class PayWatchService extends NotificationListenerService {
             "money.super.payments",                   // super.money
             "com.truecaller",                         // SMS inbox
             "com.oneplus.mms",
-            "com.xiaomi.mms"
+            "com.xiaomi.mms",
+            "in.amazon.mShop.android.shopping",       // Amazon India
+            "com.fampay.in",                          // FamPay
+            "com.freecharge.android",
+            "com.myairtelapp",                        // Airtel Payments Bank
+            "com.enstage.wibmo.hdfc",                 // PayZapp
+            "com.sbi.lotusintouch",                   // SBI YONO
+            "com.csam.icici.bank.imobile",            // ICICI iMobile
+            "com.snapwork.hdfc",                      // HDFC Bank
+            "com.axis.mobile",                        // Axis Mobile
+            "com.msf.kbank.mobile",                   // Kotak
+            "com.google.android.apps.walletnfcrel"    // Google Wallet
     ));
 
     /** Chats and social apps: a friend writing "I paid ₹60" is not your money moving. */
@@ -85,6 +96,12 @@ public class PayWatchService extends NotificationListenerService {
      * save power. Ask to be bound again straight away, so payments keep being
      * caught with DockIn closed.
      */
+    /** Connected (at boot, after an update, or switched on): keep the process alive from here on. */
+    @Override
+    public void onListenerConnected() {
+        PayGuardService.start(this);
+    }
+
     @Override
     public void onListenerDisconnected() {
         if (Build.VERSION.SDK_INT >= 24) {
@@ -136,7 +153,7 @@ public class PayWatchService extends NotificationListenerService {
         if (kept == null) return;
 
         DockInPlugin.deliver(kept);
-        PayNotifier.ask(this, PayInbox.redact(whole), sbn.getPostTime());
+        PayNotifier.ask(this, PayInbox.redact(whole), sbn.getPostTime(), sbn.getPackageName());
     }
 
     /**

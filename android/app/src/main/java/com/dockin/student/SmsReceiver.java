@@ -61,6 +61,7 @@ public class SmsReceiver extends BroadcastReceiver {
         if (kept == null) return;
 
         DockInPlugin.deliver(kept);
-        PayNotifier.ask(context, PayInbox.redact(whole), at);
+        PayNotifier.ask(context, PayInbox.redact(whole), at, "sms");
+        PayGuardService.start(context);
     }
 }

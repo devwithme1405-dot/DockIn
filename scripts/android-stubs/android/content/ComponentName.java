@@ -2,4 +2,5 @@ package android.content;
 public class ComponentName {
   public ComponentName(Context c, Class<?> cls) {}
   public String flattenToString() { return ""; }
+  public ComponentName(String pkg, String cls) {}
 }

@@ -15,4 +15,9 @@ public class View {
   public void bringToFront() {}
   public void setBackground(android.graphics.drawable.Drawable d) {}
   public void setPadding2() {}
+  public void setTranslationY(float y) {}
+  public android.view.ViewPropertyAnimator animate() { return null; }
+  public boolean requestFocus() { return true; }
+  public View findFocus() { return null; }
+  public boolean dispatchKeyEvent(KeyEvent e) { return false; }
 }

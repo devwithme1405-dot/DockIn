@@ -7,4 +7,5 @@ public class PluginCall {
   public String getString(String name) { return null; }
   public Boolean getBoolean(String name, Boolean def) { return def; }
   public JSObject getData() { return null; }
+  public String getString(String name, String def) { return def; }
 }

@@ -27,7 +27,8 @@ import java.util.regex.Pattern;
  */
 final class PayNotifier {
 
-    static final String CHANNEL = "payments";
+    /** A fresh channel id: an existing channel's importance cannot be raised later. */
+    static final String CHANNEL = "payments-v2";
 
     /** Money leaving, said outright. "Rahul paid you" is not one of these; see TO_YOU. */
     private static final Pattern DEBIT = Pattern.compile(
@@ -149,8 +150,36 @@ final class PayNotifier {
         return new Spend(amount, credit ? payerOf(text) : (payee != null ? payee : merchantOf(text)), credit);
     }
 
+    /** "Slice", "PhonePe", "Bank SMS" — where the payment was seen, in words. */
+    static String sourceName(String app) {
+        if (app == null) return null;
+        switch (app) {
+            case "com.google.android.apps.nbu.paisa.user": return "Google Pay";
+            case "com.phonepe.app": return "PhonePe";
+            case "net.one97.paytm": return "Paytm";
+            case "in.org.npci.upiapp": return "BHIM";
+            case "indwin.c3.shareapp": return "Slice";
+            case "com.dreamplug.androidapp": return "CRED";
+            case "com.mobikwik_new": return "MobiKwik";
+            case "com.amazon.mShop.android.shopping":
+            case "in.amazon.mShop.android.shopping": return "Amazon Pay";
+            case "money.jupiter": return "Jupiter";
+            case "com.epifi.paisa": return "Fi";
+            case "com.naviapp": return "Navi";
+            case "money.super.payments": return "super.money";
+            case "com.fampay.in": return "FamPay";
+            case "com.freecharge.android": return "Freecharge";
+            default:
+                return app.contains(".") ? "Bank SMS" : "Bank SMS";
+        }
+    }
+
     /** Reads one redacted notification and asks about it if money moved. */
     static void ask(Context c, String text, long at) {
+        ask(c, text, at, null);
+    }
+
+    static void ask(Context c, String text, long at, String app) {
         Spend s = readAny(text);
         if (s == null) return;
         double amount = s.amount;
@@ -185,31 +214,40 @@ final class PayNotifier {
         if (s.in) {
             postIn(c, id, amount, merchant, at);
         } else {
-            post(c, id, amount, merchant, at);
+            String source = sourceName(app);
+            post(c, id, amount, merchant, source, at);
             // The twin of a payment already asked about does not ask twice.
-            if (!twin) PayAskActivity.show(c, amount, merchant, at, id);
+            if (!twin) PayPopup.show(c, amount, merchant, source, at, id);
         }
     }
 
     /** "Spent ₹250 at Zomato", with a button for each answer that needs one more tap. */
     static void post(Context c, int id, double amount, String merchant, long at) {
+        post(c, id, amount, merchant, null, at);
+    }
+
+    static void post(Context c, int id, double amount, String merchant, String source, long at) {
         NotificationManagerCompat nm = NotificationManagerCompat.from(c);
         if (!nm.areNotificationsEnabled()) return;
         ensureChannel(c);
 
         String money = rupees(amount);
-        String title = merchant != null ? "Spent " + money + " at " + merchant : "Spent " + money;
+        String title = merchant != null ? money + " paid to " + merchant : money + " paid";
+        String via = source != null ? "via " + source + " · " : "";
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_dockin)
                 .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
-                .setContentText("What was it for? Tap to place it.")
+                .setContentText(via + "What was it for? Tap to sort it.")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(
+                        title + (source != null ? " via " + source : "") + ".\nWhat was it for? Tap For me, For someone, or open it to split."))
                 .setAutoCancel(true)
-                .setContentIntent(PayAskActivity.pending(c, id * 10, amount, merchant, at, id, null))
-                .addAction(0, "For me", PayAskActivity.pending(c, id * 10 + 1, amount, merchant, at, id, "me"))
-                .addAction(0, "For someone", PayAskActivity.pending(c, id * 10 + 2, amount, merchant, at, id, "other"))
+                .setContentIntent(PayAskActivity.pending(c, id * 10, amount, merchant, source, at, id, null))
+                .addAction(0, "For me", PayAskActivity.pending(c, id * 10 + 1, amount, merchant, source, at, id, "me"))
+                .addAction(0, "For someone", PayAskActivity.pending(c, id * 10 + 2, amount, merchant, source, at, id, "other"))
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setWhen(at)
                 .setShowWhen(true);
         try {

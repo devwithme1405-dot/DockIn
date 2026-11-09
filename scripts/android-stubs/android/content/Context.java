@@ -12,4 +12,10 @@ public class Context {
   public String getPackageName() { return null; }
   public ContentResolver getContentResolver() { return null; }
   public static final String POWER_SERVICE = "power";
+  public android.content.res.Resources getResources() { return null; }
+  public static final String WINDOW_SERVICE = "window";
+  public static final String INPUT_METHOD_SERVICE = "input_method";
+  public int checkSelfPermission(String p) { return 0; }
+  public ComponentName startForegroundService(Intent i) { return null; }
+  public ComponentName startService(Intent i) { return null; }
 }

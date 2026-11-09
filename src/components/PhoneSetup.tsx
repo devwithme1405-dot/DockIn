@@ -52,6 +52,7 @@ export function PhoneSetup() {
   }
 
   const ready = status.listening && status.notifications === "granted";
+  const xiaomi = /xiaomi|redmi|poco/i.test(status.maker);
   // Android 13 and later lock notification access for apps installed from a
   // file until "restricted settings" are allowed for them in App info.
   const restricted = status.sdk >= 33;
@@ -89,7 +90,7 @@ export function PhoneSetup() {
   async function test() {
     await run("test", async () => {
       await DockIn.testPrompt();
-      toast.show("Sent. Pull down your notifications.");
+      toast.show(status!.overlay ? "Sent. The popup should be on screen now — switch to another app to see it there too." : "Sent. Pull down your notifications.");
     });
   }
 
@@ -200,6 +201,24 @@ export function PhoneSetup() {
           />
         )}
 
+        {xiaomi && status.overlay !== undefined && (
+          <Step
+            done={false}
+            title="Xiaomi: Autostart and background pop-ups"
+            body="Xiaomi hides two extra switches. Turn on Autostart, then in Other permissions allow “Display pop-up windows while running in the background” and “Show on lock screen”."
+            action={
+              <span className="flex flex-col gap-1.5">
+                <ActionButton busy={busy === "auto"} onClick={() => run("auto", () => DockIn.openOemSettings({ which: "autostart" }))}>
+                  Autostart
+                </ActionButton>
+                <ActionButton busy={busy === "pop"} onClick={() => run("pop", () => DockIn.openOemSettings({ which: "popup" }))}>
+                  Pop-ups
+                </ActionButton>
+              </span>
+            }
+          />
+        )}
+
         {status.battery !== undefined && (
           <Step
             done={status.battery}
@@ -230,7 +249,7 @@ export function PhoneSetup() {
             disabled={busy === "test"}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium disabled:opacity-60"
           >
-            <BellRing size={13} /> Test
+            <BellRing size={13} /> {status.overlay ? "Test popup" : "Test"}
           </button>
         )}
       </div>
