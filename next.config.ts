@@ -22,6 +22,26 @@ const nextConfig: NextConfig = {
   // Tree-shake icon imports instead of shipping the whole icon set.
   experimental: { optimizePackageImports: ["lucide-react"] },
 
+  // Standard hardening for every response. No script rules here (Next's own
+  // inline scripts would need nonces); these block the attacks that need none:
+  // framing the app (clickjacking), MIME sniffing, a hijacked <base>, and
+  // browser features DockIn never uses.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
+        ],
+      },
+    ];
+  },
+
   async redirects() {
     return [
       // The Android app, straight from the release CI publishes. A redirect

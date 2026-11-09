@@ -267,6 +267,11 @@ export function installChangeHooks() {
   }
 }
 
+/** A delay spread ±20% around `base`, so phones do not sync in lockstep. `r` in [0,1). */
+export function nextDelay(base: number, r: number): number {
+  return Math.round(base * (0.8 + 0.4 * r));
+}
+
 /** Start background syncing for a signed-in user. Returns a stop function. */
 export function startSync(client: SupabaseClient, userId: string): () => void {
   installChangeHooks();
@@ -279,13 +284,29 @@ export function startSync(client: SupabaseClient, userId: string): () => void {
   const onVisible = () => document.visibilityState === "visible" && run();
   window.addEventListener("online", run);
   document.addEventListener("visibilitychange", onVisible);
-  const interval = setInterval(run, 5 * 60_000);
+  // The background round. Not a fixed 5-minute beat: thousands of phones opened
+  // at 8am would all hit the server on the same second, every 5 minutes, for
+  // the rest of the day. Each phone drifts on its own (4–6 min), skips rounds
+  // while hidden, and backs off when the server is failing instead of hammering it.
+  let failures = 0;
+  let next: ReturnType<typeof setTimeout> | null = null;
+  const loop = () => {
+    const base = failures ? Math.min(30 * 60_000, 30_000 * 2 ** (failures - 1)) : 5 * 60_000;
+    next = setTimeout(async () => {
+      if (document.visibilityState === "visible" && navigator.onLine !== false) {
+        await syncOnce(remote, userId);
+        failures = getSyncStatus().state === "error" ? failures + 1 : 0;
+      }
+      if (trigger) loop();
+    }, nextDelay(base, Math.random()));
+  };
+  loop();
   return () => {
     trigger = null;
     if (timer) clearTimeout(timer);
+    if (next) clearTimeout(next);
     window.removeEventListener("online", run);
     document.removeEventListener("visibilitychange", onVisible);
-    clearInterval(interval);
   };
 }
 

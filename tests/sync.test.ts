@@ -195,3 +195,12 @@ describe("a server that does not know a new kind yet", () => {
     expect([...upgraded.rows.values()].some((r) => r.kind === "dues")).toBe(true);
   });
 });
+
+describe("background sync spacing", () => {
+  it("spreads phones ±20% around the base so they never sync in lockstep", async () => {
+    const { nextDelay } = await import("@/lib/sync");
+    expect(nextDelay(300_000, 0)).toBe(240_000);
+    expect(nextDelay(300_000, 0.5)).toBe(300_000);
+    expect(nextDelay(300_000, 0.999)).toBeLessThan(360_000);
+  });
+});
