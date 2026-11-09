@@ -277,11 +277,20 @@ await step("setup comes up once, straight after opening the app", async () => {
 
 await step("the app knows it is inside the phone", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+  await waitFor("Phone permissions");
+  const p0 = await text();
+  if (!/still off/.test(p0)) throw new Error("Profile does not say permissions are off");
+  if (!p0.includes("College accounts")) throw new Error("Profile has no College accounts row");
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${SHOTS}/native-profile.png`, fullPage: true });
+  await page.getByRole("button", { name: /College accounts/ }).click();
+  await waitFor("Connect Camu");
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: /Phone permissions/ }).click();
   await waitFor("Also read payment notifications");
   const t = await text();
   if (/Payments are read by the Android app/i.test(t)) throw new Error("shows the browser version of the card");
   if (!/App 2\.0\.1 · Android 14/.test(t)) throw new Error("does not show the app and Android version");
-  if (!t.includes("Connect Camu")) throw new Error("Profile has no Camu switch");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-setup-off.png`, fullPage: true });
 });
@@ -317,7 +326,9 @@ await step("Allow asks for notifications, and the card goes green", async () => 
 await step("the detection log opens and shows how fast a payment was caught", async () => {
   await page.getByRole("button", { name: "Detection log" }).click();
   await waitFor("140 ms");
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/native-permissions.png`, fullPage: false });
+  await page.getByRole("button", { name: "Hide" }).click();
 });
 
 await step("Money shows the bank's and GPay's copy as one payment, and money in apart", async () => {

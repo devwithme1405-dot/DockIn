@@ -185,7 +185,7 @@ const SCREENS = [
   { path: "/attendance/timetable", name: "timetable", expect: "" },
   { path: "/money", name: "money", expect: "Spent this month" },
   { path: "/tasks", name: "tasks", expect: "To do" },
-  { path: "/settings", name: "profile", expect: "Text size" },
+  { path: "/settings", name: "profile", expect: "Appearance" },
   { path: "/calendar", name: "calendar", expect: "" },
   { path: "/add", name: "quick-add", expect: "" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },

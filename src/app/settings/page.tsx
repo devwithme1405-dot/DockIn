@@ -1,20 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
+  Building2,
   Check,
+  ChevronRight,
   Cloud,
   Download,
   Eye,
   EyeOff,
+  GraduationCap,
+  IdCard,
+  IndianRupee,
+  Info,
   KeyRound,
   LogOut,
+  Mail,
   Monitor,
   Moon,
+  Palette,
   Pencil,
+  School,
+  ShieldCheck,
   Sun,
+  type LucideIcon,
 } from "lucide-react";
 import {
   TEXT_SCALES,
@@ -44,7 +55,7 @@ import {
   inputCls,
 } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
-import { PhoneSetup } from "@/components/PhoneSetup";
+import { PhoneSetup, phoneChecklist, usePhoneStatus } from "@/components/PhoneSetup";
 import { ConnectCamu, ConnectLms } from "@/components/College";
 import { useAttendanceData, useCollege } from "@/lib/college";
 import { ProfileSkeleton } from "@/components/Skeleton";
@@ -55,7 +66,18 @@ import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
 import { FRIENDS } from "@/lib/features";
 
-type SheetName = "details" | "avatar" | "signin" | "password" | "logout" | null;
+type SheetName =
+  | "details"
+  | "avatar"
+  | "signin"
+  | "password"
+  | "logout"
+  | "appearance"
+  | "phone"
+  | "college"
+  | "backup"
+  | "about"
+  | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
 
 const THEMES: { id: ThemePref; label: string; icon: typeof Sun }[] = [
@@ -74,6 +96,19 @@ export default function ProfilePage() {
   const expenses = useExpenses();
 
   const [sheet, setSheet] = useState<SheetName>(null);
+  const phone = usePhoneStatus();
+  const checks = phone.status ? phoneChecklist(phone.status) : [];
+  const phoneOff = checks.filter((c) => !c.on).length;
+  const phoneLine = !phone.status
+    ? "Checking…"
+    : phoneOff === 0
+      ? "Everything is on"
+      : `${phoneOff} of ${checks.length} still off — payments may be missed`;
+
+  // /settings#phone (from Money's nudge) opens the permissions straight away.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#phone") void Promise.resolve().then(() => setSheet("phone"));
+  }, []);
   const [details, setDetails] = useState<{
     name: string;
     branch: string;
@@ -114,6 +149,11 @@ export default function ProfilePage() {
       </>
     );
 
+  const closePhone = () => {
+    setSheet(null);
+    phone.reload();
+    if (typeof window !== "undefined" && window.location.hash === "#phone") history.replaceState(null, "", window.location.pathname);
+  };
   const close = () => {
     if (busy) return;
     setSheet(null);
@@ -223,40 +263,60 @@ export default function ProfilePage() {
     <>
       <BackHeader href="/" backLabel="Today" title="Profile" hideLargeTitle />
 
-      <div className="space-y-5 px-5 pt-3">
-        {/* identity */}
-        <section className="notebook rings px-4 pb-4">
-          <div className="flex items-center gap-4">
+      <div className="space-y-4 px-5 pt-1">
+        {/* identity: the picture large, on a soft lavender wash */}
+        <section className="relative -mx-5 px-5 pt-2 pb-3">
+          <svg
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full text-accent opacity-[0.16]"
+            viewBox="0 0 400 100"
+            preserveAspectRatio="none"
+          >
+            <path d="M0 70 C 90 40, 170 100, 260 62 S 380 30, 400 18 L400 100 L0 100 Z" fill="currentColor" />
+          </svg>
+          <div className="relative flex items-center gap-4">
             <button
               onClick={() => setSheet("avatar")}
               aria-label="Change profile picture"
-              className="relative shrink-0 rounded-full transition active:scale-95"
+              className="relative shrink-0 rounded-full p-[5px] shadow-[0_6px_18px_rgba(80,40,140,0.22)] transition active:scale-95"
+              style={{ background: "linear-gradient(145deg, var(--card), color-mix(in oklab, var(--accent) 22%, var(--card)))" }}
             >
-              <Avatar name={profile.name} avatar={profile.avatar} size={66} />
-              <span className="absolute -right-0.5 -bottom-0.5 grid size-[22px] place-items-center rounded-full bg-accent text-on-accent shadow-[0_0_0_2px_var(--card)]">
-                <Pencil size={12} strokeWidth={2.6} />
-              </span>
+              <Avatar name={profile.name} avatar={profile.avatar} size={96} />
             </button>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[22px] font-semibold leading-tight tracking-tight">
+              <h1 className="font-display truncate text-[26px] leading-tight font-extrabold tracking-tight">
                 {profile.name || "Your name"}
               </h1>
-              <p className="truncate text-[13px] text-muted">
-                {[profile.branch, profile.year ? `Year ${profile.year}` : null, profile.section]
-                  .filter(Boolean)
-                  .join(" · ") || (signedIn ? accountName(session.user.email) : "Saved on this phone only")}
-              </p>
-              <p className="mt-0.5 text-[12px] text-muted">Using DockIn since {since}</p>
+              {(profile.branch || profile.year) && (
+                <p className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[13px] font-semibold text-accent">
+                  <GraduationCap size={15} className="shrink-0" />
+                  <span className="truncate">
+                    {[profile.branch, profile.year ? `(${ordinal(profile.year)} Year)` : null].filter(Boolean).join(" ")}
+                  </span>
+                </p>
+              )}
+              <p className="mt-1.5 text-[13px] font-medium text-muted">Using DockIn since {since}</p>
             </div>
             <button
               onClick={openDetails}
               aria-label="Edit your details"
-              className="btn-paper lip-sm grid size-10 shrink-0 place-items-center rounded-full text-text"
+              className="btn-leather lip-sm grid size-11 shrink-0 place-items-center self-start rounded-full"
             >
-              <Pencil size={17} />
+              <Pencil size={18} />
             </button>
           </div>
-          {profile.bio && <p className="mt-3 text-[14px] text-muted">{profile.bio}</p>}
+        </section>
+
+        {/* details, on the spiral pad */}
+        <section className="notebook rings px-4 pb-1">
+          <ul>
+            <DetailRow icon={IdCard} label="Roll No." value={profile.roll} onAdd={openDetails} />
+            <DetailRow icon={Building2} label="Section" value={profile.section} onAdd={openDetails} />
+            <DetailRow icon={GraduationCap} label="Year" value={profile.year ? `${ordinal(profile.year)} year` : undefined} onAdd={openDetails} />
+            {signedIn && <DetailRow icon={Mail} label="Email" value={accountName(session.user.email)} />}
+            <DetailRow icon={IndianRupee} label="UPI ID" value={profile.upi} onAdd={openDetails} />
+          </ul>
+          {profile.bio && <p className="border-t border-line py-3 text-[14px] text-muted">{profile.bio}</p>}
         </section>
 
         {/* real numbers */}
@@ -270,97 +330,145 @@ export default function ProfilePage() {
           <Stat label="Spent this month" value={monthSpent === null ? "--" : fmtMoney(monthSpent)} ink="text-text" />
         </section>
 
-        {/* appearance */}
-        <Card title="Appearance">
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">
-            {THEMES.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                role="radio"
-                aria-checked={profile.theme === id}
-                onClick={() => pickTheme(id)}
-                className={cx(
-                  "lip-sm flex h-11 items-center justify-center gap-1.5 rounded-full text-sm",
-                  profile.theme === id ? "btn-leather" : "btn-paper",
-                )}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[12.5px] text-muted">System follows your phone and switches on its own.</p>
+        {/* everything else, one row per kind, each opening its own sheet */}
+        <nav className="space-y-2.5" aria-label="Settings">
+          <MenuRow
+            icon={Palette}
+            title="Appearance"
+            sub={`${THEMES.find((t) => t.id === profile.theme)?.label ?? "System"} theme · ${TEXT_SCALE_LABELS[(TEXT_SCALES as readonly number[]).indexOf(normTextScale(profile.textScale))] ?? "Normal"} text`}
+            onClick={() => setSheet("appearance")}
+          />
+          {phone.native && (
+            <MenuRow
+              icon={ShieldCheck}
+              title="Phone permissions"
+              sub={phoneLine}
+              alert={phoneOff > 0}
+              onClick={() => setSheet("phone")}
+            />
+          )}
+          {phone.native && (
+            <MenuRow icon={School} title="College accounts" sub="Camu and the LMS" onClick={() => setSheet("college")} />
+          )}
+          {configured && (
+            <MenuRow
+              icon={Cloud}
+              title="Backup & Sync"
+              sub={signedIn ? syncLine : "Not signed in — data is on this phone only"}
+              alert={sync.state === "error"}
+              onClick={() => setSheet("backup")}
+            />
+          )}
+          <MenuRow
+            icon={Info}
+            title="About DockIn"
+            sub={phone.status?.version ? `Version ${phone.status.version}` : "Made for students"}
+            onClick={() => setSheet("about")}
+          />
+        </nav>
 
-          <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Text size</p>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Text size">
-            {TEXT_SCALES.map((scale, i) => (
-              <button
-                key={scale}
-                role="radio"
-                aria-checked={normTextScale(profile.textScale) === scale}
-                onClick={() => pickTextScale(scale)}
-                className={cx(
-                  "lip-sm flex h-11 items-center justify-center rounded-full",
-                  normTextScale(profile.textScale) === scale ? "btn-leather" : "btn-paper",
-                )}
-                style={{ fontSize: 11 + i * 1.5 }}
-              >
-                {TEXT_SCALE_LABELS[i]}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[12.5px] text-muted">Changes every screen in DockIn, not your other apps.</p>
-        </Card>
-
-        {/* account, as one line rather than a card: there is nothing to decide
-            here, only something to know */}
-        {configured && (
-          <section className="lift rounded-3xl bg-surface p-4">
-            {signedIn ? (
-              <>
-                <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
-                  <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{accountName(session.user.email)}</span>
-                    <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
-                      {syncLine}
-                    </span>
-                  </span>
-                </p>
-                <button
-                  onClick={() => setSheet("password")}
-                  className="mt-3 flex w-full items-center gap-2.5 border-t border-line pt-3 text-[14px] text-accent"
-                >
-                  <KeyRound size={16} /> Set or change password
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-[14px] text-muted">
-                  Sign in to back your data up and use DockIn on more than one phone.
-                </p>
-                <Button className="mt-3" size="sm" onClick={() => setSheet("signin")}>
-                  Sign in
-                </Button>
-              </>
-            )}
-          </section>
-        )}
-
-        {/* Camu and the LMS: only the app can read them */}
-        <CollegeCard />
-
-        {/* the phone's switches: payment reading and notifications */}
-        <PhoneSetup />
-
-        <Button variant="secondary" className="w-full" onClick={openLogout}>
-          <LogOut size={18} /> Log out
-        </Button>
+        <button
+          onClick={openLogout}
+          className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl border-[1.5px] border-danger text-[16px] font-semibold text-danger active:bg-danger-soft"
+        >
+          <LogOut size={19} /> Log out
+        </button>
 
         <p className="pb-2 text-center text-[12px] text-muted">DockIn · made for students</p>
       </div>
 
-      {/* sheets */}
+      <Sheet open={sheet === "appearance"} onClose={close} title="Appearance">
+        <p className="mb-1.5 text-[13px] font-medium text-muted">Theme</p>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Theme">
+          {THEMES.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              role="radio"
+              aria-checked={profile.theme === id}
+              onClick={() => pickTheme(id)}
+              className={cx(
+                "lip-sm flex h-11 items-center justify-center gap-1.5 rounded-full text-sm",
+                profile.theme === id ? "btn-leather" : "btn-paper",
+              )}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[12.5px] text-muted">System follows your phone and switches on its own.</p>
+
+        <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Text size</p>
+        <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Text size">
+          {TEXT_SCALES.map((scale, i) => (
+            <button
+              key={scale}
+              role="radio"
+              aria-checked={normTextScale(profile.textScale) === scale}
+              onClick={() => pickTextScale(scale)}
+              className={cx(
+                "lip-sm flex h-11 items-center justify-center rounded-full",
+                normTextScale(profile.textScale) === scale ? "btn-leather" : "btn-paper",
+              )}
+              style={{ fontSize: 11 + i * 1.5 }}
+            >
+              {TEXT_SCALE_LABELS[i]}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 mb-2 text-[12.5px] text-muted">Changes every screen in DockIn, not your other apps.</p>
+      </Sheet>
+
+      <Sheet open={sheet === "phone"} onClose={closePhone} title="Phone permissions">
+        <PhoneSetup bare />
+      </Sheet>
+
+      <Sheet open={sheet === "college"} onClose={close} title="College accounts">
+        <CollegeCard />
+      </Sheet>
+
+      <Sheet open={sheet === "backup"} onClose={close} title="Backup & Sync">
+        {signedIn ? (
+          <>
+            <p className="flex items-center gap-2.5 text-[14px]" aria-live="polite">
+              <Cloud size={17} className={sync.state === "error" ? "text-danger" : "text-accent"} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{accountName(session.user.email)}</span>
+                <span className={cx("block text-[12.5px]", sync.state === "error" ? "text-danger" : "text-muted")}>
+                  {syncLine}
+                </span>
+              </span>
+            </p>
+            <button
+              onClick={() => setSheet("password")}
+              className="mt-3 flex w-full items-center gap-2.5 border-t border-line pt-3 text-[14px] text-accent"
+            >
+              <KeyRound size={16} /> Set or change password
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[14px] text-muted">Sign in to back your data up and use DockIn on more than one phone.</p>
+            <Button className="mt-3" size="sm" onClick={() => setSheet("signin")}>
+              Sign in
+            </Button>
+          </>
+        )}
+        <Button variant="secondary" className="mt-4 mb-2 w-full" onClick={download}>
+          <Download size={17} /> Download a copy of my data
+        </Button>
+      </Sheet>
+
+      <Sheet open={sheet === "about"} onClose={close} title="About DockIn">
+        <p className="text-[14px] leading-relaxed text-muted">
+          Attendance, money and assignments for college, in one place. Camu, the LMS and your payments are read on
+          this phone and stay on it.
+        </p>
+        <p className="mt-3 mb-2 text-[13px] text-muted">
+          {phone.status ? `App ${phone.status.version || "?"} · Android build ${phone.status.sdk}` : "Web version"}
+        </p>
+      </Sheet>
+
       <Sheet open={sheet === "details"} onClose={close} title="Your details">
         {details && (
           <>
@@ -560,15 +668,6 @@ function SetPassword({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Card({ title, children, flush }: { title: string; children: ReactNode; flush?: boolean }) {
-  return (
-    <section className="lift rounded-3xl bg-surface p-4">
-      <h2 className="mb-3 text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">{title}</h2>
-      <div className={cx(flush && "-mx-1 divide-y divide-line")}>{children}</div>
-    </section>
-  );
-}
-
 function Stat({ label, value, ink }: { label: string; value: string; ink: string }) {
   return (
     <div className="lift min-w-0 rounded-2xl px-3 py-3">
@@ -661,12 +760,69 @@ function CollegeCard() {
   const { native } = useCollege();
   if (!native) return null;
   return (
-    <section className="lift rounded-3xl bg-surface px-4 pt-3.5 pb-1" aria-label="College accounts">
-      <h2 className="text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">College</h2>
+    <section className="pb-2" aria-label="College accounts">
       <div className="border-b border-line">
         <ConnectCamu compact />
       </div>
       <ConnectLms compact />
     </section>
+  );
+}
+
+function ordinal(n: number): string {
+  return n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+}
+
+function DetailRow({
+  icon: Icon,
+  label,
+  value,
+  onAdd,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value?: string;
+  onAdd?: () => void;
+}) {
+  return (
+    <li className="flex items-center gap-3.5 border-b border-line py-3 last:border-b-0">
+      <Icon size={22} className="shrink-0 text-accent" strokeWidth={1.9} />
+      <span className="w-[76px] shrink-0 text-[15px] font-semibold">{label}</span>
+      {value ? (
+        <span className="min-w-0 flex-1 truncate text-right text-[15px]">{value}</span>
+      ) : (
+        <button onClick={onAdd} className="min-w-0 flex-1 text-right text-[14px] text-muted">
+          Add
+        </button>
+      )}
+    </li>
+  );
+}
+
+function MenuRow({
+  icon: Icon,
+  title,
+  sub,
+  alert,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  sub: string;
+  alert?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} className="lift flex w-full items-center gap-4 rounded-2xl bg-surface px-4 py-3.5 text-left active:scale-[0.99]">
+      <span className="relative shrink-0 text-accent">
+        <Icon size={26} strokeWidth={1.8} />
+        {alert && <span className="absolute -top-0.5 -right-1 size-2.5 rounded-full bg-danger ring-2 ring-[var(--surface)]" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16.5px] font-bold">{title}</span>
+        <span className={cx("block truncate text-[13px]", alert ? "text-danger" : "text-muted")}>{sub}</span>
+      </span>
+      <ChevronRight size={20} className="shrink-0 text-muted" />
+    </button>
   );
 }

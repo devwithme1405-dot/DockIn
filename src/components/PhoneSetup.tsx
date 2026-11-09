@@ -34,7 +34,18 @@ export function usePhoneStatus(): { status: PhoneStatus | null; native: boolean;
   return { status, native, reload };
 }
 
-export function PhoneSetup() {
+/** The switches that decide whether payments are caught, for a one-line summary. */
+export function phoneChecklist(status: PhoneStatus): { key: string; on: boolean }[] {
+  const list = [
+    { key: "notifications", on: status.notifications === "granted" },
+    { key: "listening", on: status.listening },
+  ];
+  if (status.screen !== undefined) list.unshift({ key: "screen", on: status.screen });
+  if (status.battery !== undefined) list.push({ key: "battery", on: status.battery });
+  return list;
+}
+
+export function PhoneSetup({ bare = false }: { bare?: boolean }) {
   const toast = useToast();
   const { status, native, reload } = usePhoneStatus();
   const [busy, setBusy] = useState<string | null>(null);
@@ -56,7 +67,7 @@ export function PhoneSetup() {
 
   if (!status) {
     return (
-      <Card>
+      <Card bare={bare}>
         <p className="flex items-center gap-2 text-[13px] text-muted">
           <Loader2 size={14} className="animate-spin" /> Checking this phone…
         </p>
@@ -100,7 +111,7 @@ export function PhoneSetup() {
   }
 
   return (
-    <Card>
+    <Card bare={bare}>
       <div className="flex items-start gap-3">
         <span
           className={cx(
@@ -310,7 +321,8 @@ function GetTheApp() {
   );
 }
 
-function Card({ children }: { children: ReactNode }) {
+function Card({ children, bare }: { children: ReactNode; bare?: boolean }) {
+  if (bare) return <section id="phone">{children}</section>;
   return (
     <section id="phone" className="lift scroll-mt-20 rounded-3xl bg-surface p-4">
       <h2 className="mb-3 text-[13px] font-semibold tracking-wide text-muted uppercase">Payments from your phone</h2>
@@ -490,7 +502,7 @@ function DetectionLog() {
         <p className="text-[13px] font-semibold">Detection log</p>
         <span className="flex gap-3 text-[12.5px] font-medium text-accent">
           <button onClick={copy}>Copy</button>
-          <button onClick={() => setOpen(false)}>Close</button>
+          <button onClick={() => setOpen(false)}>Hide</button>
         </span>
       </div>
       {lines.length === 0 ? (
