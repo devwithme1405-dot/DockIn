@@ -56,3 +56,6 @@ next-env.d.ts
 # files Claude delivers into this folder on the Mac
 /Claude outputs/
 *.apk
+
+# Scratch scripts for local checks and recordings
+scripts/.tmp/
