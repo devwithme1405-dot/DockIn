@@ -119,6 +119,7 @@ await page.addInitScript(
       testPrompt: () => ({ notifications: phone.notifications }),
       openOemSettings: () => ({}),
       startGuard: () => ({}),
+      openScreenSettings: () => ({}),
       college: () => phone.college,
       syncCollege: () => {
         phone.college = { ...phone.college, syncedAt: Date.now() };

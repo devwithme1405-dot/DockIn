@@ -51,7 +51,7 @@ export function PhoneSetup() {
     );
   }
 
-  const ready = status.listening && status.notifications === "granted";
+  const ready = (status.listening || !!status.screen) && status.notifications === "granted";
   const xiaomi = /xiaomi|redmi|poco/i.test(status.maker);
   // Android 13 and later lock notification access for apps installed from a
   // file until "restricted settings" are allowed for them in App info.
@@ -116,6 +116,39 @@ export function PhoneSetup() {
       </div>
 
       <ol className="mt-4 border-t border-line">
+        {status.screen !== undefined && (
+          <Step
+            done={status.screen}
+            title="Catch the moment I pay"
+            body={
+              status.screen
+                ? "On. When PhonePe, Paytm, GPay, BHIM, Slice or CRED says “Payment successful”, DockIn pops up right there — no SMS needed."
+                : "The fastest and surest way. In Accessibility, open “DockIn payment screens” and turn it on. Only payment apps are read, only the amount and who you paid, and it never leaves this phone."
+            }
+            action={
+              !status.screen && (
+                <ActionButton busy={busy === "screen"} onClick={() => run("screen", () => DockIn.openScreenSettings())}>
+                  Turn on
+                </ActionButton>
+              )
+            }
+          >
+            {!status.screen && restricted && (
+              <div className="mt-2.5 rounded-xl bg-surface-2 px-3 py-2.5 text-[12.5px] leading-relaxed text-muted">
+                Switch greyed out, or &ldquo;Restricted setting&rdquo;? Open <b className="text-text">App info</b>, tap{" "}
+                <b className="text-text">⋮</b> at the top right, choose{" "}
+                <b className="text-text">Allow restricted settings</b>, then tap Turn on again.
+                <button
+                  onClick={() => run("appinfo", () => DockIn.openAppSettings())}
+                  className="mt-2 flex items-center gap-1 font-medium text-accent"
+                >
+                  Open App info <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
+          </Step>
+        )}
+
         <Step
           done={status.listening}
           title="Read payment notifications"
@@ -205,7 +238,7 @@ export function PhoneSetup() {
           <Step
             done={false}
             title="Xiaomi: Autostart and background pop-ups"
-            body="Xiaomi hides two extra switches. Turn on Autostart, then in Other permissions allow “Display pop-up windows while running in the background” and “Show on lock screen”."
+            body="Xiaomi hides two extra switches. Turn on Autostart, then in Other permissions allow “Display pop-up windows while running in the background” and “Show on lock screen”. Last: open Recents, long-press the DockIn card and tap the lock, so “clear all” never stops it."
             action={
               <span className="flex flex-col gap-1.5">
                 <ActionButton busy={busy === "auto"} onClick={() => run("auto", () => DockIn.openOemSettings({ which: "autostart" }))}>

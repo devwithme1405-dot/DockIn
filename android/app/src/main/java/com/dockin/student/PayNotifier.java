@@ -182,6 +182,11 @@ final class PayNotifier {
     static void ask(Context c, String text, long at, String app) {
         Spend s = readAny(text);
         if (s == null) return;
+        ask(c, s, at, app);
+    }
+
+    /** One payment, however it was found: a notification, an SMS, or the app's success screen. */
+    static void ask(Context c, Spend s, long at, String app) {
         double amount = s.amount;
         String merchant = s.merchant;
 
@@ -343,7 +348,7 @@ final class PayNotifier {
     }
 
     /** A usable name out of a raw capture, or null for a handle's plumbing, a bank word or a number. */
-    private static String clean(String raw) {
+    static String clean(String raw) {
         String name = raw.trim();
         int at = name.indexOf('@');
         if (at > 0) name = name.substring(0, at);
@@ -358,7 +363,7 @@ final class PayNotifier {
     private static final java.util.Set<String> SMALL_WORDS = new java.util.HashSet<>(java.util.Arrays.asList(
             "THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A"));
 
-    private static String title(String s) {
+    static String title(String s) {
         if (!s.equals(s.toUpperCase(Locale.ROOT)) && !s.equals(s.toLowerCase(Locale.ROOT))) return s;
         StringBuilder out = new StringBuilder(s.length());
         for (String w : s.split("(?<=\\s)|(?=\\s)")) {

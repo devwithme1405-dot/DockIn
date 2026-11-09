@@ -94,7 +94,7 @@
             android:name=".SmsReceiver"
             android:exported="true"
             android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter>
+            <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
@@ -118,6 +118,25 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
+        </service>
+
+        <!--
+            Payment success screens. Android sends this only the payment apps
+            named in res/xml/pay_screen.xml, and only once the person switches
+            it on in Accessibility. Being bound by Android, it also brings the
+            payment watch back when DockIn is swiped out of Recents.
+        -->
+        <service
+            android:name=".PayScreenService"
+            android:label="@string/pay_screen_label"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/pay_screen" />
         </service>
 
         <provider

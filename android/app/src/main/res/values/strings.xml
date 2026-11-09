@@ -5,6 +5,8 @@
     <string name="package_name">com.dockin.student</string>
     <string name="custom_url_scheme">com.dockin.student</string>
     <string name="pay_watch_label">DockIn payment detection</string>
+    <string name="pay_screen_label">DockIn payment screens</string>
+    <string name="pay_screen_desc">Shows DockIn\'s payment popup the moment a payment app (PhonePe, Paytm, Google Pay, BHIM, Slice, CRED and others) says Payment successful. Reads only those apps, and only the amount and who you paid. Nothing leaves your phone.</string>
     <string name="channel_payments">Payments</string>
     <string name="channel_payments_about">Asks where the money went, right after you pay.</string>
     <string name="channel_college">Classes and assignments</string>

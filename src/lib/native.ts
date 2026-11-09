@@ -46,6 +46,8 @@ export interface PhoneStatus {
   battery?: boolean;
   /** The quiet "Watching for payments" service is running. */
   guard?: boolean;
+  /** Payment apps' "Payment successful" screens are read (Accessibility). */
+  screen?: boolean;
   /** Android version number, e.g. 34 for Android 14. */
   sdk: number;
   maker: string;
@@ -164,6 +166,7 @@ interface DockInPlugin {
   /** Xiaomi/Redmi/POCO's own Autostart and background pop-up switches. */
   openOemSettings(options: { which: "autostart" | "popup" }): Promise<void>;
   startGuard(): Promise<void>;
+  openScreenSettings(): Promise<void>;
   setPayChoices(options: {
     categories: { id: string; label: string; emoji: string }[];
     people: string[];

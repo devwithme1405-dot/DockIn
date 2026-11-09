@@ -22,6 +22,13 @@ public class PayChecks {
     if (!ok) fails++;
     if (!ok) System.out.println("FAIL in " + text + "  ->  " + got + "   want " + want);
   }
+  static long NOW;
+  static void screen(String label, Double amount, String payee, String... texts) {
+    PayNotifier.Spend s = PayScreen.read(java.util.Arrays.asList(texts), NOW);
+    String got = s == null ? "null" : s.amount + "|" + s.merchant;
+    String want = amount == null ? "null" : amount + "|" + payee;
+    if (!got.equals(want)) { fails++; System.out.println("FAIL screen " + label + "  ->  " + got + "   want " + want); }
+  }
   public static void main(String[] a) {
     expect("You paid \u20B960.00 to 24/7 Kathi", 60.0, "24/7 Kathi");
     expect("Payment successful \u20B9149 paid to Monginis", 149.0, "Monginis");
@@ -63,6 +70,25 @@ public class PayChecks {
     expectIn("BANK Rs.60 reversed to your account for UPI txn ref 1234", 60.0, null);
     if (!PayWatchService.looksLikePayment("SBIUPI A/C X1234 debited by 60.0 trf to KATHI", true)) { System.out.println("FAIL looksLikePayment SBI"); fails++; }
     if (!PayNotifier.rupees(1250).equals("\u20B91,250") || !PayNotifier.rupees(60.5).equals("\u20B960.50")) { System.out.println("FAIL rupees"); fails++; }
+    java.util.Calendar cal = java.util.Calendar.getInstance();
+    cal.set(2026, 10, 9, 13, 40, 0);
+    NOW = cal.getTimeInMillis();
+    // payment apps' success screens, as the accessibility tree hands them over
+    screen("phonepe", 250.0, "B2B Store", "Transaction Successful", "09 Nov 2026, 1:39 pm", "Paid to", "B2B STORE", "b2bstore@ybl", "\u20B9", "250", "Banking Name : B2B STORE", "Done", "Share");
+    screen("phonepe-inline", 60.0, "24/7 Kathi", "Payment Successful", "\u20B960", "Paid to 24/7 Kathi", "UPI Ref No. 612345678901");
+    screen("paytm", 40.0, "Tuck Shop", "Paid Successfully to", "TUCK SHOP", "\u20B9 40", "13:39, 09 Nov 2026", "UPI Ref No: 612345678901", "Check Balance");
+    screen("gpay-bare", 149.0, "Monginis", "Payment successful", "149", "Paid to Monginis", "9 Nov 2026 1:40 PM");
+    screen("bhim", 500.0, "Rahul Kumar", "Transaction Successful", "Rs. 500.00", "To:", "Rahul Kumar", "rahul@okaxis", "Transaction ID 612345678901");
+    screen("slice", 250.0, "B2B", "Payment successful", "\u20B9250", "to B2B", "via slice UPI");
+    screen("no-payee", 99.0, null, "Payment successful", "\u20B999");
+    screen("failed", null, null, "Payment Failed", "\u20B9250", "Paid to B2B STORE", "Money will be refunded");
+    screen("pending", null, null, "Payment Pending", "\u20B9250", "Processing your payment");
+    screen("received", null, null, "Payment Successful", "Received from Rahul", "\u20B9500");
+    screen("enter-amount", null, null, "Paying B2B STORE", "\u20B9", "250", "Pay");
+    screen("history", null, null, "Payment successful", "Paid to A", "\u20B910", "Paid to B", "\u20B920", "Paid to C", "\u20B930", "Paid to D", "\u20B940");
+    screen("old-day", null, null, "Transaction Successful", "02 Nov 2026, 1:39 pm", "Paid to", "B2B STORE", "\u20B9250");
+    screen("old-time", null, null, "Transaction Successful", "09 Nov 2026, 9:05 am", "Paid to", "B2B STORE", "\u20B9250");
+    if (!PayScreen.watched("com.phonepe.app") || PayScreen.watched("com.whatsapp")) { System.out.println("FAIL watched"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }
 }

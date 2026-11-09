@@ -1,6 +1,7 @@
 package com.dockin.student;
 
 import android.Manifest;
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -10,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 
 import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationCompat;
@@ -34,7 +36,7 @@ public class PayGuardService extends Service {
 
     /** Worth running: payment reading is switched on in some form. */
     static boolean wanted(Context c) {
-        if (DockInPlugin.listening(c)) return true;
+        if (DockInPlugin.listening(c) || PayScreenService.enabled(c)) return true;
         return Build.VERSION.SDK_INT >= 23
                 && c.checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
     }
@@ -67,6 +69,24 @@ public class PayGuardService extends Service {
             return START_NOT_STICKY;
         }
         return START_STICKY;
+    }
+
+    /**
+     * Swiping DockIn out of Recents ends the task, and on many phones the
+     * process with it. Ask to be woken a moment later and start again.
+     */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        try {
+            AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            Intent wake = new Intent(this, BootReceiver.class).setAction(BootReceiver.REVIVE);
+            PendingIntent pi = PendingIntent.getBroadcast(this, 7702, wake,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            if (am != null) am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + 1500, pi);
+        } catch (RuntimeException ignored) {
+            // the alarm is a backstop; START_STICKY and the screen reader still bring it back
+        }
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override

@@ -117,6 +117,7 @@ public class DockInPlugin extends Plugin {
         r.put("overlay", PayPopup.allowed(c));
         r.put("battery", unrestricted(c));
         r.put("guard", PayGuardService.running);
+        r.put("screen", PayScreenService.enabled(c));
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
         try {
@@ -219,6 +220,13 @@ public class DockInPlugin extends Plugin {
         Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.fromParts("package", c.getPackageName(), null));
         launch(call, i, fallback);
+    }
+
+    /** Android's Accessibility list, where "DockIn payment screens" is switched on. */
+    @PluginMethod
+    public void openScreenSettings(PluginCall call) {
+        Intent fallback = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        launch(call, PayScreenService.settings(getContext()), fallback);
     }
 
     /** Starts the payment watch (after the person switches reading on). */
