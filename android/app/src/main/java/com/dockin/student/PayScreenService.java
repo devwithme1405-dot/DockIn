@@ -185,12 +185,14 @@ public class PayScreenService extends AccessibilityService {
         // A text box (the "To" or amount field) is what you typed, not what happened.
         if (!n.isEditable()) {
             CharSequence t = n.getText();
-            if (t != null && t.length() > 0) out.add(t.toString());
+            if (t != null && t.length() > 0) PayScreen.lines(t.toString(), false, out);
             else {
-                // Labels meant for screen readers. Apps also leave their own
-                // codes here ("send_v2_to_field_cross_clicked"); those are skipped.
+                // Labels meant for screen readers. Flutter apps (slice) put a
+                // whole card here as one label, line by line; apps also leave
+                // their own codes ("send_v2_to_field_cross_clicked"), which are
+                // dropped line by line, never the whole label.
                 CharSequence d = n.getContentDescription();
-                if (d != null && d.length() > 0 && PayScreen.human(d.toString())) out.add(d.toString());
+                if (d != null && d.length() > 0) PayScreen.lines(d.toString(), true, out);
             }
         }
         for (int i = 0; i < n.getChildCount(); i++) collect(n.getChild(i), out, depth + 1);

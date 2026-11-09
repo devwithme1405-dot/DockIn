@@ -187,6 +187,16 @@ final class PayScreen {
             "(?i).*(_|\\b(clicked|click|tap|tapped|button|btn|icon|img|image|logo|cross|close|field|toggle|v\\d+|null|undefined)\\b).*");
     private static final Pattern CAMEL = Pattern.compile(".*[a-z][A-Z][a-z].*");
 
+    /** One label as separate lines, each as the screen shows it. */
+    static void lines(String label, boolean fromDescription, List<String> out) {
+        for (String line : label.split("[\\r\\n]+")) {
+            String x = line.trim();
+            if (x.isEmpty()) continue;
+            if (fromDescription && !human(x) && !AMOUNT.matcher(x).find()) continue;
+            out.add(x);
+        }
+    }
+
     static boolean human(String s) {
         if (s == null || s.trim().isEmpty()) return false;
         String x = s.trim();

@@ -111,6 +111,15 @@ public class PayChecks {
     screen("code-label-2", 200.0, "Mr Vaibhav", "Payment successful", "To", "Send v2 to field cross clicked", "MR VAIBHAV", "\u20B9200");
     screen("camel", 90.0, "Rohan", "Paid to", "crossButtonIcon", "Rohan", "\u20B990", "Payment successful");
     if (PayScreen.human("send_v2_to_field_cross_clicked") || !PayScreen.human("MR VAIBHAV")) { System.out.println("FAIL human"); fails++; }
+    // Flutter (slice): a whole card arrives as one label, line by line
+    {
+      java.util.List<String> out = new java.util.ArrayList<>();
+      PayScreen.lines("Payment successful\n\u20B9250\nPaid to B2B STORE\n09 Nov 2026, 1:39 pm\nUPI ref no 612345678901\nTap to view details\nshare_button_clicked", true, out);
+      PayNotifier.Spend s2 = PayScreen.read(out, NOW);
+      String got = s2 == null ? "null" : s2.amount + "|" + s2.merchant;
+      if (!got.equals("250.0|B2B Store")) { System.out.println("FAIL flutter label -> " + got + " " + out); fails++; }
+      if (out.contains("share_button_clicked")) { System.out.println("FAIL code line kept"); fails++; }
+    }
     if (!PayScreen.watched("com.phonepe.app") || PayScreen.watched("com.whatsapp")) { System.out.println("FAIL watched"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }
