@@ -267,7 +267,7 @@ export default function AttendancePage() {
           {subjectList ?? (
             <Notebook rings={false} className="mx-5 overflow-hidden" label="Subjects">
               <ul>
-                {stats.map(({ subject, summary }) => (
+                {stats.map(({ subject, summary, counts: c }) => (
                   <li key={subject.id} className="ruled-row">
                     <SubjectLink
                       id={subject.id}
@@ -284,6 +284,15 @@ export default function AttendancePage() {
                             {fmtPct(summary.pct)}
                           </span>
                         </span>
+                        {summary.state !== "none" && (
+                          <span className="mt-1.5 flex items-center gap-1.5 text-[12.5px] leading-snug font-bold">
+                            <span className="shrink-0 text-muted tnum">Missed {c.absent}</span>
+                            <span className="text-muted" aria-hidden>·</span>
+                            <span className={cx("truncate", summary.state === "safe" ? "text-safe" : TONE[summary.state])}>
+                              {describe(summary)}
+                            </span>
+                          </span>
+                        )}
                       </span>
                       <ChevronRight size={18} className="shrink-0 text-muted" />
                     </SubjectLink>

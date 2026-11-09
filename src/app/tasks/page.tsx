@@ -23,11 +23,12 @@ import {
   parseQuick,
   subtaskProgress,
 } from "@/lib/tasks";
-import { addDays, fmtDay, fmtTime, toDateStr } from "@/lib/dates";
+import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Task } from "@/lib/types";
 import { EmptyState, Sheet, SubjectTile, cx, useToast } from "@/components/ui";
 import { TaskForm, TaskRow, KIND_ICON } from "@/components/TaskParts";
 import { ShareRow } from "@/components/ShareParts";
+import { TaskHistory } from "@/components/TaskHistory";
 
 type Tab = "todo" | "exams" | "done";
 
@@ -103,18 +104,6 @@ export default function TasksPage() {
     () => list.filter((t) => t.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
     [list],
   );
-  // History, grouped by the day each task was finished.
-  const doneGroups = useMemo(() => {
-    const out: { key: string; label: string; items: Task[] }[] = [];
-    for (const t of doneList) {
-      const d = t.doneAt ? toDateStr(new Date(t.doneAt)) : "—";
-      const label = d === "—" ? "Earlier" : d === today ? "Today" : d === addDays(today, -1) ? "Yesterday" : fmtDay(d);
-      const last = out[out.length - 1];
-      if (last && last.key === d) last.items.push(t);
-      else out.push({ key: d, label, items: [t] });
-    }
-    return out;
-  }, [doneList, today]);
 
   const preview = quick.trim() ? parseQuick(quick, subjects ?? [], today) : null;
 
@@ -229,7 +218,7 @@ export default function TasksPage() {
         {([
           ["todo", "To do", stats.pending + sharedOpen.length],
           ["exams", "Exams", exams.length],
-          ["done", "Done", doneList.length],
+          ["done", "History", doneList.length],
         ] as [Tab, string, number][]).map(([id, label, n]) => (
           <button
             key={id}
@@ -350,29 +339,7 @@ export default function TasksPage() {
             </div>
           ))}
 
-        {tab === "done" &&
-          (doneList.length === 0 ? (
-            <EmptyState title="Nothing finished yet" body="Completed tasks show up here, newest first." />
-          ) : (
-            <div className="space-y-5 px-5">
-              {doneGroups.map((g) => (
-                <section key={g.key}>
-                  <h3 className="mb-2 text-[12px] font-extrabold tracking-[0.08em] text-muted uppercase">{g.label}</h3>
-                  <ul className="divide-y divide-line overflow-hidden rounded-2xl lift">
-                    {g.items.map((t) => (
-                      <TaskRow
-                        key={t.id}
-                        task={t}
-                        today={today}
-                        subject={t.subjectId ? subjectById.get(t.subjectId) : undefined}
-                        onOpen={() => open(t)}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          ))}
+        {tab === "done" && <TaskHistory tasks={list} subjects={subjectById} today={today} onOpen={open} />}
       </div>
 
       </div>

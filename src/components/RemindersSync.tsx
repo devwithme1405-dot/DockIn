@@ -30,6 +30,7 @@ export function RemindersSync() {
           subjects: data.subjects,
           tasks,
           overall: data.overall,
+          stats: data.stats,
           target,
           today: toDateStr(),
           now: Date.now(),
