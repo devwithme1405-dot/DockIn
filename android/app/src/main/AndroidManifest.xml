@@ -6,12 +6,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Keeps the hourly Camu/LMS check scheduled across a restart of the phone. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Reads bank payment SMS directly, so a debit/credit is caught even when the
-         messaging app raises no notification. Only used once the person allows it. -->
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <!-- The "what was it for?" popup right after a payment, over whatever app is open.
-         Android asks the person first ("Display over other apps"). -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Lets DockIn ask to be left out of battery saving, so payments are caught when closed. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- The quiet "Watching for payments" service that keeps reading alive when the app is closed. -->
@@ -59,14 +53,14 @@
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
-        <!-- Keeps the process (and so the payment listener and SMS receiver) alive when closed. -->
+        <!-- Keeps the process (and so payment detection) alive when closed. -->
         <service
             android:name=".PayGuardService"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Reads payment notifications and bank SMS on the phone so each spend can be filed the moment it happens." />
+                android:value="Watches payment apps on the phone so each payment can be filed the moment it happens." />
         </service>
 
         <!-- Payment reading comes back after a restart or an app update, without opening DockIn. -->
@@ -85,19 +79,16 @@
             android:name=".ReminderReceiver"
             android:exported="false" />
 
-        <!--
-            Reads incoming SMS, kept to the payment test in PayWatchService.
-            Android only delivers these once SMS access is allowed; a bank's
-            "debited"/"credited" then becomes a payment like any other.
-        -->
+        <!-- "For me" on the payment notification: saves without opening anything. -->
         <receiver
-            android:name=".SmsReceiver"
-            android:exported="true"
-            android:permission="android.permission.BROADCAST_SMS">
-            <intent-filter android:priority="999">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
+            android:name=".PayActionReceiver"
+            android:exported="false" />
+
+        <!-- Every 15 minutes: is payment detection still on? Says so if the phone switched it off. -->
+        <service
+            android:name=".PayHealthJob"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
 
         <!-- The hourly check of Camu and the LMS. -->
         <service

@@ -219,10 +219,11 @@ final class PayNotifier {
         if (s.in) {
             postIn(c, id, amount, merchant, at);
         } else {
-            String source = sourceName(app);
-            post(c, id, amount, merchant, source, at);
-            // The twin of a payment already asked about does not ask twice.
-            if (!twin) PayPopup.show(c, amount, merchant, source, at, id);
+            PayLog.add(c, twin ? "twin" : "caught", app, rupees(amount) + (merchant != null ? " → " + merchant : ""),
+                    Math.max(0, System.currentTimeMillis() - at));
+            // Already answered (say "For me" on the first copy): the twin stays quiet.
+            if (twin && PayInbox.answered(c, amount, at)) return;
+            post(c, id, amount, merchant, sourceName(app), at);
         }
     }
 
@@ -243,13 +244,14 @@ final class PayNotifier {
                 .setSmallIcon(R.drawable.ic_stat_dockin)
                 .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
-                .setContentText(via + "What was it for? Tap to sort it.")
+                .setContentText(via + "Whose was it?")
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(
-                        title + (source != null ? " via " + source : "") + ".\nWhat was it for? Tap For me, For someone, or open it to split."))
+                        title + (source != null ? " via " + source : "") + ".\nWhose was it? For me saves it in one tap."))
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .setContentIntent(PayAskActivity.pending(c, id * 10, amount, merchant, source, at, id, null))
-                .addAction(0, "For me", PayAskActivity.pending(c, id * 10 + 1, amount, merchant, source, at, id, "me"))
-                .addAction(0, "For someone", PayAskActivity.pending(c, id * 10 + 2, amount, merchant, source, at, id, "other"))
+                .addAction(0, "For me", PayActionReceiver.forMe(c, id * 10 + 1, amount, merchant, at, id))
+                .addAction(0, "Split / someone else", PayAskActivity.pending(c, id * 10 + 2, amount, merchant, source, at, id, "split"))
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)

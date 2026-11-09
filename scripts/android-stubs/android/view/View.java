@@ -1,5 +1,6 @@
 package android.view;
 public class View {
+  public void setEnabled(boolean e) {}
   public static final int GONE = 8;
   public static final int VISIBLE = 0;
   public static final int INVISIBLE = 4;

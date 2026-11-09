@@ -49,6 +49,8 @@ public class MainActivity extends BridgeActivity {
 
         // From here on payment reading survives the app being closed.
         PayGuardService.start(this);
+        PayHealth.schedule(this);
+        PayHealth.check(this);
 
         // Back goes back a screen, the way it does in every other app. Without
         // this Android would close DockIn from wherever you were.

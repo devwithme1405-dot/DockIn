@@ -23,9 +23,12 @@ export interface NativeNotice {
 
 /** The payment popup's answer: for me (with a category), for someone, or not a spend. */
 export interface PopupAnswer {
-  who: "me" | "other" | "ignore";
+  who: "me" | "other" | "split" | "ignore";
   category?: string;
   person?: string;
+  /** Split: my own share (0 when it was all theirs) and what each person owes. */
+  mine?: number;
+  parts?: { person: string; amount: number }[];
   answeredAt?: number;
 }
 
@@ -36,12 +39,8 @@ export interface PhoneStatus {
   listening: boolean;
   /** Whether DockIn may post its own notifications (the "where did it go?" prompt). */
   notifications: NotifState;
-  /** Whether DockIn may read payment SMS directly (bank debits/credits). */
-  sms: NotifState;
   /** Payments waiting in the phone's inbox. */
   pending: number;
-  /** "Display over other apps": the payment popup can come up on its own. Missing on older apps. */
-  overlay?: boolean;
   /** Left out of battery saving, so detection keeps running with DockIn closed. */
   battery?: boolean;
   /** The quiet "Watching for payments" service is running. */
@@ -149,7 +148,6 @@ interface DockInPlugin {
   openAppSettings(): Promise<void>;
   openNotificationSettings(): Promise<void>;
   requestNotifications(): Promise<{ notifications: NotifState }>;
-  requestSms(): Promise<{ sms: NotifState }>;
   testPrompt(): Promise<{ notifications: NotifState }>;
   pending(): Promise<{ notices: NativeNotice[] }>;
   ack(options: { ids: string[] }): Promise<void>;
@@ -161,10 +159,12 @@ interface DockInPlugin {
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
-  openOverlaySettings(): Promise<void>;
   openBatterySettings(): Promise<void>;
-  /** Xiaomi/Redmi/POCO's own Autostart and background pop-up switches. */
-  openOemSettings(options: { which: "autostart" | "popup" }): Promise<void>;
+  /** The phone maker's own run-in-background screens, or the payment alerts' channel. */
+  openOemSettings(options: { which: "autostart" | "battery" | "channel" }): Promise<void>;
+  /** What detection saw lately, as a JSON array string. */
+  payLog(): Promise<{ lines: string }>;
+  clearPayLog(): Promise<void>;
   startGuard(): Promise<void>;
   openScreenSettings(): Promise<void>;
   setPayChoices(options: {

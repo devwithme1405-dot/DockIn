@@ -18,6 +18,8 @@ public class BootReceiver extends BroadcastReceiver {
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a)
                 || REVIVE.equals(a)) {
             PayGuardService.start(context);
+            PayHealth.schedule(context);
+            PayHealth.check(context);
         }
     }
 }

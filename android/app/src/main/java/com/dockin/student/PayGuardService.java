@@ -36,9 +36,7 @@ public class PayGuardService extends Service {
 
     /** Worth running: payment reading is switched on in some form. */
     static boolean wanted(Context c) {
-        if (DockInPlugin.listening(c) || PayScreenService.enabled(c)) return true;
-        return Build.VERSION.SDK_INT >= 23
-                && c.checkSelfPermission(Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+        return DockInPlugin.listening(c) || PayScreenService.enabled(c);
     }
 
     /** Starts it when payment reading is on. Safe to call often, from anywhere. */

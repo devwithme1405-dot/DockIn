@@ -38,6 +38,19 @@ export function PhoneSetup() {
   const toast = useToast();
   const { status, native, reload } = usePhoneStatus();
   const [busy, setBusy] = useState<string | null>(null);
+  const [done, setDone] = useState<Record<string, boolean>>(() => readTicks());
+
+  function tick(key: string) {
+    setDone((d) => {
+      const next = { ...d, [key]: !d[key] };
+      try {
+        localStorage.setItem(TICKS, JSON.stringify(next));
+      } catch {
+        // private mode: the tick just lasts this visit
+      }
+      return next;
+    });
+  }
 
   if (!native) return <GetTheApp />;
 
@@ -52,7 +65,7 @@ export function PhoneSetup() {
   }
 
   const ready = (status.listening || !!status.screen) && status.notifications === "granted";
-  const xiaomi = /xiaomi|redmi|poco/i.test(status.maker);
+  const oem = oemGuide(status.maker);
   // Android 13 and later lock notification access for apps installed from a
   // file until "restricted settings" are allowed for them in App info.
   const restricted = status.sdk >= 33;
@@ -79,18 +92,10 @@ export function PhoneSetup() {
     });
   }
 
-  async function allowSms() {
-    await run("sms", async () => {
-      const r = await DockIn.requestSms();
-      // A hard "no" (the dialog won't show again) — the only way left is App info.
-      if (r.sms === "denied") await DockIn.openAppSettings();
-    });
-  }
-
   async function test() {
     await run("test", async () => {
       await DockIn.testPrompt();
-      toast.show(status!.overlay ? "Sent. The popup should be on screen now — switch to another app to see it there too." : "Sent. Pull down your notifications.");
+      toast.show("Sent. It should drop down from the top — tap Split to see the sheet.");
     });
   }
 
@@ -122,7 +127,7 @@ export function PhoneSetup() {
             title="Catch the moment I pay"
             body={
               status.screen
-                ? "On. When PhonePe, Paytm, GPay, BHIM, Slice or CRED says “Payment successful”, DockIn pops up right there — no SMS needed."
+                ? "On. The moment PhonePe, Paytm, GPay, BHIM, Slice or CRED says “Payment successful”, DockIn's alert drops down — no SMS needed."
                 : "The fastest and surest way. In Accessibility, open “DockIn payment screens” and turn it on. Only payment apps are read, only the amount and who you paid, and it never leaves this phone."
             }
             action={
@@ -150,44 +155,12 @@ export function PhoneSetup() {
         )}
 
         <Step
-          done={status.listening}
-          title="Read payment notifications"
-          body={
-            status.listening
-              ? "On. Only payment apps and bank messages are looked at."
-              : "Opens Android's switch for DockIn. Turn it on and come back."
-          }
-          action={
-            !status.listening && (
-              <ActionButton busy={busy === "listen"} onClick={() => run("listen", () => DockIn.openListenerSettings())}>
-                Turn on
-              </ActionButton>
-            )
-          }
-        >
-          {!status.listening && restricted && (
-            <div className="mt-2.5 rounded-xl bg-surface-2 px-3 py-2.5 text-[12.5px] leading-relaxed text-muted">
-              Switch greyed out, or a &ldquo;Restricted setting&rdquo; message? Android does that for apps not
-              from the Play Store. Open <b className="text-text">App info</b>, tap <b className="text-text">⋮</b>{" "}
-              at the top right, choose <b className="text-text">Allow restricted settings</b>, then tap Turn on
-              again.
-              <button
-                onClick={() => run("appinfo", () => DockIn.openAppSettings())}
-                className="mt-2 flex items-center gap-1 font-medium text-accent"
-              >
-                Open App info <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
-        </Step>
-
-        <Step
           done={status.notifications === "granted"}
-          title="Ask me right after I pay"
+          title="Let DockIn notify you"
           body={
             status.notifications === "granted"
-              ? "On. One notification per payment, with the amount and where."
-              : "DockIn needs to be allowed to send notifications for this."
+              ? "On. One alert per payment, with For me and Split right on it."
+              : "The payment alert is a notification, so DockIn must be allowed to send them."
           }
           action={
             status.notifications !== "granted" && (
@@ -199,54 +172,49 @@ export function PhoneSetup() {
         />
 
         <Step
-          done={status.sms === "granted"}
-          title="Read bank payment SMS"
+          done={!!done.channel}
+          title="Show payment alerts on top"
+          body="So the alert drops down over any app instead of hiding in the tray: in Payments, turn on “Pop on screen” (also called Floating notifications, Banners or Heads-up), sound and lock screen."
+          action={
+            <span className="flex flex-col items-end gap-1.5">
+              <ActionButton busy={busy === "channel"} onClick={() => run("channel", () => DockIn.openOemSettings({ which: "channel" }))}>
+                Open
+              </ActionButton>
+              <Tick on={!!done.channel} onClick={() => tick("channel")} />
+            </span>
+          }
+        />
+
+        <Step
+          done={status.listening}
+          title="Also read payment notifications"
           body={
-            status.sms === "granted"
-              ? "On. A bank's debit or credit SMS is caught even when no notification shows."
-              : "The surest way to catch bank payments — many banks only send an SMS. DockIn reads only money SMS; OTPs and chats are ignored."
+            status.listening
+              ? "On. Catches GPay, CRED and bank apps that announce a payment, and card payments too."
+              : "A second way in, for apps that post a “You paid” notification. Only payment apps are looked at."
           }
           action={
-            status.sms !== "granted" && (
-              <ActionButton busy={busy === "sms"} onClick={allowSms}>
-                Allow
+            !status.listening && (
+              <ActionButton busy={busy === "listen"} onClick={() => run("listen", () => DockIn.openListenerSettings())}>
+                Turn on
               </ActionButton>
             )
           }
         />
 
-        {status.overlay !== undefined && (
+        {oem && (
           <Step
-            done={status.overlay}
-            title="Pop up right after I pay"
-            body={
-              status.overlay
-                ? "On. A small sheet asks what it was for, over any app — even with DockIn closed."
-                : "Allow “Display over other apps” and a small sheet asks what each payment was for, right on your screen."
-            }
+            done={!!done.oem}
+            title={`${oem.name}: never stop DockIn`}
+            body={oem.how}
             action={
-              !status.overlay && (
-                <ActionButton busy={busy === "overlay"} onClick={() => run("overlay", () => DockIn.openOverlaySettings())}>
-                  Allow
-                </ActionButton>
-              )
-            }
-          />
-        )}
-
-        {xiaomi && status.overlay !== undefined && (
-          <Step
-            done={false}
-            title="Xiaomi: Autostart and background pop-ups"
-            body="Xiaomi hides two extra switches. Turn on Autostart, then in Other permissions allow “Display pop-up windows while running in the background” and “Show on lock screen”. Last: open Recents, long-press the DockIn card and tap the lock, so “clear all” never stops it."
-            action={
-              <span className="flex flex-col gap-1.5">
-                <ActionButton busy={busy === "auto"} onClick={() => run("auto", () => DockIn.openOemSettings({ which: "autostart" }))}>
-                  Autostart
-                </ActionButton>
-                <ActionButton busy={busy === "pop"} onClick={() => run("pop", () => DockIn.openOemSettings({ which: "popup" }))}>
-                  Pop-ups
-                </ActionButton>
+              <span className="flex flex-col items-end gap-1.5">
+                {oem.buttons.map((b) => (
+                  <ActionButton key={b.which} busy={busy === b.which} onClick={() => run(b.which, () => DockIn.openOemSettings({ which: b.which }))}>
+                    {b.label}
+                  </ActionButton>
+                ))}
+                <Tick on={!!done.oem} onClick={() => tick("oem")} />
               </span>
             }
           />
@@ -255,11 +223,11 @@ export function PhoneSetup() {
         {status.battery !== undefined && (
           <Step
             done={status.battery}
-            title="Keep running when closed"
+            title="No battery restrictions"
             body={
               status.battery
-                ? "On. Android will not put DockIn to sleep, so no payment or reminder is missed."
-                : "Choose “Allow” (or “No restrictions”) so Android never stops DockIn in the background. On Xiaomi/Redmi, also turn on Autostart in App info."
+                ? "On. Android will not put DockIn to sleep."
+                : "Choose “Allow” (or “Unrestricted”) so Android never pauses DockIn in the background."
             }
             action={
               !status.battery && (
@@ -282,10 +250,11 @@ export function PhoneSetup() {
             disabled={busy === "test"}
             className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium disabled:opacity-60"
           >
-            <BellRing size={13} /> {status.overlay ? "Test popup" : "Test"}
+            <BellRing size={13} /> Test alert
           </button>
         )}
       </div>
+      <DetectionLog />
     </Card>
   );
 }
@@ -297,7 +266,7 @@ export function PhoneSetup() {
 export function PhoneSetupNudge() {
   const { status, native } = usePhoneStatus();
   if (!native || !status) return null;
-  if (status.listening && status.notifications === "granted") return null;
+  if ((status.listening || status.screen) && status.notifications === "granted") return null;
   return (
     <Link
       href="/settings#phone"
@@ -305,7 +274,7 @@ export function PhoneSetupNudge() {
     >
       <Radio size={18} className="shrink-0" />
       <span className="min-w-0 flex-1 text-[13.5px] font-medium">
-        {status.listening ? "Allow notifications so DockIn can ask after each payment" : "Turn on payment reading — two taps"}
+        {status.listening || status.screen ? "Allow notifications so DockIn can ask after each payment" : "Turn on payment detection — two taps"}
       </span>
       <ChevronRight size={17} className="shrink-0" />
     </Link>
@@ -404,4 +373,144 @@ function ActionButton({ busy, onClick, children }: { busy: boolean; onClick: () 
 function androidName(sdk: number): string {
   const names: Record<number, string> = { 36: "16", 35: "15", 34: "14", 33: "13", 32: "12L", 31: "12", 30: "11", 29: "10" };
   return names[sdk] ?? String(sdk);
+}
+
+const TICKS = "dockin.phone-ticks";
+
+function readTicks(): Record<string, boolean> {
+  try {
+    return JSON.parse(localStorage.getItem(TICKS) ?? "{}") as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+/** For switches Android will not let an app read back: the person ticks them. */
+function Tick({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={cx("text-[12px] font-medium", on ? "text-safe" : "text-muted underline")}>
+      {on ? "Done ✓" : "Mark done"}
+    </button>
+  );
+}
+
+type OemWhich = "autostart" | "battery";
+
+/** Each maker's own "let it run" switches, which stock Android does not have. */
+export function oemGuide(maker: string): { name: string; how: string; buttons: { label: string; which: OemWhich }[] } | null {
+  const m = maker.toLowerCase();
+  const lock = " Then open Recents, long-press the DockIn card and tap the lock, so “clear all” never stops it.";
+  if (/xiaomi|redmi|poco/.test(m))
+    return {
+      name: "Xiaomi",
+      how: "Turn on Autostart, and set Battery saver to “No restrictions”." + lock,
+      buttons: [
+        { label: "Autostart", which: "autostart" },
+        { label: "Battery", which: "battery" },
+      ],
+    };
+  if (/samsung/.test(m))
+    return {
+      name: "Samsung",
+      how: "In Battery › Background usage limits, make sure DockIn is not in Sleeping or Deep sleeping apps — add it to Never sleeping apps.",
+      buttons: [{ label: "Battery", which: "autostart" }],
+    };
+  if (/oneplus|oppo|realme/.test(m))
+    return {
+      name: /oneplus/.test(m) ? "OnePlus" : /realme/.test(m) ? "realme" : "OPPO",
+      how: "Turn on Auto launch, and in App info › Battery choose “Allow background activity”." + lock,
+      buttons: [{ label: "Auto launch", which: "autostart" }],
+    };
+  if (/vivo|iqoo/.test(m))
+    return {
+      name: /iqoo/.test(m) ? "iQOO" : "vivo",
+      how: "Allow Autostart, and in Battery › Background power consumption, allow DockIn high background power use." + lock,
+      buttons: [
+        { label: "Autostart", which: "autostart" },
+        { label: "Battery", which: "battery" },
+      ],
+    };
+  return null;
+}
+
+interface LogLine {
+  at: number;
+  kind: "caught" | "twin" | "missed" | "off";
+  app: string;
+  text: string;
+  ms?: number;
+}
+
+/**
+ * What detection saw lately. When a payment is missed, "Copy" hands over the
+ * screen it did not understand (long numbers masked), so it can be taught.
+ */
+function DetectionLog() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [lines, setLines] = useState<LogLine[]>([]);
+
+  async function load() {
+    try {
+      const r = await DockIn.payLog();
+      setLines((JSON.parse(r.lines) as LogLine[]).reverse());
+    } catch {
+      setLines([]);
+    }
+  }
+
+  async function copy() {
+    const text = lines
+      .map((l) => `${new Date(l.at).toLocaleString("en-IN")} ${l.kind} ${l.app}${l.ms != null ? ` ${l.ms}ms` : ""}\n${l.text}`)
+      .join("\n\n");
+    try {
+      await navigator.clipboard.writeText(text || "empty");
+      toast.show("Copied. Paste it to whoever is fixing it.");
+    } catch {
+      toast.show("Could not copy on this phone.");
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => {
+          setOpen(true);
+          void load();
+        }}
+        className="mt-3 text-[12.5px] font-medium text-muted underline"
+      >
+        Detection log
+      </button>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-2xl bg-surface-2 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[13px] font-semibold">Detection log</p>
+        <span className="flex gap-3 text-[12.5px] font-medium text-accent">
+          <button onClick={copy}>Copy</button>
+          <button onClick={() => setOpen(false)}>Close</button>
+        </span>
+      </div>
+      {lines.length === 0 ? (
+        <p className="text-[12.5px] text-muted">Nothing yet. Pay someone and it shows here.</p>
+      ) : (
+        <ul className="max-h-72 space-y-2 overflow-y-auto">
+          {lines.map((l, i) => (
+            <li key={i} className="text-[12px] leading-snug">
+              <span className={cx("font-semibold", l.kind === "missed" || l.kind === "off" ? "text-danger" : "text-safe")}>
+                {l.kind === "caught" ? "Caught" : l.kind === "twin" ? "Same payment again" : l.kind === "missed" ? "Not read" : "Switched off"}
+              </span>
+              <span className="text-muted">
+                {" "}· {new Date(l.at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+                {l.ms != null && l.kind === "caught" ? ` · ${l.ms < 1000 ? `${l.ms} ms` : `${(l.ms / 1000).toFixed(1)} s`}` : ""}
+              </span>
+              <p className="break-words text-muted">{l.text}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }

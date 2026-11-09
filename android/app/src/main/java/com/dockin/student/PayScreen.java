@@ -42,7 +42,11 @@ final class PayScreen {
     /** Not a finished spend of yours: failed, still going, or money coming in. */
     private static final Pattern NOT = Pattern.compile(
             "\\b(failed|failure|unsuccessful|declined|cancell?ed|processing|in progress|awaiting|payment pending|transaction pending"
-                    + "|received from|you received|money received|requested|request money|collect request|recharge plans)\\b",
+                    + "|received|requested|request money|collect request|recharge plans)\\b",
+            Pattern.CASE_INSENSITIVE);
+    /** A line that by itself says the money went: "Paid to Rahul", "₹250 paid", "Money sent". */
+    private static final Pattern PAID_LINE = Pattern.compile(
+            "^(paid|sent|money sent|amount paid)( to\\b.*)?$|^(?:\u20B9|rs\\.?)\\s*[0-9][0-9,.]*\\s+(paid|sent)\\b|^(paid|sent)\\s+(?:\u20B9|rs\\.?)\\s*[0-9]",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern AMOUNT = Pattern.compile(
             "(?:₹|\\brs\\.?|\\binr)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE);
@@ -58,6 +62,14 @@ final class PayScreen {
     private static final Pattern JUNK_NAME = Pattern.compile(
             "(?i).*\\b(upi|transaction|ref|id|bank|account|a/c|xx|share|done|view|details|split|balance|cashback|reward|rewards|paid|payment|successful|debited|from)\\b.*");
 
+    private static final Pattern PAYISH = Pattern.compile("\\b(success|successful|successfully|paid|sent|debited|completed)\\b", Pattern.CASE_INSENSITIVE);
+
+    /** Worth a line in the log when not read: says paid/successful and shows a ₹ amount. */
+    static boolean looksLikePayment(List<String> texts) {
+        String all = String.join(" | ", texts);
+        return PAYISH.matcher(all).find() && AMOUNT.matcher(all).find() && all.length() < 4000;
+    }
+
     /** The spend on this screen, or null when it is not a fresh success screen. */
     static PayNotifier.Spend read(List<String> texts, long now) {
         List<String> t = new ArrayList<>();
@@ -67,7 +79,13 @@ final class PayScreen {
             if (!x.isEmpty() && x.length() <= 200) t.add(x);
         }
         String all = String.join(" | ", t);
-        if (!SUCCESS.matcher(all).find() || NOT.matcher(all).find()) return null;
+        if (NOT.matcher(all).find()) return null;
+        boolean said = SUCCESS.matcher(all).find();
+        if (!said) {
+            // GPay and others: no "successful", just a line saying it was paid.
+            for (String x : t) if (PAID_LINE.matcher(x).find()) { said = true; break; }
+        }
+        if (!said) return null;
         if (!recent(all, now)) return null;
 
         // Amounts: "₹250", "Rs. 250", or "₹" and "250" as two texts.

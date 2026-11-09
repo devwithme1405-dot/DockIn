@@ -8,8 +8,8 @@ import android.os.Bundle;
 
 /**
  * The payment sheet as a screen, opened by tapping the payment notification
- * (always allowed, unlike starting a screen from the background). The floating
- * version, drawn over any app with no tap, is {@link PayPopup}.
+ * (always allowed, unlike starting a screen from the background). It opens
+ * on top of whatever app is showing, not inside DockIn.
  */
 public class PayAskActivity extends Activity {
 
@@ -51,17 +51,11 @@ public class PayAskActivity extends Activity {
             finish();
             return;
         }
-        PayPopup.dismiss(this);
         PayAskUi ui = new PayAskUi(this, amount, i.getStringExtra(EXTRA_MERCHANT), i.getStringExtra(EXTRA_SOURCE), at,
                 i.getIntExtra(EXTRA_ID, 0), i.getStringExtra(EXTRA_MODE), new PayAskUi.Host() {
                     @Override
                     public void close() {
                         finish();
-                    }
-
-                    @Override
-                    public void keyboard(boolean on) {
-                        // A normal screen gets the keyboard by itself.
                     }
                 });
         setContentView(ui.root());

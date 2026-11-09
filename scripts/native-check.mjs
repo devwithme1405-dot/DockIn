@@ -97,7 +97,7 @@ await page.addInitScript(
       status: () => ({
         listening: phone.listening,
         notifications: phone.notifications,
-        sms: phone.sms ?? "prompt",
+        screen: phone.screen ?? false,
         pending: phone.inbox.length,
         sdk: 34,
         maker: "Pretend",
@@ -112,10 +112,8 @@ await page.addInitScript(
         phone.notifications = "granted";
         return { notifications: "granted" };
       },
-      requestSms: () => {
-        phone.sms = "granted";
-        return { sms: "granted" };
-      },
+      payLog: () => ({ lines: JSON.stringify([{ at: Date.now(), kind: "caught", app: "com.phonepe.app", text: "₹60 → 24/7 Kathi", ms: 140 }]) }),
+      clearPayLog: () => ({}),
       testPrompt: () => ({ notifications: phone.notifications }),
       openOemSettings: () => ({}),
       startGuard: () => ({}),
@@ -265,7 +263,7 @@ await step("setup comes up once, straight after opening the app", async () => {
   await page.waitForURL(/\/setup$/, { timeout: 8000 });
   await waitFor("Set up DockIn once");
   const t = await text();
-  for (const want of ["Connect Camu", "Connect the LMS", "Read payment notifications"]) {
+  for (const want of ["Connect Camu", "Connect the LMS", "Catch the moment I pay"]) {
     if (!t.includes(want)) throw new Error(`setup is missing "${want}"`);
   }
   await page.waitForTimeout(900);
@@ -279,7 +277,7 @@ await step("setup comes up once, straight after opening the app", async () => {
 
 await step("the app knows it is inside the phone", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
-  await waitFor("Read payment notifications");
+  await waitFor("Also read payment notifications");
   const t = await text();
   if (/Payments are read by the Android app/i.test(t)) throw new Error("shows the browser version of the card");
   if (!/App 2\.0\.1 · Android 14/.test(t)) throw new Error("does not show the app and Android version");
@@ -288,24 +286,27 @@ await step("the app knows it is inside the phone", async () => {
   await page.screenshot({ path: `${SHOTS}/native-setup-off.png`, fullPage: true });
 });
 
-await step("Turn on opens Android's switch", async () => {
-  await page.getByRole("button", { name: "Turn on" }).click();
+await step("Turn on opens Android's switches: payment screens, then notifications", async () => {
+  await page.locator("li", { hasText: "Catch the moment I pay" }).getByRole("button", { name: "Turn on" }).click();
+  await page.locator("li", { hasText: "Also read payment notifications" }).getByRole("button", { name: "Turn on" }).click();
   await page.waitForTimeout(300);
   const calls = await page.evaluate(() => window.__phone.get().calls);
+  if (!calls.includes("openScreenSettings")) throw new Error(`calls were ${calls.join(", ")}`);
   if (!calls.includes("openListenerSettings")) throw new Error(`calls were ${calls.join(", ")}`);
 });
 
 await step("coming back from Settings ticks the step without a refresh", async () => {
   await page.evaluate(() => {
-    window.__phone.set({ listening: true });
+    window.__phone.set({ listening: true, screen: true });
     window.__phone.fire("resume", {});
   });
-  await waitFor("Only payment apps and bank messages are looked at");
+  await waitFor("no SMS needed");
+  await waitFor("Catches GPay, CRED");
 });
 
 await step("Allow asks for notifications, and the card goes green", async () => {
   await page
-    .locator("li", { hasText: "Ask me right after I pay" })
+    .locator("li", { hasText: "Let DockIn notify you" })
     .getByRole("button", { name: "Allow" })
     .click();
   await waitFor("Reading your payments");
@@ -313,14 +314,10 @@ await step("Allow asks for notifications, and the card goes green", async () => 
   await page.screenshot({ path: `${SHOTS}/native-setup-on.png`, fullPage: true });
 });
 
-await step("Allow turns on reading bank payment SMS", async () => {
-  await page
-    .locator("li", { hasText: "Read bank payment SMS" })
-    .getByRole("button", { name: "Allow" })
-    .click();
-  await waitFor("even when no notification shows");
-  const sms = await page.evaluate(() => window.__phone.get().sms);
-  if (sms !== "granted") throw new Error("SMS access was not granted");
+await step("the detection log opens and shows how fast a payment was caught", async () => {
+  await page.getByRole("button", { name: "Detection log" }).click();
+  await waitFor("140 ms");
+  await page.getByRole("button", { name: "Close" }).click();
 });
 
 await step("Money shows the bank's and GPay's copy as one payment, and money in apart", async () => {
@@ -361,7 +358,7 @@ await step("a payment for a friend goes to lena-dena, not spending", async () =>
   await page.getByRole("button", { name: "Add to lena-dena" }).click();
   await waitFor("owes you");
   const t = await text();
-  if (!/You.ll get\s*₹149/i.test(t)) throw new Error("Lend & Borrow does not show ₹149 to get back");
+  if (!/You.ll get\s*₹149/i.test(t)) throw new Error("Lend & Borrow does not show ₹149 to get back: " + t.slice(t.indexOf("owes you") - 300, t.indexOf("owes you") + 200));
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${SHOTS}/native-money-udhaar.png`, fullPage: true });
 });
@@ -424,9 +421,9 @@ await step("tapping the payment notification opens Money", async () => {
 });
 
 await step("Money nudges while payment reading is off", async () => {
-  await page.evaluate(() => window.__phone.set({ listening: false }));
+  await page.evaluate(() => window.__phone.set({ listening: false, screen: false }));
   await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("Turn on payment reading");
+  await waitFor("Turn on payment detection");
 });
 
 await step("connecting Camu turns Attendance into Camu's numbers", async () => {

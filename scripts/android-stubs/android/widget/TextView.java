@@ -10,4 +10,6 @@ public class TextView extends View {
   public void setHint(CharSequence h) {}
   public void setSingleLine(boolean s) {}
   public CharSequence getText() { return null; }
+  public void setInputType(int t) {}
+  public void addTextChangedListener(android.text.TextWatcher w) {}
 }

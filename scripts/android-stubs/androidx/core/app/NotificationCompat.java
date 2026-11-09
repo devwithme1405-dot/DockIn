@@ -20,6 +20,9 @@ public class NotificationCompat {
     public Builder setPriority(int p) { return this; }
     public Builder setWhen(long w) { return this; }
     public Builder setShowWhen(boolean b) { return this; }
+    public Builder setOnlyAlertOnce(boolean b) { return this; }
+    public Builder setSilent(boolean b) { return this; }
+    public Builder setTimeoutAfter(long ms) { return this; }
     public Builder addAction(int icon, CharSequence title, PendingIntent i) { return this; }
     public Builder setStyle(Style s) { return this; }
     public Builder setOngoing(boolean b) { return this; }

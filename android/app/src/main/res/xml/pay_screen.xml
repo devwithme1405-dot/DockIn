@@ -5,6 +5,6 @@
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagIncludeNotImportantViews"
     android:canRetrieveWindowContent="true"
-    android:notificationTimeout="250"
+    android:notificationTimeout="100"
     android:description="@string/pay_screen_desc"
     android:packageNames="com.phonepe.app,net.one97.paytm,com.google.android.apps.nbu.paisa.user,in.org.npci.upiapp,indwin.c3.shareapp,com.dreamplug.androidapp,com.mobikwik_new,in.amazon.mShop.android.shopping,com.amazon.mShop.android.shopping,money.jupiter,com.epifi.paisa,com.naviapp,money.super.payments,com.fampay.in,com.freecharge.android,com.myairtelapp,com.sbi.lotusintouch,com.csam.icici.bank.imobile,com.axis.mobile,com.msf.kbank.mobile,com.enstage.wibmo.hdfc,com.snapwork.hdfc" />

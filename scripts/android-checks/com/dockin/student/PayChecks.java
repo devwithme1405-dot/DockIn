@@ -88,6 +88,12 @@ public class PayChecks {
     screen("history", null, null, "Payment successful", "Paid to A", "\u20B910", "Paid to B", "\u20B920", "Paid to C", "\u20B930", "Paid to D", "\u20B940");
     screen("old-day", null, null, "Transaction Successful", "02 Nov 2026, 1:39 pm", "Paid to", "B2B STORE", "\u20B9250");
     screen("old-time", null, null, "Transaction Successful", "09 Nov 2026, 9:05 am", "Paid to", "B2B STORE", "\u20B9250");
+    screen("gpay-plain", 250.0, "Rahul Kumar", "\u20B9250", "Paid to Rahul Kumar", "rahulk@okicici", "9 Nov 2026, 1:39 pm", "UPI transaction ID", "Done");
+    screen("amount-paid", 80.0, "Chai Point", "\u20B980 paid", "to Chai Point", "Done");
+    screen("pin-entry", null, null, "Paying to", "B2B STORE", "\u20B9250", "ENTER UPI PIN");
+    screen("pay-button", null, null, "Pay \u20B9250 to B2B Store", "Pay", "Add a note");
+    screen("chat-received", null, null, "Rahul Kumar", "\u20B9250", "Received", "Paid to Rahul", "\u20B960");
+    screen("request", null, null, "Rahul requested \u20B9200", "Pay", "Decline", "Paid to Rahul");
     if (!PayScreen.watched("com.phonepe.app") || PayScreen.watched("com.whatsapp")) { System.out.println("FAIL watched"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }

@@ -18,6 +18,8 @@ let running: Promise<string[]> | null = null;
 const filed = new Set<string>();
 
 /** Files every answered payment; returns a line per one, for a toast. */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export function applyPopupAnswers(): Promise<string[]> {
   if (running) return running;
   running = run().finally(() => {
@@ -47,6 +49,26 @@ async function run(): Promise<string[]> {
       await addExpense({ amount: d.amount, category, note: where, date });
       if (answer.category && d.merchant) await rememberMerchant(merchantKey(d.merchant), d.merchant, answer.category);
       said.push(`${fmtMoney(d.amount)} at ${where} added`);
+    } else if (answer.who === "split" && answer.parts?.length) {
+      // Trust nothing blindly: shares are clamped so they never add up to more than was paid.
+      let left = d.amount;
+      const owed: string[] = [];
+      for (const p of answer.parts) {
+        const person = p.person?.trim().slice(0, 40);
+        const amt = Math.min(round2(Number(p.amount) || 0), left);
+        if (!person || amt <= 0) continue;
+        left = round2(left - amt);
+        await addDue({ person, amount: amt, dir: "owed", note: where, date });
+        owed.push(`${person} owes you ${fmtMoney(amt)}`);
+      }
+      const mine = Math.min(round2(Number(answer.mine) || 0), left);
+      if (mine > 0) {
+        rules ??= await merchantRules();
+        const known = d.merchant ? rules.find((r) => r.id === merchantKey(d.merchant!))?.category : undefined;
+        await addExpense({ amount: mine, category: answer.category || known || "other", note: where, date });
+        owed.push(`your ${fmtMoney(mine)} added`);
+      }
+      said.push(`${fmtMoney(d.amount)} at ${where} split: ${owed.join(", ")}`);
     } else if (answer.who === "other" && answer.person?.trim()) {
       const person = answer.person.trim().slice(0, 40);
       await addDue({ person, amount: d.amount, dir: "owed", note: d.merchant ?? "", date });

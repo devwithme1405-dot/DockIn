@@ -42,8 +42,7 @@ import java.util.Set;
 @CapacitorPlugin(
         name = "DockIn",
         permissions = {
-                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS}),
-                @Permission(alias = "sms", strings = {Manifest.permission.RECEIVE_SMS})
+                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS})
         }
 )
 public class DockInPlugin extends Plugin {
@@ -112,9 +111,7 @@ public class DockInPlugin extends Plugin {
         JSObject r = new JSObject();
         r.put("listening", listening(c));
         r.put("notifications", notificationState());
-        r.put("sms", smsState());
         r.put("pending", PayInbox.size(c));
-        r.put("overlay", PayPopup.allowed(c));
         r.put("battery", unrestricted(c));
         r.put("guard", PayGuardService.running);
         r.put("screen", PayScreenService.enabled(c));
@@ -180,15 +177,6 @@ public class DockInPlugin extends Plugin {
         return pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName());
     }
 
-    /** "Display over other apps" — lets the payment popup come up on its own. */
-    @PluginMethod
-    public void openOverlaySettings(PluginCall call) {
-        Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getContext().getPackageName()));
-        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", getContext().getPackageName(), null));
-        launch(call, i, fallback);
-    }
 
     /** Asks Android to stop putting DockIn to sleep. */
     @PluginMethod
@@ -200,33 +188,81 @@ public class DockInPlugin extends Plugin {
     }
 
     /**
-     * The phone maker's own switches that decide whether DockIn may run and pop
-     * up in the background. Xiaomi/Redmi/POCO (MIUI, HyperOS) hide these outside
-     * Android's settings; elsewhere this opens App info.
+     * The phone maker's own "let it run in the background" screens, which
+     * Android's settings do not cover. Each maker hides them somewhere else and
+     * renames them between versions, so this tries the known ones in turn and
+     * falls back to App info.
      */
     @PluginMethod
     public void openOemSettings(PluginCall call) {
         String which = call.getString("which", "autostart");
         Context c = getContext();
-        Intent i;
-        if ("popup".equals(which)) {
-            i = new Intent("miui.intent.action.APP_PERM_EDITOR")
-                    .setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
-                    .putExtra("extra_pkgname", c.getPackageName());
-        } else {
-            i = new Intent().setComponent(new ComponentName(
-                    "com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"));
+        String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<Intent> tries = new java.util.ArrayList<>();
+        if ("channel".equals(which)) {
+            // The payment alerts' own switches: "Floating notifications" / "Pop on screen".
+            PayNotifier.ensureChannel(c);
+            tries.add(new Intent("android.settings.CHANNEL_NOTIFICATION_SETTINGS")
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, c.getPackageName())
+                    .putExtra("android.provider.extra.CHANNEL_ID", PayNotifier.CHANNEL));
+            tries.add(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, c.getPackageName()));
+        } else if (maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco")) {
+            if ("battery".equals(which)) {
+                tries.add(cmp("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
+                        .putExtra("package_name", c.getPackageName())
+                        .putExtra("package_label", "DockIn"));
+            } else {
+                tries.add(cmp("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"));
+            }
+        } else if (maker.contains("samsung")) {
+            tries.add(cmp("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"));
+            tries.add(cmp("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity"));
+            tries.add(cmp("com.samsung.android.sm", "com.samsung.android.sm.ui.battery.BatteryActivity"));
+        } else if (maker.contains("oneplus") || maker.contains("oppo") || maker.contains("realme")) {
+            tries.add(cmp("com.oplus.safecenter", "com.oplus.safecenter.startupapp.view.StartupAppListActivity"));
+            tries.add(cmp("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"));
+            tries.add(cmp("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"));
+            tries.add(cmp("com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"));
+        } else if (maker.contains("vivo") || maker.contains("iqoo")) {
+            if ("battery".equals(which)) {
+                tries.add(cmp("com.vivo.abe", "com.vivo.applicationbehaviorengine.ui.ExcessivePowerManagerActivity"));
+                tries.add(cmp("com.iqoo.powersaving", "com.iqoo.powersaving.PowerSavingManagerActivity"));
+            }
+            tries.add(cmp("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"));
+            tries.add(cmp("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager"));
+            tries.add(cmp("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"));
         }
-        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", c.getPackageName(), null));
-        launch(call, i, fallback);
+        for (Intent i : tries) {
+            try {
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getActivity().startActivity(i);
+                call.resolve();
+                return;
+            } catch (ActivityNotFoundException | SecurityException e) {
+                // renamed or hidden on this version; try the next
+            }
+        }
+        launch(call, null, new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", c.getPackageName(), null)));
     }
 
-    /** Android's Accessibility list, where "DockIn payment screens" is switched on. */
+    private static Intent cmp(String pkg, String cls) {
+        return new Intent().setComponent(new ComponentName(pkg, cls));
+    }
+
+    /** What payment detection saw lately, for Settings and for "Copy" when one is missed. */
     @PluginMethod
-    public void openScreenSettings(PluginCall call) {
-        Intent fallback = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-        launch(call, PayScreenService.settings(getContext()), fallback);
+    public void payLog(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("lines", PayLog.all(getContext()).toString());
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void clearPayLog(PluginCall call) {
+        PayLog.clear(getContext());
+        call.resolve();
     }
 
     /** Starts the payment watch (after the person switches reading on). */
@@ -308,36 +344,10 @@ public class DockInPlugin extends Plugin {
         call.resolve(r);
     }
 
-    /** Reading payment SMS directly. Asks for SMS access; older phones grant at install. */
-    @PluginMethod
-    public void requestSms(PluginCall call) {
-        if (getPermissionState("sms") != PermissionState.GRANTED) {
-            requestPermissionForAlias("sms", call, "smsAnswered");
-            return;
-        }
-        smsAnswered(call);
-    }
-
-    @PermissionCallback
-    private void smsAnswered(PluginCall call) {
-        JSObject r = new JSObject();
-        r.put("sms", smsState());
-        call.resolve(r);
-    }
-
-    private String smsState() {
-        PermissionState s = getPermissionState("sms");
-        if (s == PermissionState.GRANTED) return "granted";
-        if (s == PermissionState.PROMPT || s == PermissionState.PROMPT_WITH_RATIONALE) return "prompt";
-        return "denied";
-    }
-
     /** Shows what a payment prompt looks like, so the whole path can be checked without paying. */
     @PluginMethod
     public void testPrompt(PluginCall call) {
         PayNotifier.post(getContext(), 3999, 1, "DockIn test", "Test", System.currentTimeMillis());
-        // The floating sheet too, so "does it show over other apps?" is answered now.
-        PayPopup.show(getContext(), 1, "DockIn test", "Test", 0, 3999);
         PayGuardService.start(getContext());
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
