@@ -106,6 +106,11 @@ public class PayChecks {
     if (!PayScreen.paying(java.util.Arrays.asList("B2B STORE", "\u20B9250", "Pay"))) { System.out.println("FAIL paying button"); fails++; }
     if (PayScreen.paying(succ)) { System.out.println("FAIL paying on success"); fails++; }
     if (!PayScreen.successish(succ) || PayScreen.successish(java.util.Arrays.asList("Home", "Scan & Pay", "\u20B9 balance"))) { System.out.println("FAIL successish"); fails++; }
+    // an app's own code in a label must never become the name
+    screen("code-label", 200.0, "Mr Vaibhav", "Transaction Successful", "Paid to", "send_v2_to_field_cross_clicked", "MR VAIBHAV", "\u20B9200");
+    screen("code-label-2", 200.0, "Mr Vaibhav", "Payment successful", "To", "Send v2 to field cross clicked", "MR VAIBHAV", "\u20B9200");
+    screen("camel", 90.0, "Rohan", "Paid to", "crossButtonIcon", "Rohan", "\u20B990", "Payment successful");
+    if (PayScreen.human("send_v2_to_field_cross_clicked") || !PayScreen.human("MR VAIBHAV")) { System.out.println("FAIL human"); fails++; }
     if (!PayScreen.watched("com.phonepe.app") || PayScreen.watched("com.whatsapp")) { System.out.println("FAIL watched"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }

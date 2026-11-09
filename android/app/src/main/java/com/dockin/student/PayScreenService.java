@@ -62,6 +62,14 @@ public class PayScreenService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
+        try {
+            onEvent(e);
+        } catch (Throwable t) {
+            PayLog.add(this, "error", "", String.valueOf(t), -1);
+        }
+    }
+
+    private void onEvent(AccessibilityEvent e) {
         if (e == null || e.getPackageName() == null) return;
         String pkg = e.getPackageName().toString();
         if (!PayScreen.watched(pkg)) return;
@@ -85,7 +93,15 @@ public class PayScreenService extends AccessibilityService {
         String pkg = pending;
         if (pkg == null) return;
         lastScanAt = System.currentTimeMillis();
-        boolean done = read(pkg);
+        boolean done;
+        try {
+            done = read(pkg);
+        } catch (Throwable t) {
+            // Never let one odd screen crash the service: a crashed accessibility
+            // service is what phones switch off for good.
+            PayLog.add(this, "error", pkg, String.valueOf(t), -1);
+            done = true;
+        }
         if (!done && retries < RETRY_MS.length) {
             main.postDelayed(scan, RETRY_MS[retries++]);
         }
@@ -166,11 +182,16 @@ public class PayScreenService extends AccessibilityService {
 
     private static void collect(AccessibilityNodeInfo n, List<String> out, int depth) {
         if (n == null || out.size() >= MAX_NODES || depth > 40) return;
-        CharSequence t = n.getText();
-        if (t != null && t.length() > 0) out.add(t.toString());
-        else {
-            CharSequence d = n.getContentDescription();
-            if (d != null && d.length() > 0) out.add(d.toString());
+        // A text box (the "To" or amount field) is what you typed, not what happened.
+        if (!n.isEditable()) {
+            CharSequence t = n.getText();
+            if (t != null && t.length() > 0) out.add(t.toString());
+            else {
+                // Labels meant for screen readers. Apps also leave their own
+                // codes here ("send_v2_to_field_cross_clicked"); those are skipped.
+                CharSequence d = n.getContentDescription();
+                if (d != null && d.length() > 0 && PayScreen.human(d.toString())) out.add(d.toString());
+            }
         }
         for (int i = 0; i < n.getChildCount(); i++) collect(n.getChild(i), out, depth + 1);
     }

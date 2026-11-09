@@ -182,8 +182,19 @@ final class PayScreen {
         return null;
     }
 
+    /** Words for people, not an app's own code: no snake_case, camelCase or "…clicked". */
+    private static final Pattern CODE = Pattern.compile(
+            "(?i).*(_|\\b(clicked|click|tap|tapped|button|btn|icon|img|image|logo|cross|close|field|toggle|v\\d+|null|undefined)\\b).*");
+    private static final Pattern CAMEL = Pattern.compile(".*[a-z][A-Z][a-z].*");
+
+    static boolean human(String s) {
+        if (s == null || s.trim().isEmpty()) return false;
+        String x = s.trim();
+        return !CODE.matcher(x).matches() && !(CAMEL.matcher(x).matches() && !x.contains(" "));
+    }
+
     private static String name(String raw) {
-        if (raw == null || AMOUNT.matcher(raw).find() || BARE.matcher(raw).matches()) return null;
+        if (raw == null || !human(raw) || AMOUNT.matcher(raw).find() || BARE.matcher(raw).matches()) return null;
         String n = PayNotifier.clean(raw);
         if (n == null || JUNK_NAME.matcher(n).matches()) return null;
         return PayNotifier.title(n);

@@ -434,7 +434,7 @@ await step("tapping the payment notification opens Money", async () => {
 await step("Money nudges while payment reading is off", async () => {
   await page.evaluate(() => window.__phone.set({ listening: false, screen: false }));
   await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("Turn on payment detection");
+  await waitFor("Payment detection is off");
 });
 
 await step("connecting Camu turns Attendance into Camu's numbers", async () => {

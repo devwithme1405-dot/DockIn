@@ -4,5 +4,6 @@ public class AccessibilityNodeInfo {
   public CharSequence getContentDescription() { return null; }
   public CharSequence getPackageName() { return null; }
   public int getChildCount() { return 0; }
+  public boolean isEditable() { return false; }
   public AccessibilityNodeInfo getChild(int i) { return null; }
 }

@@ -412,7 +412,7 @@ final class PayNotifier {
 
     /** SHOUTED merchant names are the norm on UPI; nobody wants to read those. */
     private static final java.util.Set<String> SMALL_WORDS = new java.util.HashSet<>(java.util.Arrays.asList(
-            "THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A"));
+            "THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A", "MR", "MRS", "MS", "DR"));
 
     static String title(String s) {
         if (!s.equals(s.toUpperCase(Locale.ROOT)) && !s.equals(s.toLowerCase(Locale.ROOT))) return s;

@@ -210,7 +210,7 @@ function payerOf(text: string): string | null {
 function title(s: string): string {
   if (s !== s.toUpperCase() && s !== s.toLowerCase()) return s; // already mixed, leave it
   // Short shouted words that are really initials (KFC, B2B, HP) stay as they are.
-  const keep = new Set(["THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A"]);
+  const keep = new Set(["THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A", "MR", "MRS", "MS", "DR"]);
   return s
     .split(/(\s+)/)
     .map((w) =>

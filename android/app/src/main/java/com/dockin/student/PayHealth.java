@@ -22,7 +22,7 @@ final class PayHealth {
     private static final int JOB_ID = 4202;
     private static final int NOTE_ID = 7703;
     private static final long EVERY_MS = 15 * 60 * 1000L;
-    private static final long NAG_GAP_MS = 6 * 60 * 60 * 1000L;
+    private static final long NAG_GAP_MS = 2 * 60 * 60 * 1000L;
 
     static void check(Context c) {
         SharedPreferences p = c.getApplicationContext().getSharedPreferences("dockin-pay", Context.MODE_PRIVATE);

@@ -277,7 +277,9 @@ export function PhoneSetup({ bare = false }: { bare?: boolean }) {
 export function PhoneSetupNudge() {
   const { status, native } = usePhoneStatus();
   if (!native || !status) return null;
-  if ((status.listening || status.screen) && status.notifications === "granted") return null;
+  // Payment screens switched off (phones do this after an update) is the one that matters most.
+  const screenOff = status.screen === false;
+  if (!screenOff && (status.listening || status.screen) && status.notifications === "granted") return null;
   return (
     <Link
       href="/settings#phone"
@@ -285,7 +287,11 @@ export function PhoneSetupNudge() {
     >
       <Radio size={18} className="shrink-0" />
       <span className="min-w-0 flex-1 text-[13.5px] font-medium">
-        {status.listening || status.screen ? "Allow notifications so DockIn can ask after each payment" : "Turn on payment detection — two taps"}
+        {screenOff
+          ? "Payment detection is off — turn on “Catch the moment I pay”"
+          : status.listening || status.screen
+            ? "Allow notifications so DockIn can ask after each payment"
+            : "Turn on payment detection — two taps"}
       </span>
       <ChevronRight size={17} className="shrink-0" />
     </Link>
@@ -447,7 +453,7 @@ export function oemGuide(maker: string): { name: string; how: string; buttons: {
 
 interface LogLine {
   at: number;
-  kind: "caught" | "twin" | "missed" | "off" | "screen";
+  kind: "caught" | "twin" | "missed" | "off" | "screen" | "error";
   app: string;
   text: string;
   ms?: number;
@@ -526,7 +532,7 @@ function DetectionLog() {
               <span
                 className={cx(
                   "font-semibold",
-                  l.kind === "missed" || l.kind === "off" ? "text-danger" : l.kind === "screen" ? "text-muted" : "text-safe",
+                  l.kind === "missed" || l.kind === "off" || l.kind === "error" ? "text-danger" : l.kind === "screen" ? "text-muted" : "text-safe",
                 )}
               >
                 {l.kind === "caught"
@@ -537,7 +543,9 @@ function DetectionLog() {
                       ? "Not read"
                       : l.kind === "screen"
                         ? `Screen · ${l.app}`
-                        : "Switched off"}
+                        : l.kind === "error"
+                          ? "Error (skipped)"
+                          : "Switched off"}
               </span>
               <span className="text-muted">
                 {" "}· {new Date(l.at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
