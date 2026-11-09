@@ -92,7 +92,8 @@ export function DetectedTray() {
   const load = useCallback(async () => {
     try {
       const notices = await phoneInbox();
-      setList(detectedFrom(notices));
+      // Ones answered in the popup are filed by PayPopupSync, not asked again here.
+      setList(detectedFrom(notices.filter((n) => !n.answer)));
       // Adverts and balance alerts come in with everything else; they are not
       // shown and they are not kept.
       const rubbish = strayIds(notices);

@@ -11,4 +11,5 @@ public class Context {
   public android.content.pm.PackageManager getPackageManager() { return null; }
   public String getPackageName() { return null; }
   public ContentResolver getContentResolver() { return null; }
+  public static final String POWER_SERVICE = "power";
 }

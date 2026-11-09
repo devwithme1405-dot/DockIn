@@ -9,6 +9,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 
 import androidx.core.app.NotificationManagerCompat;
@@ -113,6 +114,8 @@ public class DockInPlugin extends Plugin {
         r.put("notifications", notificationState());
         r.put("sms", smsState());
         r.put("pending", PayInbox.size(c));
+        r.put("overlay", PayAskActivity.canPopUp(c));
+        r.put("battery", unrestricted(c));
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
         try {
@@ -166,6 +169,39 @@ public class DockInPlugin extends Plugin {
         Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 Uri.fromParts("package", getContext().getPackageName(), null));
         launch(call, i, null);
+    }
+
+    /** Not held back by battery saving, so the listener and alarms keep running. */
+    static boolean unrestricted(Context c) {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName());
+    }
+
+    /** "Display over other apps" — lets the payment popup come up on its own. */
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getContext().getPackageName()));
+        Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", getContext().getPackageName(), null));
+        launch(call, i, fallback);
+    }
+
+    /** Asks Android to stop putting DockIn to sleep. */
+    @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:" + getContext().getPackageName()));
+        Intent fallback = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+        launch(call, i, fallback);
+    }
+
+    /** The categories and people the payment popup offers, as the app knows them. */
+    @PluginMethod
+    public void setPayChoices(PluginCall call) {
+        PayInbox.setChoices(getContext(), call.getData() == null ? "{}" : call.getData().toString());
+        call.resolve();
     }
 
     @PluginMethod

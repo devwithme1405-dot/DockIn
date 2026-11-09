@@ -180,6 +180,44 @@ export function PhoneSetup() {
             )
           }
         />
+
+        {status.overlay !== undefined && (
+          <Step
+            done={status.overlay}
+            title="Pop up right after I pay"
+            body={
+              status.overlay
+                ? "On. A small sheet asks what it was for, over any app — even with DockIn closed."
+                : "Allow “Display over other apps” and a small sheet asks what each payment was for, right on your screen."
+            }
+            action={
+              !status.overlay && (
+                <ActionButton busy={busy === "overlay"} onClick={() => run("overlay", () => DockIn.openOverlaySettings())}>
+                  Allow
+                </ActionButton>
+              )
+            }
+          />
+        )}
+
+        {status.battery !== undefined && (
+          <Step
+            done={status.battery}
+            title="Keep running when closed"
+            body={
+              status.battery
+                ? "On. Android will not put DockIn to sleep, so no payment or reminder is missed."
+                : "Choose “Allow” (or “No restrictions”) so Android never stops DockIn in the background. On Xiaomi/Redmi, also turn on Autostart in App info."
+            }
+            action={
+              !status.battery && (
+                <ActionButton busy={busy === "battery"} onClick={() => run("battery", () => DockIn.openBatterySettings())}>
+                  Allow
+                </ActionButton>
+              )
+            }
+          />
+        )}
       </ol>
 
       <div className="mt-1 flex items-center justify-between gap-3 border-t border-line pt-3">

@@ -6,4 +6,5 @@ public class PluginCall {
   public JSArray getArray(String name) { return null; }
   public String getString(String name) { return null; }
   public Boolean getBoolean(String name, Boolean def) { return def; }
+  public JSObject getData() { return null; }
 }

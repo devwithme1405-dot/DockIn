@@ -9,6 +9,11 @@
     <!-- Reads bank payment SMS directly, so a debit/credit is caught even when the
          messaging app raises no notification. Only used once the person allows it. -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- The "what was it for?" popup right after a payment, over whatever app is open.
+         Android asks the person first ("Display over other apps"). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Lets DockIn ask to be left out of battery saving, so payments are caught when closed. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:allowBackup="true"
@@ -38,6 +43,17 @@
             android:name=".CamuLoginActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
+        <!-- The small "what was it for?" sheet after a payment. Its own task, so it
+             never drags the whole app to the front, and never shows in Recents. -->
+        <activity
+            android:name=".PayAskActivity"
+            android:theme="@style/AppTheme.PayAsk"
+            android:taskAffinity="com.dockin.student.payask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
         <!-- Fires scheduled reminders (class starting, task due, attendance low). -->

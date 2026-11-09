@@ -7,7 +7,8 @@ public class LinearLayout extends ViewGroup {
   public void setOrientation(int o) {}
   public void setGravity(int g) {}
   public void setClickable(boolean c) {}
-  public static class LayoutParams extends ViewGroup.LayoutParams {
+  public static class LayoutParams extends ViewGroup.MarginLayoutParams {
+    public int gravity;
     public LayoutParams(int w, int h) { super(w, h); }
     public LayoutParams(int w, int h, float weight) { super(w, h); }
   }

@@ -13,4 +13,6 @@ public class View {
   public void setVisibility(int v) {}
   public void setClickable(boolean c) {}
   public void bringToFront() {}
+  public void setBackground(android.graphics.drawable.Drawable d) {}
+  public void setPadding2() {}
 }

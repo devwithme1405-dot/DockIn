@@ -7,4 +7,7 @@ public class TextView extends View {
   public void setTextColor(int c) {}
   public void setTextSize(int unit, float size) {}
   public void setTypeface(android.graphics.Typeface t) {}
+  public void setHint(CharSequence h) {}
+  public void setSingleLine(boolean s) {}
+  public CharSequence getText() { return null; }
 }

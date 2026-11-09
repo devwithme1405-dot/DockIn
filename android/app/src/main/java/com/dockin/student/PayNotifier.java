@@ -35,12 +35,25 @@ final class PayNotifier {
     /** Words used both ways ("payment of ₹500 received"); they count as a spend only with nothing saying money came in. */
     private static final Pattern NEUTRAL = Pattern.compile("(?i)\\b(payment of|transferred)\\b");
     private static final Pattern CREDIT = Pattern.compile(
-            "(?i)\\b(credited|received|refund(?:ed)?|cashback|added to|paid you|sent you)\\b");
+            "(?i)\\b(credited|received|refund(?:ed)?|reversed|reversal|cashback|added to|paid you|sent you)\\b");
+    /** The payee's side of your own spend: "; KATHI credited", "credited to rahul@okaxis". */
+    private static final Pattern PAYEE_CREDITED = Pattern.compile(
+            "(?i)[;.]\\s*(?![0-9])([^;.\\n]{2,60}?)\\s+credited\\b(?!\\s+to\\s+(?:your|ur|a/c|acct?|account)\\b)");
+    private static final Pattern CREDITED_TO_OTHER = Pattern.compile(
+            "(?i)\\bcredited to\\s+(?:vpa\\s+|beneficiary\\s+)?(?!(?:your|ur|a/c|acct?|account)\\b)([^.,;\\n]{2,60})");
     private static final Pattern TO_YOU = Pattern.compile("(?i)\\b(?:paid|sent) you\\b");
     private static final Pattern NOISE = Pattern.compile(
-            "(?i)\\b(otp|one[- ]time|code|balance is|avl bal|available balance|due|reminder|offer|cashback up to|win|request(?:ed|s)? (?:money|payment)|will be|failed|declined|requesting)\\b");
+            "(?i)\\b(otp|one[- ]time|code|balance is|avl bal|available balance|due|reminder|offer|cashback up to|win|request(?:ed|s)? (?:money|payment)|will be|failed|declined|requesting|pending|scheduled|upcoming)\\b");
     private static final Pattern AMOUNT = Pattern.compile(
             "(?i)(?:\u20B9|rs\\.?|inr)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)|([0-9][0-9,]*(?:\\.[0-9]{1,2})?)\\s*(?:\u20B9|rupees)");
+    /** "debited by 60.0": no rupee sign, so only a number right after a verb. */
+    private static final Pattern VERB_AMOUNT = Pattern.compile(
+            "(?i)\\b(?:debited|credited|withdrawn|deducted|spent)\\s+(?:by|for|with|of)\\s+([0-9][0-9,]*(?:\\.[0-9]{1,2})?)(?![0-9/-])");
+    /** "UPI/P2M/<ref>/KATHI": the payee is the last part of the path. */
+    private static final Pattern UPI_PATH = Pattern.compile(
+            "(?i)\\bUPI/(?:P2[AMP]/)?(?:(?:number|[0-9]+)/)?([A-Za-z][A-Za-z0-9 &.'-]{1,40}?)(?=\\s+(?:not you|on|ref|info)\\b|[/.]|\\s*$)");
+    private static final Pattern ATM = Pattern.compile("(?i)\\batm\\b");
+    private static final Pattern WITHDRAW = Pattern.compile("(?i)\\bwithdraw");
     private static final Pattern TO = Pattern.compile(
             "(?i)\\b(?:to|towards|at|in favour of)\\s+(?:vpa\\s+|upi/|upi id\\s+)?([^.,;\\n]{2,60})");
     private static final Pattern FROM = Pattern.compile(
@@ -50,7 +63,7 @@ final class PayNotifier {
     private static final Pattern NOT_A_NAME = Pattern.compile(
             "(?i)^(?:upi|neft|imps|rtgs|ach|nach|account|your account|your a/c|bank|a/c|cash|cash deposit|atm|card|number)$");
     private static final Pattern CLEAN_TAIL = Pattern.compile(
-            "(?i)\\s+(?:on|using|via|from|through|at|by|ref|upi ref|txn|utr|a/c|account|bank|successfully|success|is successful|has been|dated|to)\\b.*$");
+            "(?i)\\s+(?:on|using|via|from|through|at|by|ref|refno|ref no|rrn|upi ref|txn|utr|a/c|account|bank|successfully|success|is successful|has been|dated|to|not you|if not|for)\\b.*$");
 
     /** The same payment from the UPI app and the bank, seconds apart, is one prompt. */
     private static final long TWIN_WINDOW_MS = 150_000;
@@ -95,13 +108,37 @@ final class PayNotifier {
         if (text == null) return null;
         if (NOISE.matcher(text).find()) return null;
         String mine = TO_YOU.matcher(text).replaceAll(" ");
-        boolean credit = CREDIT.matcher(text).find();
+        // A spend that also says the payee was credited is still only a spend.
+        String payee = null;
+        String creditText = text;
+        if (DEBIT.matcher(mine).find()) {
+            Matcher side = CREDITED_TO_OTHER.matcher(text);
+            boolean found = side.find();
+            if (!found) {
+                side = PAYEE_CREDITED.matcher(text);
+                found = side.find();
+            }
+            if (found && !DEBIT.matcher(side.group(1)).find()) {
+                String name = clean(CLEAN_TAIL.matcher(side.group(1)).replaceAll(""));
+                if (name != null) {
+                    payee = title(name);
+                    creditText = text.substring(0, side.start()) + " " + text.substring(side.end());
+                }
+            }
+        }
+        boolean credit = CREDIT.matcher(creditText).find();
         boolean debit = DEBIT.matcher(mine).find() || (!credit && NEUTRAL.matcher(mine).find());
         if (credit == debit) return null;
 
         Matcher m = AMOUNT.matcher(text);
-        if (!m.find()) return null;
-        String raw = m.group(1) != null ? m.group(1) : m.group(2);
+        String raw;
+        if (m.find()) {
+            raw = m.group(1) != null ? m.group(1) : m.group(2);
+        } else {
+            Matcher v = VERB_AMOUNT.matcher(text);
+            if (!v.find()) return null;
+            raw = v.group(1);
+        }
         double amount;
         try {
             amount = Double.parseDouble(raw.replace(",", ""));
@@ -109,7 +146,7 @@ final class PayNotifier {
             return null;
         }
         if (amount <= 0 || amount > 1_000_000) return null;
-        return new Spend(amount, credit ? payerOf(text) : merchantOf(text), credit);
+        return new Spend(amount, credit ? payerOf(text) : (payee != null ? payee : merchantOf(text)), credit);
     }
 
     /** Reads one redacted notification and asks about it if money moved. */
@@ -127,9 +164,11 @@ final class PayNotifier {
         String lastMerchant = p.getString("askMerchant", null);
 
         int id;
+        boolean twin = false;
         if (lastId != 0 && lastAmount == amount && lastIn == s.in && Math.abs(at - lastAt) <= TWIN_WINDOW_MS) {
             // The twin: update the prompt already showing rather than add a second.
             id = lastId;
+            twin = true;
             merchant = richer(lastMerchant, merchant);
             at = lastAt;
         } else {
@@ -143,8 +182,13 @@ final class PayNotifier {
                 .putString("askMerchant", merchant)
                 .apply();
 
-        if (s.in) postIn(c, id, amount, merchant, at);
-        else post(c, id, amount, merchant, at);
+        if (s.in) {
+            postIn(c, id, amount, merchant, at);
+        } else {
+            post(c, id, amount, merchant, at);
+            // The twin of a payment already asked about does not ask twice.
+            if (!twin) PayAskActivity.show(c, amount, merchant, at, id);
+        }
     }
 
     /** "Spent ₹250 at Zomato", with a button for each answer that needs one more tap. */
@@ -155,17 +199,15 @@ final class PayNotifier {
 
         String money = rupees(amount);
         String title = merchant != null ? "Spent " + money + " at " + merchant : "Spent " + money;
-        String place = "/money?pay=" + amountParam(amount) + "&at=" + at;
-
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_dockin)
                 .setColor(0xFF6A3DE8)
                 .setContentTitle(title)
                 .setContentText("What was it for? Tap to place it.")
                 .setAutoCancel(true)
-                .setContentIntent(open(c, id * 10, place))
-                .addAction(0, "For me", open(c, id * 10 + 1, place + "&who=me"))
-                .addAction(0, "For someone", open(c, id * 10 + 2, place + "&who=other"))
+                .setContentIntent(PayAskActivity.pending(c, id * 10, amount, merchant, at, id, null))
+                .addAction(0, "For me", PayAskActivity.pending(c, id * 10 + 1, amount, merchant, at, id, "me"))
+                .addAction(0, "For someone", PayAskActivity.pending(c, id * 10 + 2, amount, merchant, at, id, "other"))
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setWhen(at)
@@ -231,6 +273,12 @@ final class PayNotifier {
 
     /** "… to VPA kathi@okaxis on 03-10-26. Ref 1234" → "Kathi". */
     static String merchantOf(String text) {
+        if (ATM.matcher(text).find() && WITHDRAW.matcher(text).find()) return "ATM withdrawal";
+        Matcher path = UPI_PATH.matcher(text);
+        if (path.find()) {
+            String n = clean(path.group(1));
+            if (n != null) return title(n);
+        }
         Matcher to = TO.matcher(text);
         if (!to.find()) return null;
         String name = clean(CLEAN_TAIL.matcher(to.group(1)).replaceAll(""));
@@ -269,13 +317,26 @@ final class PayNotifier {
     }
 
     /** SHOUTED merchant names are the norm on UPI; nobody wants to read those. */
+    private static final java.util.Set<String> SMALL_WORDS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A"));
+
     private static String title(String s) {
         if (!s.equals(s.toUpperCase(Locale.ROOT)) && !s.equals(s.toLowerCase(Locale.ROOT))) return s;
         StringBuilder out = new StringBuilder(s.length());
-        boolean start = true;
-        for (char ch : s.toLowerCase(Locale.ROOT).toCharArray()) {
-            out.append(start ? Character.toUpperCase(ch) : ch);
-            start = !Character.isLetterOrDigit(ch);
+        for (String w : s.split("(?<=\\s)|(?=\\s)")) {
+            boolean upper = w.equals(w.toUpperCase(Locale.ROOT));
+            boolean initials = upper && (
+                    (w.length() <= 5 && w.matches(".*\\p{N}.*") && w.matches(".*\\p{L}.*"))
+                    || (w.length() <= 3 && w.matches("\\p{L}+") && !SMALL_WORDS.contains(w)));
+            if (initials) {
+                out.append(w);
+                continue;
+            }
+            boolean start = true;
+            for (char ch : w.toLowerCase(Locale.ROOT).toCharArray()) {
+                out.append(start ? Character.toUpperCase(ch) : ch);
+                start = !Character.isLetterOrDigit(ch) && ch != '\'';
+            }
         }
         return out.toString();
     }

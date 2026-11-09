@@ -307,3 +307,75 @@ describe("payments from any app", () => {
     expect(parseNotice({ app: "com.whatsapp", title: "Yash", text: "bhai maine ₹200 paid kar diya", at })).toBeNull();
   });
 });
+
+/**
+ * Real bank and card wording, one per issuer students actually use. Each of
+ * these used to come out wrong (no amount without a rupee sign, a payee's
+ * "credited" read as money in, a UPI path or a "Refno" swallowed into the name).
+ */
+describe("bank formats in the wild", () => {
+  const out = (title: string, text: string) => parseNotice(note(SMS, title, text));
+
+  it("SBI: an amount with no rupee sign, and a Refno after the name", () => {
+    expect(
+      out("SBIUPI", "Dear UPI user A/C X1234 debited by 60.0 on date 09Nov26 trf to KATHI Refno 612345678901. If not u? call 1800111109. -SBI"),
+    ).toMatchObject({ dir: "out", amount: 60, merchant: "Kathi" });
+  });
+
+  it("ICICI: the payee being credited is still your spend", () => {
+    expect(
+      out("ICICIB", "ICICI Bank Acct XX123 debited for Rs 60.00 on 09-Nov-26; KATHI credited. UPI:612345678901. Call 18002662 for dispute. SMS BLOCK 123 to 9215676766."),
+    ).toMatchObject({ dir: "out", amount: 60, merchant: "Kathi" });
+  });
+
+  it("Axis: the merchant is the last part of the UPI path", () => {
+    expect(
+      out("AXISBK", "INR 60.00 debited A/c no. XX1234 09-11-26 10:21:33 UPI/P2M/612345678901/KATHI Not you? SMS BLOCKUPI Cust ID to 919951860002 Axis Bank"),
+    ).toMatchObject({ dir: "out", amount: 60, merchant: "Kathi" });
+  });
+
+  it("Kotak: a handle and a glued-on UPI Ref", () => {
+    expect(
+      out("KOTAKB", "Sent Rs.60.00 from Kotak Bank AC X1234 to kathi@okaxis on 09-11-26.UPI Ref 612345678901. Not you, https://kotak.com/KBANKT/Fraud"),
+    ).toMatchObject({ dir: "out", amount: 60, merchant: "Kathi" });
+  });
+
+  it("a credit card spend names the shop after At", () => {
+    expect(
+      out("HDFCBK", "Spent Rs.450 On HDFC Bank Card 1234 At DOMINOS PIZZA On 2026-11-09:13:42:10 Not You? Call 18002586161"),
+    ).toMatchObject({ dir: "out", amount: 450, merchant: "Dominos Pizza" });
+  });
+
+  it("slice: a credit card UPI AutoPay", () => {
+    expect(
+      out("VM-SLICEIT", "Successfully paid Rs.250 from slice credit card XX1284 to B2B on 07-Nov-26 via UPI AutoPay. UMN - 01a1b3fb54e07c829d54258268dd31c5@slc - slice"),
+    ).toMatchObject({ dir: "out", amount: 250, merchant: "B2B" });
+  });
+
+  it("money sent out to someone else's account is a spend, not a credit", () => {
+    expect(
+      out("BANK", "Rs.500 debited from A/c XX1234 and credited to rahul@okaxis via IMPS on 09-11-26"),
+    ).toMatchObject({ dir: "out", amount: 500, merchant: "Rahul" });
+  });
+
+  it("cash from an ATM is a withdrawal you can track", () => {
+    expect(out("SBIINB", "Rs.2000 withdrawn at ATM S1AW000123 from A/c XX1234 on 09Nov26")).toMatchObject({
+      dir: "out",
+      amount: 2000,
+      merchant: "ATM withdrawal",
+    });
+  });
+
+  it("a payment still pending or scheduled is not money gone yet", () => {
+    expect(out("BANK", "Your payment of Rs.60 to Kathi is pending")).toBeNull();
+    expect(out("BANK", "Rs.199 scheduled to be debited for Netflix on 12-Nov")).toBeNull();
+  });
+
+  it("a reversal is money back in", () => {
+    expect(out("BANK", "Rs.60 reversed to your account for UPI txn ref 1234")).toMatchObject({ dir: "in", amount: 60 });
+  });
+
+  it("still refuses a message that really says both ways", () => {
+    expect(out("BANK", "Rs.500 credited to your account and Rs.60 debited from account")).toBeNull();
+  });
+});

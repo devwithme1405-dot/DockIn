@@ -18,7 +18,7 @@
  *    trusting the total — and the total is the whole product.
  */
 
-import { DockIn, isNativeApp } from "./native";
+import { DockIn, isNativeApp, type PopupAnswer } from "./native";
 
 export interface Notice {
   /** Android package that posted it, e.g. "com.google.android.apps.nbu.paisa.user". */
@@ -95,14 +95,36 @@ const DEBIT = /\b(paid|debited|debit|sent|spent|withdrawn|deducted)\b/i;
 /** Words used both ways ("payment of ₹500 received"); a spend only when nothing says money came in. */
 const NEUTRAL = /\b(payment of|transferred)\b/i;
 /** Money coming in. */
-const CREDIT = /\b(credited|received|refund(?:ed)?|cashback|added to|paid you|sent you)\b/i;
+const CREDIT = /\b(credited|received|refund(?:ed)?|reversed|reversal|cashback|added to|paid you|sent you)\b/i;
+/**
+ * The payee's side of your own spend: ICICI's "; KATHI credited" and the
+ * "debited … and credited to rahul@okaxis" of a transfer. Taken out before
+ * deciding the direction, and used as the payee's name.
+ */
+const PAYEE_CREDITED = /[;.]\s*(?![0-9])([^;.\n]{2,60}?)\s+credited\b(?!\s+to\s+(?:your|ur|a\/c|acct?|account)\b)/i;
+const CREDITED_TO_OTHER =
+  /\bcredited to\s+(?:vpa\s+|beneficiary\s+)?(?!(?:your|ur|a\/c|acct?|account)\b)([^.,;\n]{2,60})/i;
 const TO_YOU = /\b(?:paid|sent) you\b/gi;
 /** Messages that mention money but are not a payment. */
 const NOISE =
-  /\b(otp|one[- ]time|code|balance is|avl bal|available balance|due|reminder|offer|cashback up to|win|request(?:ed|s)? (?:money|payment)|will be|failed|declined|requesting)\b/i;
+  /\b(otp|one[- ]time|code|balance is|avl bal|available balance|due|reminder|offer|cashback up to|win|request(?:ed|s)? (?:money|payment)|will be|failed|declined|requesting|pending|scheduled|upcoming)\b/i;
 
 const AMOUNT =
   /(?:₹|rs\.?|inr)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:₹|rupees)/i;
+/** SBI and a few others drop the rupee sign: "debited by 60.0". Only after a verb. */
+const VERB_AMOUNT =
+  /\b(?:debited|credited|withdrawn|deducted|spent)\s+(?:by|for|with|of)\s+([0-9][0-9,]*(?:\.[0-9]{1,2})?)(?![0-9/-])/i;
+/** Axis and others: "UPI/P2M/<ref>/KATHI" — the payee is the last part of the path. */
+const UPI_PATH = /\bUPI\/(?:P2[AMP]\/)?(?:(?:number|[0-9]+)\/)?([A-Za-z][A-Za-z0-9 &.'-]{1,40}?)(?=\s+(?:not you|on|ref|info)\b|[/.]|\s*$)/i;
+
+/** The amount in a message: a rupee sign first, a bare number after a verb only if there is none. */
+function amountIn(text: string): number | null {
+  const m = AMOUNT.exec(text);
+  const raw = m ? (m[1] ?? m[2]) : VERB_AMOUNT.exec(text)?.[1];
+  if (!raw) return null;
+  const n = Number(raw.replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 && n <= 1_000_000 ? n : null;
+}
 
 /**
  * Account and card numbers are not wanted and not kept. The phone strips them
@@ -119,7 +141,7 @@ export function redact(text: string): string {
 }
 
 const CLEAN_TAIL =
-  /\s+(?:on|using|via|from|through|at|by|ref|upi ref|txn|utr|a\/c|account|bank|successfully|success|is successful|has been|dated|to)\b.*$/i;
+  /\s+(?:on|using|via|from|through|at|by|ref|refno|ref no|rrn|upi ref|txn|utr|a\/c|account|bank|successfully|success|is successful|has been|dated|to|not you|if not|for)\b.*$/i;
 const NOT_A_NAME =
   /^(?:upi|neft|imps|rtgs|ach|nach|account|your account|your a\/c|bank|a\/c|cash|cash deposit|atm|card|number)$/i;
 
@@ -138,6 +160,12 @@ function clean(raw: string): string | null {
 
 /** Pulls the payee out of "… to VPA kathi@okaxis on 03-10-26. Ref 1234". */
 function merchantOf(text: string): string | null {
+  if (/\batm\b/i.test(text) && /\bwithdraw/i.test(text)) return "ATM withdrawal";
+  const path = UPI_PATH.exec(text);
+  if (path) {
+    const n = clean(path[1]);
+    if (n) return title(n);
+  }
   const to =
     /\b(?:to|towards|at|in favour of)\s+(?:vpa\s+|upi\/|upi id\s+)?([^.,;\n]{2,60})/i.exec(text);
   if (!to) return null;
@@ -170,9 +198,18 @@ function payerOf(text: string): string | null {
 /** SHOUTED merchant names are the norm on UPI; nobody wants a feed of those. */
 function title(s: string): string {
   if (s !== s.toUpperCase() && s !== s.toLowerCase()) return s; // already mixed, leave it
+  // Short shouted words that are really initials (KFC, B2B, HP) stay as they are.
+  const keep = new Set(["THE", "AND", "FOR", "OF", "BY", "AN", "IN", "AT", "ON", "TO", "A"]);
   return s
-    .toLowerCase()
-    .replace(/\b[\p{L}\p{N}]/gu, (c) => c.toUpperCase())
+    .split(/(\s+)/)
+    .map((w) =>
+      /\p{N}/u.test(w) && /\p{L}/u.test(w) && w.length <= 5 && w === w.toUpperCase()
+        ? w
+        : w.length <= 3 && w === w.toUpperCase() && /^\p{L}+$/u.test(w) && !keep.has(w)
+          ? w
+          : w.toLowerCase().replace(/(^|[^\p{L}\p{N}'])([\p{L}\p{N}])/gu, (_m, a: string, c: string) => a + c.toUpperCase()),
+    )
+    .join("")
     .replace(/\b(Pvt|Ltd|Llp|Hoc)\b/g, (m) => m.toUpperCase());
 }
 
@@ -194,18 +231,28 @@ export function parseNotice(n: Notice): Payment | null {
   if (!body) return null;
   if (NOISE.test(body)) return null;
   const mine = body.replace(TO_YOU, " ");
-  const credit = CREDIT.test(body);
+  // A spend that also says the payee was credited is still only a spend.
+  let payee: string | null = null;
+  let creditText = body;
+  if (DEBIT.test(mine)) {
+    const side = CREDITED_TO_OTHER.exec(body) ?? PAYEE_CREDITED.exec(body);
+    const raw = side && !DEBIT.test(side[1]) ? side[1] : null;
+    const name = raw ? clean(raw.replace(CLEAN_TAIL, "")) : null;
+    if (side && name) {
+      payee = title(name);
+      creditText = body.replace(side[0], " ");
+    }
+  }
+  const credit = CREDIT.test(creditText);
   // An app not on the list has to say it outright; "payment of" alone is not enough.
   const debit = DEBIT.test(mine) || (from.known && !credit && NEUTRAL.test(mine));
   if (credit === debit) return null;
 
-  const m = AMOUNT.exec(body);
-  if (!m) return null;
-  const amount = Number((m[1] ?? m[2]).replace(/,/g, ""));
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return null;
+  const amount = amountIn(body);
+  if (amount === null) return null;
 
   const dir = credit ? "in" : "out";
-  return { amount, merchant: dir === "in" ? payerOf(body) : merchantOf(body), source, at: n.at, dir };
+  return { amount, merchant: dir === "in" ? payerOf(body) : (payee ?? merchantOf(body)), source, at: n.at, dir };
 }
 
 /** The key a merchant is remembered under, so spelling and case cannot split it. */
@@ -263,6 +310,8 @@ export interface StoredNotice {
   title: string;
   body: string;
   posted_at: number;
+  /** Answered in the popup already; the app files it without asking again. */
+  answer?: PopupAnswer;
 }
 
 /**
@@ -281,6 +330,7 @@ export async function phoneInbox(): Promise<StoredNotice[]> {
     title: n.title,
     body: n.body,
     posted_at: n.at,
+    ...(n.answer ? { answer: n.answer } : {}),
   }));
 }
 

@@ -116,6 +116,58 @@ final class PayInbox {
         return read(c).length();
     }
 
+    private static final String K_CHOICES = "choices";
+
+    /** Does this notice describe this spend (same amount, within the twin window)? */
+    private static boolean matches(JSONObject o, double amount, long at) {
+        if (Math.abs(at - o.optLong("at")) > 150_000L) return false;
+        PayNotifier.Spend s = PayNotifier.readAny(redact(o.optString("title") + " " + o.optString("body")));
+        return s != null && !s.in && s.amount == amount;
+    }
+
+    /**
+     * The answer given in the popup, kept on every copy of that payment (the
+     * bank's and the UPI app's). The app reads it and files the payment.
+     */
+    static synchronized int answer(Context c, double amount, long at, JSONObject answer) {
+        JSONArray list = read(c);
+        int n = 0;
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.optJSONObject(i);
+            if (o == null || !matches(o, amount, at)) continue;
+            try {
+                o.put("answer", answer);
+                n++;
+            } catch (JSONException ignored) {
+            }
+        }
+        if (n > 0) write(c, list);
+        return n;
+    }
+
+    /** Already answered — a second popup for the twin notice is not needed. */
+    static synchronized boolean answered(Context c, double amount, long at) {
+        JSONArray list = read(c);
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.optJSONObject(i);
+            if (o != null && o.has("answer") && matches(o, amount, at)) return true;
+        }
+        return false;
+    }
+
+    /** Categories and people the app last handed over, for the popup's buttons. */
+    static synchronized void setChoices(Context c, String json) {
+        prefs(c).edit().putString(K_CHOICES, json == null ? "{}" : json).apply();
+    }
+
+    static synchronized JSONObject choices(Context c) {
+        try {
+            return new JSONObject(prefs(c).getString(K_CHOICES, "{}"));
+        } catch (JSONException e) {
+            return new JSONObject();
+        }
+    }
+
     /** Added or dismissed in the app: either way it is done with. */
     static synchronized void ack(Context c, Set<String> ids) {
         if (ids.isEmpty()) return;

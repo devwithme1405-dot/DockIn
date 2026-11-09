@@ -17,4 +17,10 @@ public class Intent {
   public String getStringExtra(String k) { return null; }
   public void removeExtra(String k) {}
   public String getAction() { return null; }
+  public Intent putExtra(String k, double v) { return this; }
+  public Intent putExtra(String k, long v) { return this; }
+  public double getDoubleExtra(String k, double d) { return d; }
+  public long getLongExtra(String k, long d) { return d; }
+  public static final int FLAG_ACTIVITY_CLEAR_TASK = 32768;
+  public static final int FLAG_ACTIVITY_NO_ANIMATION = 65536;
 }

@@ -358,9 +358,36 @@ await step("a payment for a friend goes to lena-dena, not spending", async () =>
   await page.getByRole("button", { name: "Add to lena-dena" }).click();
   await waitFor("owes you");
   const t = await text();
-  if (!/Lena hai\s*₹149/.test(t)) throw new Error("lena-dena does not show ₹149 to get back");
+  if (!/You.ll get\s*₹149/i.test(t)) throw new Error("Lend & Borrow does not show ₹149 to get back");
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${SHOTS}/native-money-udhaar.png`, fullPage: true });
+});
+
+await step("an answer given in the payment popup is filed as soon as the app opens", async () => {
+  await page.evaluate((now) => {
+    const p = window.__phone.get();
+    window.__phone.set({
+      inbox: [
+        ...p.inbox,
+        {
+          id: "pop1",
+          app: "com.google.android.apps.messaging",
+          title: "VM-SLICEIT",
+          body: "Successfully paid Rs.450.00 from slice credit card XX1284 to DOMINOS PIZZA on 09-Nov-26 via UPI.",
+          at: now,
+          answer: { who: "other", person: "Rohan" },
+        },
+      ],
+    });
+    window.__phone.fire("resume", {});
+  }, Date.now());
+  await waitFor("Rohan owes you ₹450");
+  await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
+  await waitFor("Rohan");
+  const left = await page.evaluate(() => window.__phone.get().inbox.filter((n) => n.answer).length);
+  if (left !== 0) throw new Error("the answered payment was not cleared from the phone");
+  const t = await text();
+  if (/₹450[\s\S]{0,40}to place/i.test(t)) throw new Error("an answered payment is still asked about in the tray");
 });
 
 await step("money in from someone who owes you ticks them off in one tap", async () => {
@@ -368,7 +395,7 @@ await step("money in from someone who owes you ticks them off in one tap", async
   await page.getByRole("button", { name: "Paid back" }).click();
   await waitFor("Money in");
   const t = await text();
-  if (!/Lena hai\s*₹0/.test(t)) throw new Error("Rahul still shows as owing");
+  if (/Rahul[\s\S]{0,80}owes you/.test(t)) throw new Error("Rahul still shows as owing");
   if (!t.includes("+₹101")) throw new Error("the extra ₹101 was not noted as money in");
 });
 
@@ -453,7 +480,7 @@ await step("the holiday calendar and trip calculator live on the timetable", asy
   await page.getByLabel("Trip end").fill(`${to.getFullYear()}-${pad(to.getMonth() + 1)}-${pad(to.getDate())}`);
   await page.waitForTimeout(400);
   const t2 = await text();
-  if (!/would become|Nothing changes/.test(t2)) throw new Error("the trip result is missing");
+  if (!/Skipping \d+ class|would become|Nothing changes/.test(t2)) throw new Error("the trip result is missing");
   await page.screenshot({ path: `${SHOTS}/native-calendar.png`, fullPage: true });
 });
 

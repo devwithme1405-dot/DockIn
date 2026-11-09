@@ -17,6 +17,16 @@ export interface NativeNotice {
   body: string;
   /** When it was posted, in ms. */
   at: number;
+  /** What was chosen in the payment popup, before the app was even open. */
+  answer?: PopupAnswer;
+}
+
+/** The payment popup's answer: for me (with a category), for someone, or not a spend. */
+export interface PopupAnswer {
+  who: "me" | "other" | "ignore";
+  category?: string;
+  person?: string;
+  answeredAt?: number;
 }
 
 export type NotifState = "granted" | "denied" | "prompt";
@@ -30,6 +40,10 @@ export interface PhoneStatus {
   sms: NotifState;
   /** Payments waiting in the phone's inbox. */
   pending: number;
+  /** "Display over other apps": the payment popup can come up on its own. Missing on older apps. */
+  overlay?: boolean;
+  /** Left out of battery saving, so detection keeps running with DockIn closed. */
+  battery?: boolean;
   /** Android version number, e.g. 34 for Android 14. */
   sdk: number;
   maker: string;
@@ -143,6 +157,12 @@ interface DockInPlugin {
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
+  openOverlaySettings(): Promise<void>;
+  openBatterySettings(): Promise<void>;
+  setPayChoices(options: {
+    categories: { id: string; label: string; emoji: string }[];
+    people: string[];
+  }): Promise<void>;
   appReady(): Promise<void>;
   addListener(event: "notice", fn: (n: NativeNotice) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;

@@ -7,6 +7,10 @@ public final class Settings {
   public static final String ACTION_APPLICATION_DETAILS_SETTINGS = "d";
   public static final String ACTION_APP_NOTIFICATION_SETTINGS = "e";
   public static final String EXTRA_APP_PACKAGE = "f";
+  public static final String ACTION_MANAGE_OVERLAY_PERMISSION = "g";
+  public static final String ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS = "h";
+  public static final String ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS = "i";
+  public static boolean canDrawOverlays(android.content.Context c) { return false; }
   public static final class Secure {
     public static String getString(ContentResolver cr, String name) { return null; }
   }

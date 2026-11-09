@@ -49,6 +49,19 @@ public class PayChecks {
     expect("You paid \u20B960.00 Payment successful", 60.0, null);
     expect("BANK Rs.60 debited to 553201", 60.0, null);
     expect("Rahul sent you \u20B9500 Received in your bank account", null, null);
+    // bank formats in the wild — same as the web app's tests
+    expect("SBIUPI Dear UPI user A/C X1234 debited by 60.0 on date 09Nov26 trf to KATHI Refno 612345678901. If not u? call 1800111109. -SBI", 60.0, "Kathi");
+    expect("ICICIB ICICI Bank Acct XX123 debited for Rs 60.00 on 09-Nov-26; KATHI credited. UPI:612345678901. Call 18002662 for dispute. SMS BLOCK 123 to 9215676766.", 60.0, "Kathi");
+    expect("AXISBK INR 60.00 debited A/c no. XX1234 09-11-26 10:21:33 UPI/P2M/612345678901/KATHI Not you? SMS BLOCKUPI Cust ID to 919951860002 Axis Bank", 60.0, "Kathi");
+    expect("KOTAKB Sent Rs.60.00 from Kotak Bank AC X1234 to kathi@okaxis on 09-11-26.UPI Ref 612345678901. Not you, https://kotak.com/KBANKT/Fraud", 60.0, "Kathi");
+    expect("HDFCBK Spent Rs.450 On HDFC Bank Card 1234 At DOMINOS PIZZA On 2026-11-09:13:42:10 Not You? Call 18002586161", 450.0, "Dominos Pizza");
+    expect("VM-SLICEIT Successfully paid Rs.250 from slice credit card XX1284 to B2B on 07-Nov-26 via UPI AutoPay. UMN - 01a1b3fb54e07c829d54258268dd31c5@slc - slice", 250.0, "B2B");
+    expect("BANK Rs.500 debited from A/c XX1234 and credited to rahul@okaxis via IMPS on 09-11-26", 500.0, "Rahul");
+    expect("SBIINB Rs.2000 withdrawn at ATM S1AW000123 from A/c XX1234 on 09Nov26", 2000.0, "ATM withdrawal");
+    expect("BANK Your payment of Rs.60 to Kathi is pending", null, null);
+    expect("BANK Rs.500 credited to your account and Rs.60 debited from account", null, null);
+    expectIn("BANK Rs.60 reversed to your account for UPI txn ref 1234", 60.0, null);
+    if (!PayWatchService.looksLikePayment("SBIUPI A/C X1234 debited by 60.0 trf to KATHI", true)) { System.out.println("FAIL looksLikePayment SBI"); fails++; }
     if (!PayNotifier.rupees(1250).equals("\u20B91,250") || !PayNotifier.rupees(60.5).equals("\u20B960.50")) { System.out.println("FAIL rupees"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }

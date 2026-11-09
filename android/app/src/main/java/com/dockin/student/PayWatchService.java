@@ -1,6 +1,8 @@
 package com.dockin.student;
 
 import android.app.Notification;
+import android.content.ComponentName;
+import android.os.Build;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -74,9 +76,24 @@ public class PayWatchService extends NotificationListenerService {
      * so this only has to keep ordinary chats out.
      */
     private static final Pattern LOOKS_LIKE_MONEY =
-            Pattern.compile("(?i)(?:\u20B9|\\brs\\.?|\\binr\\b)\\s*[0-9]|[0-9]\\s*(?:\u20B9|rupees)");
+            Pattern.compile("(?i)(?:\u20B9|\\brs\\.?|\\binr\\b)\\s*[0-9]|[0-9]\\s*(?:\u20B9|rupees)|\\b(?:debited|credited|withdrawn|deducted|spent)\\s+(?:by|for|with|of)\\s+[0-9]");
     private static final Pattern LOOKS_LIKE_PAYING = Pattern.compile(
             "(?i)\\b(paid|pay|payment|debited|debit|spent|sent|txn|transaction|credited|received|refund|upi|withdrawn)\\b");
+
+    /**
+     * Android (and MIUI/ColorOS more eagerly) sometimes unbinds a listener to
+     * save power. Ask to be bound again straight away, so payments keep being
+     * caught with DockIn closed.
+     */
+    @Override
+    public void onListenerDisconnected() {
+        if (Build.VERSION.SDK_INT >= 24) {
+            try {
+                requestRebind(new ComponentName(this, PayWatchService.class));
+            } catch (RuntimeException ignored) {
+            }
+        }
+    }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {

@@ -10,4 +10,5 @@ public final class NotificationManagerCompat {
   public boolean areNotificationsEnabled() { return false; }
   public void notify(int id, Notification n) {}
   public void createNotificationChannel(NotificationChannelCompat channel) {}
+  public void cancel(int id) {}
 }
