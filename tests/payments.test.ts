@@ -146,6 +146,37 @@ describe("what never leaves the phone", () => {
   });
 });
 
+describe("two payments back to back", () => {
+  const PHONEPE = "com.phonepe.app";
+  it("keeps two ₹50 payments to the same shop from the same app as two", () => {
+    const list = detectedFrom([
+      { id: "a", app: PHONEPE, title: "Payment successful", body: "Payment successful ₹50 paid to Chai Point", posted_at: 1000, via: "screen", nid: 4001 },
+      { id: "b", app: PHONEPE, title: "Payment successful", body: "Payment successful ₹50 paid to Chai Point", posted_at: 30_000, via: "screen", nid: 4002 },
+    ]);
+    expect(list).toHaveLength(2);
+  });
+
+  it("still folds the success screen and the app's own notification into one", () => {
+    const list = detectedFrom([
+      { id: "a", app: PHONEPE, title: "Payment successful", body: "Payment successful ₹50 paid to Chai Point", posted_at: 1000, via: "screen", nid: 4001 },
+      { id: "b", app: PHONEPE, title: "Paid ₹50", body: "Paid ₹50 to Chai Point", posted_at: 4000, via: "note", nid: 4001 },
+    ]);
+    expect(list).toHaveLength(1);
+    expect(list[0].ids.sort()).toEqual(["a", "b"]);
+  });
+
+  it("matches each notification to its own payment when both were ₹50", () => {
+    const list = detectedFrom([
+      { id: "s1", app: PHONEPE, title: "Payment successful", body: "Payment successful ₹50 paid to Chai Point", posted_at: 1000, via: "screen" },
+      { id: "s2", app: PHONEPE, title: "Payment successful", body: "Payment successful ₹50 paid to Chai Point", posted_at: 20_000, via: "screen" },
+      { id: "n1", app: PHONEPE, title: "Paid ₹50", body: "Paid ₹50 to Chai Point", posted_at: 3000 },
+      { id: "n2", app: PHONEPE, title: "Paid ₹50", body: "Paid ₹50 to Chai Point", posted_at: 22_000 },
+    ]);
+    expect(list).toHaveLength(2);
+    expect(list.map((d) => d.ids.sort().join(",")).sort()).toEqual(["n1,s1", "n2,s2"]);
+  });
+});
+
 describe("the same payment arriving twice", () => {
   it("counts a UPI app and the bank as one spend", () => {
     const both = dedupe([

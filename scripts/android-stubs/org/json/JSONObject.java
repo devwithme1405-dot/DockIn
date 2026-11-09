@@ -1,6 +1,7 @@
 package org.json;
 import java.util.Iterator;
 public class JSONObject {
+  public static final Object NULL = new Object();
   public JSONObject() {}
   public JSONObject(String s) throws JSONException {}
   public JSONObject put(String k, Object v) throws JSONException { return this; }

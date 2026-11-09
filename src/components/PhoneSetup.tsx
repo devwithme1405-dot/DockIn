@@ -447,7 +447,7 @@ export function oemGuide(maker: string): { name: string; how: string; buttons: {
 
 interface LogLine {
   at: number;
-  kind: "caught" | "twin" | "missed" | "off";
+  kind: "caught" | "twin" | "missed" | "off" | "screen";
   app: string;
   text: string;
   ms?: number;
@@ -468,6 +468,15 @@ function DetectionLog() {
       setLines((JSON.parse(r.lines) as LogLine[]).reverse());
     } catch {
       setLines([]);
+    }
+  }
+
+  async function record() {
+    try {
+      await DockIn.recordScreens({ minutes: 3 });
+      toast.show("Recording for 3 minutes. Pay ₹1 in the app that was missed, then come back and tap Copy.");
+    } catch {
+      toast.show("Update the DockIn app to use this.");
     }
   }
 
@@ -505,14 +514,30 @@ function DetectionLog() {
           <button onClick={() => setOpen(false)}>Hide</button>
         </span>
       </div>
+      <button onClick={record} className="mb-2.5 w-full rounded-xl bg-accent-soft px-3 py-2 text-left text-[12.5px] font-medium text-accent">
+        A payment app was missed? Tap to record its screens for 3 minutes, pay ₹1 there, then Copy this log and send it.
+      </button>
       {lines.length === 0 ? (
         <p className="text-[12.5px] text-muted">Nothing yet. Pay someone and it shows here.</p>
       ) : (
         <ul className="max-h-72 space-y-2 overflow-y-auto">
           {lines.map((l, i) => (
             <li key={i} className="text-[12px] leading-snug">
-              <span className={cx("font-semibold", l.kind === "missed" || l.kind === "off" ? "text-danger" : "text-safe")}>
-                {l.kind === "caught" ? "Caught" : l.kind === "twin" ? "Same payment again" : l.kind === "missed" ? "Not read" : "Switched off"}
+              <span
+                className={cx(
+                  "font-semibold",
+                  l.kind === "missed" || l.kind === "off" ? "text-danger" : l.kind === "screen" ? "text-muted" : "text-safe",
+                )}
+              >
+                {l.kind === "caught"
+                  ? "Caught"
+                  : l.kind === "twin"
+                    ? "Same payment, another copy"
+                    : l.kind === "missed"
+                      ? "Not read"
+                      : l.kind === "screen"
+                        ? `Screen · ${l.app}`
+                        : "Switched off"}
               </span>
               <span className="text-muted">
                 {" "}· {new Date(l.at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}

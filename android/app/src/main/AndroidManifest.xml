@@ -8,9 +8,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Lets DockIn ask to be left out of battery saving, so payments are caught when closed. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- The quiet "Watching for payments" service that keeps reading alive when the app is closed. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -52,16 +49,6 @@
             android:noHistory="true"
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
-
-        <!-- Keeps the process (and so payment detection) alive when closed. -->
-        <service
-            android:name=".PayGuardService"
-            android:foregroundServiceType="specialUse"
-            android:exported="false">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Watches payment apps on the phone so each payment can be filed the moment it happens." />
-        </service>
 
         <!-- Payment reading comes back after a restart or an app update, without opening DockIn. -->
         <receiver

@@ -30,7 +30,6 @@ final class PayHealth {
         if (on) {
             if (!p.getBoolean("screenWasOn", false)) p.edit().putBoolean("screenWasOn", true).apply();
             NotificationManagerCompat.from(c).cancel(NOTE_ID);
-            PayGuardService.start(c);
             return;
         }
         if (!p.getBoolean("screenWasOn", false)) return;

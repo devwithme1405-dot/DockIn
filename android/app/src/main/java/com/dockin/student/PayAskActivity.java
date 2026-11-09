@@ -47,7 +47,7 @@ public class PayAskActivity extends Activity {
         }
         double amount = i.getDoubleExtra(EXTRA_AMOUNT, 0);
         long at = i.getLongExtra(EXTRA_AT, System.currentTimeMillis());
-        if (amount <= 0 || PayInbox.answered(this, amount, at)) {
+        if (amount <= 0 || PayInbox.answered(this, i.getIntExtra(EXTRA_ID, 0), amount, at)) {
             finish();
             return;
         }

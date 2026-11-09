@@ -48,7 +48,11 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         // From here on payment reading survives the app being closed.
-        PayGuardService.start(this);
+        // The old always-on "Watching for payments" notification is gone for good.
+        try {
+            androidx.core.app.NotificationManagerCompat.from(this).deleteNotificationChannel("guard");
+        } catch (RuntimeException ignored) {
+        }
         PayHealth.schedule(this);
         PayHealth.check(this);
 

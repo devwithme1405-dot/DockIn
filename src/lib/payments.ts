@@ -323,6 +323,8 @@ export interface StoredNotice {
   posted_at: number;
   /** Answered in the popup already; the app files it without asking again. */
   answer?: PopupAnswer;
+  via?: string;
+  nid?: number;
 }
 
 /**
@@ -342,6 +344,8 @@ export async function phoneInbox(): Promise<StoredNotice[]> {
     body: n.body,
     posted_at: n.at,
     ...(n.answer ? { answer: n.answer } : {}),
+    ...(n.via ? { via: n.via } : {}),
+    ...(n.nid ? { nid: n.nid } : {}),
   }));
 }
 
@@ -361,20 +365,36 @@ export interface Detected extends Payment {
  * payment, and fold the duplicate a bank and a UPI app always produce into one.
  */
 export function detectedFrom(notices: StoredNotice[]): Detected[] {
+  // Where each copy came from, and which phone alert it belongs to. Copies of
+  // one payment come through different channels (the app's success screen,
+  // its notification, the bank's); the same channel twice is two payments.
+  const meta = new WeakMap<Detected, { chans: Set<string>; nids: Set<number> }>();
   const parsed: Detected[] = [];
   for (const n of notices) {
     const p = parseNotice({ app: n.app, title: n.title, text: n.body, at: n.posted_at });
-    if (p) parsed.push({ ...p, ids: [n.id] });
+    if (!p) continue;
+    const d: Detected = { ...p, ids: [n.id] };
+    meta.set(d, { chans: new Set([`${n.app}|${n.via ?? "note"}`]), nids: new Set(n.nid ? [n.nid] : []) });
+    parsed.push(d);
   }
   const merged: Detected[] = [];
   for (const p of parsed.sort((a, b) => a.at - b.at)) {
-    const twin = merged.find(
-      (q) => q.amount === p.amount && q.dir === p.dir && Math.abs(q.at - p.at) <= 150_000,
-    );
+    const pm = meta.get(p)!;
+    const twin = merged.find((q) => {
+      if (q.amount !== p.amount || q.dir !== p.dir || Math.abs(q.at - p.at) > 150_000) return false;
+      const qm = meta.get(q)!;
+      if (pm.nids.size && qm.nids.size) return [...pm.nids].some((x) => qm.nids.has(x));
+      return ![...pm.chans].some((c) => qm.chans.has(c));
+    });
     if (!twin) {
-      merged.push({ ...p });
+      const d = { ...p };
+      meta.set(d, { chans: new Set(pm.chans), nids: new Set(pm.nids) });
+      merged.push(d);
       continue;
     }
+    const tm = meta.get(twin)!;
+    pm.chans.forEach((c) => tm.chans.add(c));
+    pm.nids.forEach((x) => tm.nids.add(x));
     twin.ids.push(...p.ids);
     const best = richer(twin.merchant, p.merchant);
     if (best !== twin.merchant) {

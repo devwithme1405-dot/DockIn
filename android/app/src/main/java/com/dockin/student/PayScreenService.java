@@ -10,6 +10,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,7 +51,6 @@ public class PayScreenService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         connected = true;
-        PayGuardService.start(this);
     }
 
     /** When the screen being read started changing (wall clock), for the log's "how fast". */
@@ -91,40 +91,76 @@ public class PayScreenService extends AccessibilityService {
         }
     }
 
+    /** The success screen already asked about, while it is still up. */
+    private String shownKey;
+    /** Since that ask, has this app shown a PIN or Pay screen (so a repeat is a new payment)? */
+    private boolean flowSince = true;
+
     /** True when this screen is finished with: a payment was caught, or it is not one. */
     private boolean read(String pkg) {
-        AccessibilityNodeInfo root;
+        List<String> texts = new ArrayList<>();
         try {
-            root = getRootInActiveWindow();
+            // Every window of the app, not just the active one: a success
+            // screen drawn as a sheet or dialog sits in a window of its own.
+            List<AccessibilityWindowInfo> wins = getWindows();
+            if (wins != null) {
+                for (AccessibilityWindowInfo w : wins) {
+                    AccessibilityNodeInfo r = w.getRoot();
+                    if (r != null && r.getPackageName() != null && pkg.equals(r.getPackageName().toString())) collect(r, texts, 0);
+                }
+            }
+            if (texts.isEmpty()) {
+                AccessibilityNodeInfo root = getRootInActiveWindow();
+                if (root != null && root.getPackageName() != null && pkg.equals(root.getPackageName().toString())) collect(root, texts, 0);
+            }
         } catch (RuntimeException e) {
             return false;
         }
-        if (root == null || root.getPackageName() == null || !pkg.equals(root.getPackageName().toString())) return false;
-        List<String> texts = new ArrayList<>();
-        collect(root, texts, 0);
+        if (texts.isEmpty()) return false;
         long now = System.currentTimeMillis();
+        SharedPreferences p = getSharedPreferences("dockin-pay", Context.MODE_PRIVATE);
+        if (now < p.getLong("recordUntil", 0)) PayLog.add(this, "screen", pkg, String.join(" | ", texts), -1);
+
+        if (PayScreen.paying(texts)) flowSince = true;
         PayNotifier.Spend s = PayScreen.read(texts, now);
         if (s == null) {
+            // Off the success screen: the next one is a new payment.
+            if (!PayScreen.successish(texts)) shownKey = null;
             if (retries >= RETRY_MS.length && PayScreen.looksLikePayment(texts)) {
                 PayLog.add(this, "missed", pkg, String.join(" | ", texts), -1);
             }
             return false;
         }
 
-        // The same success screen stays up and redraws; ask once.
-        String key = pkg + "|" + s.amount + "|" + s.merchant;
-        SharedPreferences p = getSharedPreferences("dockin-pay", Context.MODE_PRIVATE);
-        if (key.equals(p.getString("screenKey", null)) && now - p.getLong("screenAt", 0) < SAME_SCREEN_MS) return true;
-        p.edit().putString("screenKey", key).putLong("screenAt", now).apply();
+        String ref = PayScreen.ref(texts);
+        String key = pkg + "|" + s.amount + "|" + s.merchant + "|" + (ref == null ? "" : ref);
+        // The same success screen, still up and redrawing.
+        if (key.equals(shownKey)) return true;
+        // A payment already asked about, opened again from history: same reference,
+        // or no reference and no PIN/Pay screen in between.
+        String seenRefs = p.getString("screenRefs", "");
+        if (ref != null && seenRefs.contains("|" + ref + "|")) {
+            shownKey = key;
+            return true;
+        }
+        String lastKey = p.getString("screenKey", null);
+        if (ref == null && key.equals(lastKey) && !flowSince && now - p.getLong("screenAt", 0) < SAME_SCREEN_MS) {
+            shownKey = key;
+            return true;
+        }
+        shownKey = key;
+        flowSince = false;
+        String refs = ref == null ? seenRefs : ("|" + ref + "|" + seenRefs);
+        if (refs.length() > 1500) refs = refs.substring(0, 1500);
+        p.edit().putString("screenKey", key).putLong("screenAt", now).putString("screenRefs", refs).apply();
 
         // Into the same inbox as notifications, so the app files it even if
-        // the notification is swiped away; a twin from the app's own
-        // notification moments later is merged there.
+        // the alert is swiped away.
         String body = "Payment successful " + PayNotifier.rupees(s.amount) + " paid"
                 + (s.merchant != null ? " to " + s.merchant : "");
-        org.json.JSONObject kept = PayInbox.add(this, pkg, "Payment successful", body, burstAt);
+        org.json.JSONObject kept = PayInbox.add(this, pkg, "Payment successful", body, burstAt, "screen", "s" + now);
         if (kept != null) DockInPlugin.deliver(kept);
-        PayNotifier.ask(this, s, burstAt, pkg);
+        PayNotifier.ask(this, s, burstAt, pkg, "screen", kept == null ? null : kept.optString("id", null));
         return true;
     }
 

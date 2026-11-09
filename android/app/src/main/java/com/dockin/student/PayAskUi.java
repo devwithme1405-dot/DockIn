@@ -375,7 +375,7 @@ final class PayAskUi {
     }
 
     private void save(JSONObject a, String said) {
-        PayInbox.answer(c, amount, at, a);
+        PayInbox.answer(c, nid, amount, at, a);
         if (nid != 0) {
             try {
                 NotificationManagerCompat.from(c).cancel(nid);

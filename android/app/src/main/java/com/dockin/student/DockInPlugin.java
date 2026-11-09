@@ -113,7 +113,6 @@ public class DockInPlugin extends Plugin {
         r.put("notifications", notificationState());
         r.put("pending", PayInbox.size(c));
         r.put("battery", unrestricted(c));
-        r.put("guard", PayGuardService.running);
         r.put("screen", PayScreenService.enabled(c));
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
@@ -259,18 +258,21 @@ public class DockInPlugin extends Plugin {
         call.resolve(r);
     }
 
+    /** For the next few minutes, every payment-app screen goes in the log, to teach DockIn a new app. */
+    @PluginMethod
+    public void recordScreens(PluginCall call) {
+        int minutes = Math.max(1, Math.min(10, call.getInt("minutes", 3)));
+        getContext().getSharedPreferences("dockin-pay", Context.MODE_PRIVATE).edit()
+                .putLong("recordUntil", System.currentTimeMillis() + minutes * 60_000L).apply();
+        call.resolve();
+    }
+
     @PluginMethod
     public void clearPayLog(PluginCall call) {
         PayLog.clear(getContext());
         call.resolve();
     }
 
-    /** Starts the payment watch (after the person switches reading on). */
-    @PluginMethod
-    public void startGuard(PluginCall call) {
-        PayGuardService.start(getContext());
-        call.resolve();
-    }
 
     /** The categories and people the payment popup offers, as the app knows them. */
     @PluginMethod
@@ -348,7 +350,6 @@ public class DockInPlugin extends Plugin {
     @PluginMethod
     public void testPrompt(PluginCall call) {
         PayNotifier.post(getContext(), 3999, 1, "DockIn test", "Test", System.currentTimeMillis());
-        PayGuardService.start(getContext());
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
         call.resolve(r);

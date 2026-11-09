@@ -39,7 +39,7 @@ public class PayActionReceiver extends BroadcastReceiver {
         } catch (JSONException ignored) {
             // plain keys
         }
-        PayInbox.answer(c, amount, at, a);
+        PayInbox.answer(c, nid, amount, at, a);
 
         // Swap the question for a quiet "saved", gone in a few seconds.
         NotificationManagerCompat nm = NotificationManagerCompat.from(c);

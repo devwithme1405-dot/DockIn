@@ -116,7 +116,7 @@ await page.addInitScript(
       clearPayLog: () => ({}),
       testPrompt: () => ({ notifications: phone.notifications }),
       openOemSettings: () => ({}),
-      startGuard: () => ({}),
+      recordScreens: () => ({}),
       openScreenSettings: () => ({}),
       college: () => phone.college,
       syncCollege: () => {

@@ -19,6 +19,10 @@ export interface NativeNotice {
   at: number;
   /** What was chosen in the payment popup, before the app was even open. */
   answer?: PopupAnswer;
+  /** "screen" when read off the app's success screen, else a notification. */
+  via?: string;
+  /** The phone's alert this copy belongs to: copies with the same one are one payment. */
+  nid?: number;
 }
 
 /** The payment popup's answer: for me (with a category), for someone, or not a spend. */
@@ -43,8 +47,6 @@ export interface PhoneStatus {
   pending: number;
   /** Left out of battery saving, so detection keeps running with DockIn closed. */
   battery?: boolean;
-  /** The quiet "Watching for payments" service is running. */
-  guard?: boolean;
   /** Payment apps' "Payment successful" screens are read (Accessibility). */
   screen?: boolean;
   /** Android version number, e.g. 34 for Android 14. */
@@ -165,7 +167,8 @@ interface DockInPlugin {
   /** What detection saw lately, as a JSON array string. */
   payLog(): Promise<{ lines: string }>;
   clearPayLog(): Promise<void>;
-  startGuard(): Promise<void>;
+  /** Log every payment-app screen for a few minutes, to teach DockIn a new app. */
+  recordScreens(options: { minutes: number }): Promise<void>;
   openScreenSettings(): Promise<void>;
   setPayChoices(options: {
     categories: { id: string; label: string; emoji: string }[];

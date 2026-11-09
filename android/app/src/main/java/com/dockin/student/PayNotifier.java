@@ -5,6 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -180,49 +184,94 @@ final class PayNotifier {
     }
 
     static void ask(Context c, String text, long at, String app) {
-        Spend s = readAny(text);
-        if (s == null) return;
-        ask(c, s, at, app);
+        ask(c, text, at, app, "note", null);
     }
 
-    /** One payment, however it was found: a notification, an SMS, or the app's success screen. */
+    static void ask(Context c, String text, long at, String app, String via, String inboxId) {
+        Spend s = readAny(text);
+        if (s == null) return;
+        ask(c, s, at, app, via, inboxId);
+    }
+
     static void ask(Context c, Spend s, long at, String app) {
+        ask(c, s, at, app, "screen", null);
+    }
+
+    /**
+     * One payment, however it was found: the app's success screen or a
+     * notification. The same payment seen by a second channel (PhonePe's screen,
+     * then PhonePe's or the bank's notification) updates the alert already
+     * showing. The same channel reporting the same amount again is a second
+     * payment — two ₹50 chais back to back are two alerts.
+     */
+    static void ask(Context c, Spend s, long at, String app, String via, String inboxId) {
         double amount = s.amount;
         String merchant = s.merchant;
+        String channel = (app == null ? "?" : app) + "|" + via;
 
         SharedPreferences p = c.getApplicationContext().getSharedPreferences("dockin-pay", Context.MODE_PRIVATE);
-        double lastAmount = Double.longBitsToDouble(p.getLong("askAmount", 0));
-        long lastAt = p.getLong("askAt", 0);
-        int lastId = p.getInt("askId", 0);
-        boolean lastIn = p.getBoolean("askIn", false);
-        String lastMerchant = p.getString("askMerchant", null);
+        JSONArray recent;
+        try {
+            recent = new JSONArray(p.getString("recentAsks", "[]"));
+        } catch (JSONException e) {
+            recent = new JSONArray();
+        }
+        long now = System.currentTimeMillis();
+        JSONObject twinOf = null;
+        for (int i = 0; i < recent.length(); i++) {
+            JSONObject r = recent.optJSONObject(i);
+            if (r == null) continue;
+            if (r.optDouble("amount") != amount || r.optBoolean("in") != s.in) continue;
+            if (Math.abs(at - r.optLong("at")) > TWIN_WINDOW_MS) continue;
+            JSONArray ch = r.optJSONArray("channels");
+            boolean seen = false;
+            for (int k = 0; ch != null && k < ch.length(); k++) if (channel.equals(ch.optString(k))) seen = true;
+            if (seen) continue;
+            twinOf = r;
+            break;
+        }
 
         int id;
-        boolean twin = false;
-        if (lastId != 0 && lastAmount == amount && lastIn == s.in && Math.abs(at - lastAt) <= TWIN_WINDOW_MS) {
-            // The twin: update the prompt already showing rather than add a second.
-            id = lastId;
-            twin = true;
-            merchant = richer(lastMerchant, merchant);
-            at = lastAt;
-        } else {
-            id = 4000 + (int) ((at / 1000) % 100_000);
+        boolean twin = twinOf != null;
+        try {
+            if (twin) {
+                id = twinOf.optInt("id");
+                merchant = richer(twinOf.optString("merchant", null), merchant);
+                at = twinOf.optLong("at");
+                twinOf.put("merchant", merchant == null ? JSONObject.NULL : merchant);
+                twinOf.getJSONArray("channels").put(channel);
+            } else {
+                int next = p.getInt("nextId", 4000);
+                id = next;
+                p.edit().putInt("nextId", next >= 99_000 ? 4000 : next + 1).apply();
+                JSONObject r = new JSONObject();
+                r.put("id", id);
+                r.put("amount", amount);
+                r.put("in", s.in);
+                r.put("at", at);
+                r.put("merchant", merchant == null ? JSONObject.NULL : merchant);
+                r.put("channels", new JSONArray().put(channel));
+                recent.put(r);
+            }
+        } catch (JSONException e) {
+            return;
         }
-        p.edit()
-                .putLong("askAmount", Double.doubleToLongBits(amount))
-                .putLong("askAt", at)
-                .putInt("askId", id)
-                .putBoolean("askIn", s.in)
-                .putString("askMerchant", merchant)
-                .apply();
+        // Only the last few minutes matter.
+        JSONArray kept = new JSONArray();
+        for (int i = 0; i < recent.length(); i++) {
+            JSONObject r = recent.optJSONObject(i);
+            if (r != null && now - r.optLong("at") <= 10 * 60_000L) kept.put(r);
+        }
+        p.edit().putString("recentAsks", kept.toString()).apply();
+        PayInbox.tag(c, inboxId, id);
 
         if (s.in) {
             postIn(c, id, amount, merchant, at);
         } else {
             PayLog.add(c, twin ? "twin" : "caught", app, rupees(amount) + (merchant != null ? " → " + merchant : ""),
-                    Math.max(0, System.currentTimeMillis() - at));
+                    Math.max(0, now - at));
             // Already answered (say "For me" on the first copy): the twin stays quiet.
-            if (twin && PayInbox.answered(c, amount, at)) return;
+            if (twin && PayInbox.answered(c, id, amount, at)) return;
             post(c, id, amount, merchant, sourceName(app), at);
         }
     }

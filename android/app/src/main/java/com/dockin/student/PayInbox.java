@@ -61,11 +61,20 @@ final class PayInbox {
         prefs(c).edit().putString(K_INBOX, list.toString()).apply();
     }
 
+    static synchronized JSONObject add(Context c, String app, String title, String body, long at) {
+        return add(c, app, title, body, at, "note", null);
+    }
+
     /**
      * Keeps one notice. Returns it, or null when it is a re-post of one already
-     * kept (same app, same words, a few minutes apart).
+     * kept: the same notification (same key) updated, or the same text seen
+     * by a second app. Two real payments with identical words — ₹50 to the
+     * same shop twice in a row — come as two notifications and are both kept.
+     *
+     * @param via "note" for a notification, "screen" for a success screen
+     * @param key the notification's own key, or anything unique per screen
      */
-    static synchronized JSONObject add(Context c, String app, String title, String body, long at) {
+    static synchronized JSONObject add(Context c, String app, String title, String body, long at, String via, String key) {
         String t = redact(title);
         String b = redact(body);
         JSONArray list = read(c);
@@ -74,17 +83,18 @@ final class PayInbox {
             if (o == null) continue;
             boolean near = Math.abs(at - o.optLong("at")) < SAME_WINDOW_MS;
             if (!near) continue;
-            // The same words from the same app, moments apart: a re-post.
-            if (app.equals(o.optString("app"))
-                    && t.equals(o.optString("title"))
-                    && b.equals(o.optString("body"))) {
+            boolean sameApp = app.equals(o.optString("app")) && via.equals(o.optString("via", "note"));
+            if (sameApp && key != null && key.equals(o.optString("key", null))
+                    && t.equals(o.optString("title")) && b.equals(o.optString("body"))) {
                 return null;
             }
-            // The same text seen twice from different sources — a bank SMS read
-            // both as an SMS and as the messaging app's notification. The body
-            // carries the reference number, so a real second payment never reads
-            // identically; this only folds the one event back into one.
-            if (!b.isEmpty() && b.equals(o.optString("body"))) {
+            if (sameApp && key == null && t.equals(o.optString("title")) && b.equals(o.optString("body"))) {
+                return null;
+            }
+            // The same text from a different app — a bank SMS shown by two
+            // messaging apps. The body carries the reference, so this only ever
+            // folds one event back into one.
+            if (!sameApp && !b.isEmpty() && b.equals(o.optString("body"))) {
                 return null;
             }
         }
@@ -95,6 +105,8 @@ final class PayInbox {
             n.put("title", t);
             n.put("body", b);
             n.put("at", at);
+            n.put("via", via);
+            if (key != null) n.put("key", key);
         } catch (JSONException e) {
             return null;
         }
@@ -106,6 +118,23 @@ final class PayInbox {
         }
         write(c, list);
         return n;
+    }
+
+    /** Marks a kept notice as belonging to one payment (its notification id). */
+    static synchronized void tag(Context c, String id, int nid) {
+        if (id == null) return;
+        JSONArray list = read(c);
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.optJSONObject(i);
+            if (o != null && id.equals(o.optString("id"))) {
+                try {
+                    o.put("nid", nid);
+                } catch (JSONException ignored) {
+                }
+                write(c, list);
+                return;
+            }
+        }
     }
 
     static synchronized JSONArray list(Context c) {
@@ -126,15 +155,23 @@ final class PayInbox {
     }
 
     /**
-     * The answer given in the popup, kept on every copy of that payment (the
-     * bank's and the UPI app's). The app reads it and files the payment.
+     * The answer given on the alert, kept on every copy of that one payment
+     * (the screen's and the app's notification): those tagged with its
+     * notification id. Older untagged copies fall back to amount and time.
      */
-    static synchronized int answer(Context c, double amount, long at, JSONObject answer) {
+    static synchronized int answer(Context c, int nid, double amount, long at, JSONObject answer) {
         JSONArray list = read(c);
         int n = 0;
+        boolean tagged = false;
         for (int i = 0; i < list.length(); i++) {
             JSONObject o = list.optJSONObject(i);
-            if (o == null || !matches(o, amount, at)) continue;
+            if (o != null && nid != 0 && o.optInt("nid", 0) == nid) tagged = true;
+        }
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.optJSONObject(i);
+            if (o == null || o.has("answer")) continue;
+            boolean mine = tagged ? o.optInt("nid", 0) == nid : (!o.has("nid") && matches(o, amount, at));
+            if (!mine) continue;
             try {
                 o.put("answer", answer);
                 n++;
@@ -145,12 +182,14 @@ final class PayInbox {
         return n;
     }
 
-    /** Already answered — a second popup for the twin notice is not needed. */
-    static synchronized boolean answered(Context c, double amount, long at) {
+    /** Already answered — the sheet for it need not open again. */
+    static synchronized boolean answered(Context c, int nid, double amount, long at) {
         JSONArray list = read(c);
         for (int i = 0; i < list.length(); i++) {
             JSONObject o = list.optJSONObject(i);
-            if (o != null && o.has("answer") && matches(o, amount, at)) return true;
+            if (o == null || !o.has("answer")) continue;
+            if (nid != 0 && o.optInt("nid", 0) == nid) return true;
+            if (nid == 0 && matches(o, amount, at)) return true;
         }
         return false;
     }

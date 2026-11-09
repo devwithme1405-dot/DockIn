@@ -99,7 +99,6 @@ public class PayWatchService extends NotificationListenerService {
     /** Connected (at boot, after an update, or switched on): keep the process alive from here on. */
     @Override
     public void onListenerConnected() {
-        PayGuardService.start(this);
     }
 
     @Override
@@ -149,11 +148,11 @@ public class PayWatchService extends NotificationListenerService {
         // wallet) only when it says outright that money moved.
         if (!looksLikePayment(whole, !known)) return;
 
-        JSONObject kept = PayInbox.add(this, sbn.getPackageName(), title, body, sbn.getPostTime());
+        JSONObject kept = PayInbox.add(this, sbn.getPackageName(), title, body, sbn.getPostTime(), "note", sbn.getKey());
         if (kept == null) return;
 
         DockInPlugin.deliver(kept);
-        PayNotifier.ask(this, PayInbox.redact(whole), sbn.getPostTime(), sbn.getPackageName());
+        PayNotifier.ask(this, PayInbox.redact(whole), sbn.getPostTime(), sbn.getPackageName(), "note", kept.optString("id", null));
     }
 
     /**

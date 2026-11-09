@@ -1,5 +1,6 @@
 package com.getcapacitor;
 public class PluginCall {
+  public Integer getInt(String k, Integer d) { return d; }
   public void resolve(JSObject data) {}
   public void resolve() {}
   public void reject(String msg) {}

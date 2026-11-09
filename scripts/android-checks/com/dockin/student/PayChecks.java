@@ -94,6 +94,18 @@ public class PayChecks {
     screen("pay-button", null, null, "Pay \u20B9250 to B2B Store", "Pay", "Add a note");
     screen("chat-received", null, null, "Rahul Kumar", "\u20B9250", "Received", "Paid to Rahul", "\u20B960");
     screen("request", null, null, "Rahul requested \u20B9200", "Pay", "Decline", "Paid to Rahul");
+    // slice and others that word it their own way
+    screen("slice-youpaid", 250.0, "B2B", "You paid \u20B9250 to B2B", "09 Nov, 1:39 pm", "UPI ref 612345678901", "Done");
+    screen("slice-done", 120.0, "Chai Point", "Payment done", "\u20B9120", "to Chai Point", "B2B received your payment");
+    screen("slice-sent", 75.0, "Rohan", "Sent!", "\u20B975", "to Rohan");
+    screen("slice-limit", 40.0, "Tuck Shop", "Payment successful", "\u20B940", "Paid to Tuck Shop", "Available limit \u20B99,460");
+    java.util.List<String> succ = java.util.Arrays.asList("Transaction Successful", "Paid to", "B2B STORE", "\u20B9250", "UPI Ref No. 612345678901");
+    if (!"612345678901".equals(PayScreen.ref(succ))) { System.out.println("FAIL ref " + PayScreen.ref(succ)); fails++; }
+    if (PayScreen.ref(java.util.Arrays.asList("Paid to B2B", "\u20B9250")) != null) { System.out.println("FAIL ref none"); fails++; }
+    if (!PayScreen.paying(java.util.Arrays.asList("ENTER UPI PIN", "\u20B9250"))) { System.out.println("FAIL paying pin"); fails++; }
+    if (!PayScreen.paying(java.util.Arrays.asList("B2B STORE", "\u20B9250", "Pay"))) { System.out.println("FAIL paying button"); fails++; }
+    if (PayScreen.paying(succ)) { System.out.println("FAIL paying on success"); fails++; }
+    if (!PayScreen.successish(succ) || PayScreen.successish(java.util.Arrays.asList("Home", "Scan & Pay", "\u20B9 balance"))) { System.out.println("FAIL successish"); fails++; }
     if (!PayScreen.watched("com.phonepe.app") || PayScreen.watched("com.whatsapp")) { System.out.println("FAIL watched"); fails++; }
     System.exit(fails == 0 ? 0 : 1);
   }

@@ -3,6 +3,7 @@ import android.app.Notification;
 import android.content.Context;
 import java.util.Set;
 public final class NotificationManagerCompat {
+  public void deleteNotificationChannel(String id) {}
   public static final int IMPORTANCE_HIGH = 4;
   public static final int IMPORTANCE_DEFAULT = 3;
   public static NotificationManagerCompat from(Context c) { return null; }
