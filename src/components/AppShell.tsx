@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, UtensilsCrossed } from "lucide-react";
 import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
@@ -45,6 +45,7 @@ const TABS = [
   { href: "/", label: "Today", icon: House },
   { href: "/attendance", label: "Attendance", icon: ChartNoAxesColumn },
   { href: "/timetable", label: "Timetable", icon: CalendarDays },
+  { href: "/cafeteria", label: "Cafeteria", icon: UtensilsCrossed },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
 ];
 

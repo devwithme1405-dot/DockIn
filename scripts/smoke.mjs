@@ -185,6 +185,7 @@ const SCREENS = [
   { path: "/attendance/timetable", name: "timetable", expect: "" },
   { path: "/tasks", name: "tasks", expect: "To do" },
   { path: "/settings", name: "profile", expect: "Appearance" },
+  { path: "/cafeteria", name: "cafeteria", expect: "mess pass" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
   { path: "/privacy", name: "privacy", expect: "" },

@@ -42,8 +42,20 @@ export interface Profile {
   friends?: string[];
   /** The shape of a college day; see lib/periods.ts. */
   grid?: { start: string; length: number; gap: number; count: number };
+  /** The permanent cafeteria QR, exactly as MyCamu encodes it (its decoded text). */
+  messQr?: string;
+  /** The weekly mess menu, keyed by weekday 0 (Sun) to 6 (Sat). */
+  messMenu?: Record<number, MessDay>;
   createdAt: number;
   updatedAt: number;
+}
+
+/** One day of mess food. Each line is free text ("Poha, Tea" etc.). */
+export interface MessDay {
+  breakfast?: string;
+  lunch?: string;
+  snacks?: string;
+  dinner?: string;
 }
 
 export interface Subject extends Base {

@@ -74,6 +74,8 @@ export async function saveProfile(
       | "roll"
       | "upi"
       | "friends"
+      | "messQr"
+      | "messMenu"
     >
   >,
 ): Promise<void> {
