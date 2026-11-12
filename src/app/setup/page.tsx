@@ -16,7 +16,7 @@ import { cx } from "@/components/ui";
  * Everything DockIn needs from the phone, on one screen, once.
  *
  * Four things, each one tap: back up, Camu, the LMS, and the two switches for
- * payments. Each line ticks itself the moment it is done — including the ones
+ * * reminders. Each line ticks itself the moment it is done — including the ones
  * finished in Android's own Settings — and anything skipped can be done later
  * from Profile.
  */
@@ -36,7 +36,7 @@ export default function SetupPage() {
     !configured || !!session,
     !!state.camu?.connected && !state.camu.expired,
     !!state.lms?.connected,
-    !!status?.listening && status.notifications === "granted",
+    status?.notifications === "granted",
   ];
   const done = steps.filter(Boolean).length;
   const all = done === steps.length;
@@ -58,7 +58,7 @@ export default function SetupPage() {
       </h1>
       <p className="mt-2 text-[14.5px] text-muted">
         {all
-          ? "Attendance, assignments and payments now come in by themselves."
+          ? "Attendance and assignments now come in by themselves."
           : "Each line is one tap. After this, DockIn fills itself in."}
       </p>
       <div className="mt-4 flex gap-1.5" aria-hidden>

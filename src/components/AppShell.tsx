@@ -4,14 +4,13 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, Wallet } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig } from "lucide-react";
 import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
-import { PayPopupSync } from "./PayPopupSync";
 import { useAuth } from "@/lib/auth";
 import { appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -46,7 +45,6 @@ const TABS = [
   { href: "/", label: "Today", icon: House },
   { href: "/attendance", label: "Attendance", icon: ChartNoAxesColumn },
   { href: "/timetable", label: "Timetable", icon: CalendarDays },
-  { href: "/money", label: "Money", icon: Wallet },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
 ];
 
@@ -161,25 +159,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     [router],
   );
 
-  /**
-   * A payment landed while the app is open: a small banner slides down from the
-   * top so it is caught without leaving the screen. Tapping it opens Money.
-   */
-  const [notice, setNotice] = useState<{ amount?: number; merchant?: string } | null>(null);
-  useEffect(() => {
-    return onPhone("notice", (n) => {
-      const text = `${n.title ?? ""} ${n.body ?? ""}`;
-      const amt = text.match(/(?:₹|rs\.?|inr)\s?([\d,]+(?:\.\d{1,2})?)/i);
-      const amount = amt ? Number(amt[1].replace(/,/g, "")) : undefined;
-      const to = text.match(/(?:to|at)\s+([A-Za-z0-9&'. -]{2,30})/i);
-      setNotice({ amount, merchant: to?.[1]?.trim() });
-      window.clearTimeout((window as unknown as { __dockinNoticeT?: number }).__dockinNoticeT);
-      (window as unknown as { __dockinNoticeT?: number }).__dockinNoticeT = window.setTimeout(
-        () => setNotice(null),
-        6000,
-      );
-    });
-  }, []);
 
   useEffect(() => {
     if (
@@ -260,31 +239,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
         {ready && !onboarding && isNativeApp() && <RemindersSync />}
-        {ready && !onboarding && isNativeApp() && <PayPopupSync />}
       </div>
-      {notice && (
-        <button
-          onClick={() => {
-            setNotice(null);
-            router.push("/money");
-          }}
-          className="fixed inset-x-0 top-0 z-[60] mx-auto flex w-full max-w-md items-center gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]"
-          style={{ animation: "notice-drop .4s cubic-bezier(.2,.9,.2,1) both" }}
-        >
-          <span className="leather stitched flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left text-on-ink">
-            <span className="tab-glow grid size-9 shrink-0 place-items-center rounded-xl">
-              <Wallet size={17} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold">
-                {notice.amount ? `Spent ₹${notice.amount}` : "Payment detected"}
-                {notice.merchant ? ` at ${notice.merchant}` : ""}
-              </span>
-              <span className="block text-[12px] text-on-ink/70">Tap to add it — what was it for?</span>
-            </span>
-          </span>
-        </button>
-      )}
       {/* In the app the phone's own launch splash covers the load, so a second
           brown web overlay would only bring back the very gap it holds through.
           The web overlay is for the browser/PWA, where there is no native splash. */}

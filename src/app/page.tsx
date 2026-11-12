@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  ArrowLeftRight,
   Bell,
   CalendarCheck,
   CalendarDays,
@@ -16,25 +15,22 @@ import {
   Layers,
   Minus,
   PartyPopper,
-  Plus,
   SquareCheckBig,
   TriangleAlert,
-  Wallet,
   X,
 } from "lucide-react";
 import { StickyBar } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { ensureSessionsSince, getProfile, setSessionStatus, setTaskDone } from "@/lib/repo";
-import { useEvents, useExpenses, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
+import { useEvents, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { holidayLastDay, holidayOn, useAttendanceData, type ViewSession } from "@/lib/college";
 import { CamuStatus } from "@/components/College";
 import { eventsOn, holidayLength } from "@/lib/calendar";
 import { bucketOf, compareTasks, countdownText, daysBetween, doneToday, dueLabel } from "@/lib/tasks";
-import { budgetStatus, fmtMoney, monthKey, sum } from "@/lib/money";
 import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
 import { describe, fmtPct, weekChange } from "@/lib/attendance";
 import { loadReadKeys, saveReadKeys } from "@/lib/bell";
-import type { AttendanceState, AttendanceSummary, Session, SessionStatus, Subject, Task } from "@/lib/types";
+import type { AttendanceSummary, Session, SessionStatus, Subject, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useCountUp, useToast } from "@/components/ui";
 import { BookTile, Cap3D, InkBar, Notebook, PaperCheck, PaperIconButton, SectionTitle, TrendPill } from "@/components/Paper";
 
@@ -50,14 +46,6 @@ function useNow(): { today: string; hm: string } {
 /** "9:00 am" → "9:00 AM", the way it is written on a timetable. */
 const clock = (t: string) => fmtTime(t).toUpperCase();
 
-/** Over budget is red, close to it amber, otherwise the calm green of money in. */
-const MONEY_TONE: Record<AttendanceState | "safe" | "warn" | "danger", string> = {
-  none: "text-text",
-  safe: "text-safe",
-  warn: "text-warn",
-  danger: "text-danger",
-};
-
 export default function TodayPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { today, hm } = useNow();
@@ -68,7 +56,6 @@ export default function TodayPage() {
   const slots = useSlots();
   const tasks = useTasks();
   const events = useEvents();
-  const expenses = useExpenses();
   const localToday = useSessionsOn(today);
   const todaySessions: ViewSession[] | undefined = camu ? data?.sessions.filter((s) => s.date === today) : localToday;
 
@@ -154,18 +141,6 @@ export default function TodayPage() {
     [todaySessions],
   );
 
-  // Money: today's spend (with a nudge vs yesterday) and the month against budget.
-  const money = useMemo(() => {
-    const all = expenses ?? [];
-    const todaySpend = sum(all.filter((e) => e.date === today));
-    const yday = sum(all.filter((e) => e.date === addDays(today, -1)));
-    const monthSpent = sum(all.filter((e) => monthKey(e.date) === monthKey(today)));
-    const budget = profile?.budget ?? 0;
-    const status = budget > 0 ? budgetStatus(budget, monthSpent, monthKey(today), today) : null;
-    const trendPct = yday > 0 ? Math.round(((todaySpend - yday) / yday) * 100) : null;
-    return { todaySpend, monthSpent, budget, status, trendPct };
-  }, [expenses, today, profile?.budget]);
-
   if (!profile || !data) return <TodaySkeleton />;
 
   const name = profile.name || "there";
@@ -240,38 +215,6 @@ export default function TodayPage() {
               </span>
             ) : (
               <span className="text-[12px] font-semibold text-muted">Nothing scheduled</span>
-            )
-          }
-        />
-        <StatCard
-          href="/money"
-          tint="bg-danger-soft"
-          icon={<Wallet size={20} className="text-accent" strokeWidth={2.3} />}
-          label="Today's Spend"
-          value={fmtMoney(money.todaySpend)}
-          foot={
-            money.trendPct !== null && money.trendPct !== 0 ? <TrendPill delta={-money.trendPct} /> : <span className="text-[12px] text-muted">Tracked here</span>
-          }
-        />
-        <StatCard
-          href="/money"
-          icon={<CalendarCheck size={20} className="text-accent" strokeWidth={2.3} />}
-          label="This Month"
-          value={
-            <>
-              <span className={money.status ? MONEY_TONE[money.status.state] : "text-safe"}>{fmtMoney(money.monthSpent)}</span>
-              {money.budget > 0 && <span className="text-[15px] font-bold text-muted"> / {fmtMoney(money.budget)}</span>}
-            </>
-          }
-          valueSmall
-          foot={
-            money.status ? (
-              <span className="flex items-center gap-2">
-                <InkBar pct={money.status.used * 100} state={money.status.state} className="h-1.5 flex-1" />
-                <span className="shrink-0 text-[12px] font-extrabold tnum">{Math.round(money.status.used * 100)}%</span>
-              </span>
-            ) : (
-              <span className="text-[12px] text-muted">Set a budget</span>
             )
           }
         />
@@ -358,8 +301,6 @@ export default function TodayPage() {
         <div>
           <h2 className="font-display mb-2.5 text-[16px] font-extrabold tracking-[-0.02em]">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2.5">
-            <QuickAction href="/add" icon={<Plus size={18} strokeWidth={2.75} />} label="Add Expense" />
-            <QuickAction href="/money#dues" icon={<ArrowLeftRight size={18} strokeWidth={2.5} />} label="Lend & Borrow" />
             <QuickAction href="/tasks?new=1" icon={<SquareCheckBig size={18} strokeWidth={2.5} />} label="Add Task" />
             <QuickAction href="/timetable" icon={<CalendarDays size={18} strokeWidth={2.5} />} label="Timetable" />
           </div>

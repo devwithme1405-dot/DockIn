@@ -6,8 +6,7 @@ import Link from "next/link";
  *
  * Written plainly rather than defensively: every claim here is one you could go
  * and verify in the code. It is also the page Google Play requires before an
- * app that reads notifications can be listed, which is the only route that gets
- * payment detection past Play Protect.
+ * app that connects to Camu and the LMS can be listed on the Play Store.
  */
 
 export const metadata: Metadata = {
@@ -29,7 +28,7 @@ export default function Privacy() {
 
         <Section title="What is stored">
           <p>
-            Your attendance, timetable, spending, tasks and the things you share live on your own
+            Your attendance, timetable, tasks and the things you share live on your own
             phone. If you sign in, a copy is kept in your own account so a new phone can get it
             back. Nobody else can read it: the database only ever returns your own rows, and what
             friends see is limited to what you choose to share with them.
@@ -43,37 +42,6 @@ export default function Privacy() {
             never the percentage. People find you only by your eight-character code. There is no way
             to search for someone by name, email or phone number.
           </p>
-        </Section>
-
-        <Section title="Payment detection, if you turn it on">
-          <p>
-            The Android app can read the notifications your payment apps post, so a payment turns up
-            on your Money screen without you typing it. It is off until you switch it on in Android,
-            and you can switch it off there at any time.
-          </p>
-          <ul className="mt-2 list-disc space-y-1.5 pl-5">
-            <li>
-              Payment apps (Google Pay, PhonePe, Paytm, BHIM, CRED, Slice and others) and your
-              bank&rsquo;s messages are read. Any other app counts only when its notification says
-              outright that money was paid, debited or received. Chats and social apps (WhatsApp,
-              Instagram, Telegram and the like) are never read.
-            </li>
-            <li>
-              A notification is only kept if it mentions an amount and a payment, and it is kept on
-              your phone — it is not sent anywhere.
-            </li>
-            <li>
-              Account and card numbers are stripped the moment it is read.
-            </li>
-            <li>
-              It is deleted from the phone as soon as you add or dismiss the payment. Only a payment
-              you add becomes part of your backed-up spending.
-            </li>
-            <li>
-              Nothing is ever added to your spending on its own. Every payment waits for you to tap
-              it.
-            </li>
-          </ul>
         </Section>
 
         <Section title="Camu and the LMS, if you connect them">
@@ -110,8 +78,8 @@ export default function Privacy() {
 
         <Section title="Getting rid of it">
           <p>
-            Log out and the copy on that phone goes. Switch off notification access in Android and
-            payment reading stops at once. To have your account and everything in it deleted, write to{" "}
+            Log out and the copy on that phone goes. To have your account and everything in it
+            deleted, write to{" "}
             <a href="mailto:motionsachin1@gmail.com" className="font-medium text-accent">
               motionsachin1@gmail.com
             </a>{" "}

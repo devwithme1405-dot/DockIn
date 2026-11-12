@@ -18,8 +18,6 @@ const BASE = process.env.BASE ?? "http://localhost:3000";
 const SHOTS = "/tmp/dockin-shots";
 mkdirSync(SHOTS, { recursive: true });
 
-const GPAY = "com.google.android.apps.nbu.paisa.user";
-const SMS = "com.google.android.apps.messaging";
 const now = Date.now();
 
 /** Camu as the phone stores it, with classes today and a record behind them. */
@@ -72,12 +70,12 @@ page.on("console", (m) => {
 });
 
 await page.addInitScript(
-  ({ inbox, camuReady, lmsReady }) => {
+  ({ camuReady, lmsReady }) => {
     // What the phone knows. Persisted per tab so a reload keeps it.
     const saved = sessionStorage.getItem("fake-phone");
     const phone = saved
       ? JSON.parse(saved)
-      : { listening: false, notifications: "prompt", sms: "prompt", inbox, calls: [], college: { camu: { connected: false }, lms: { connected: false } }, camuReady, lmsReady };
+      : { notifications: "prompt", battery: true, calls: [], college: { camu: { connected: false }, lms: { connected: false } }, camuReady, lmsReady };
     const save = () => sessionStorage.setItem("fake-phone", JSON.stringify(phone));
     const listeners = {};
     let nextId = 1;
@@ -95,29 +93,22 @@ await page.addInitScript(
 
     const methods = {
       status: () => ({
-        listening: phone.listening,
         notifications: phone.notifications,
-        screen: phone.screen ?? false,
-        pending: phone.inbox.length,
+        battery: phone.battery ?? true,
         sdk: 34,
         maker: "Pretend",
         version: "2.0.1",
         build: 1,
       }),
-      openListenerSettings: () => ({}),
       appReady: () => ({}),
       openAppSettings: () => ({}),
       openNotificationSettings: () => ({}),
+      openBatterySettings: () => ({}),
       requestNotifications: () => {
         phone.notifications = "granted";
         return { notifications: "granted" };
       },
-      payLog: () => ({ lines: JSON.stringify([{ at: Date.now(), kind: "caught", app: "com.phonepe.app", text: "₹60 → 24/7 Kathi", ms: 140 }]) }),
-      clearPayLog: () => ({}),
-      testPrompt: () => ({ notifications: phone.notifications }),
       openOemSettings: () => ({}),
-      recordScreens: () => ({}),
-      openScreenSettings: () => ({}),
       college: () => phone.college,
       syncCollege: () => {
         phone.college = { ...phone.college, syncedAt: Date.now() };
@@ -145,11 +136,6 @@ await page.addInitScript(
       disconnectCollege: ({ which }) => {
         phone.college = { ...phone.college, [which]: { connected: false } };
         return phone.college;
-      },
-      pending: () => ({ notices: phone.inbox }),
-      ack: ({ ids }) => {
-        phone.inbox = phone.inbox.filter((n) => !ids.includes(n.id));
-        return {};
       },
     };
 
@@ -206,13 +192,6 @@ await page.addInitScript(
         },
       ],
     },
-    inbox: [
-      // One spend reported twice (bank SMS, then GPay), an advert, and money in.
-      { id: "n1", app: SMS, title: "HDFCBK", body: "Rs.60 debited from account to VPA kathi@okaxis", at: now - 60_000 },
-      { id: "n2", app: GPAY, title: "You paid ₹60.00", body: "to 24/7 Kathi", at: now - 58_000 },
-      { id: "n3", app: GPAY, title: "Offer", body: "Get cashback up to ₹100 when you pay", at: now - 50_000 },
-      { id: "n4", app: GPAY, title: "₹250 received", body: "Rahul paid you ₹250", at: now - 40_000 },
-    ],
   },
 );
 
@@ -263,7 +242,7 @@ await step("setup comes up once, straight after opening the app", async () => {
   await page.waitForURL(/\/setup$/, { timeout: 8000 });
   await waitFor("Set up DockIn once");
   const t = await text();
-  for (const want of ["Connect Camu", "Connect the LMS", "Catch the moment I pay"]) {
+  for (const want of ["Connect Camu", "Connect the LMS", "Let DockIn notify you"]) {
     if (!t.includes(want)) throw new Error(`setup is missing "${want}"`);
   }
   await page.waitForTimeout(900);
@@ -275,166 +254,23 @@ await step("setup comes up once, straight after opening the app", async () => {
   if (page.url().endsWith("/setup")) throw new Error("setup was forced a second time");
 });
 
-await step("the app knows it is inside the phone", async () => {
+await step("the phone setup asks only for reminder notifications", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
   await waitFor("Phone permissions");
-  const p0 = await text();
-  if (!/still off/.test(p0)) throw new Error("Profile does not say permissions are off");
-  if (!p0.includes("College accounts")) throw new Error("Profile has no College accounts row");
-  await page.waitForTimeout(700);
-  await page.screenshot({ path: `${SHOTS}/native-profile.png`, fullPage: true });
+  if (!(await text()).includes("College accounts")) throw new Error("Profile has no College accounts row");
   await page.getByRole("button", { name: /College accounts/ }).click();
   await waitFor("Connect Camu");
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: /Phone permissions/ }).click();
-  await waitFor("Also read payment notifications");
+  await waitFor("Let DockIn notify you");
   const t = await text();
-  if (/Payments are read by the Android app/i.test(t)) throw new Error("shows the browser version of the card");
+  if (/Catch the moment|payment screens|payment notifications|Reading your payments/i.test(t))
+    throw new Error("the phone setup still shows the old payment steps");
   if (!/App 2\.0\.1 · Android 14/.test(t)) throw new Error("does not show the app and Android version");
-  await page.waitForTimeout(900);
-  await page.screenshot({ path: `${SHOTS}/native-setup-off.png`, fullPage: true });
-});
-
-await step("Turn on opens Android's switches: payment screens, then notifications", async () => {
-  await page.locator("li", { hasText: "Catch the moment I pay" }).getByRole("button", { name: "Turn on" }).click();
-  await page.locator("li", { hasText: "Also read payment notifications" }).getByRole("button", { name: "Turn on" }).click();
-  await page.waitForTimeout(300);
-  const calls = await page.evaluate(() => window.__phone.get().calls);
-  if (!calls.includes("openScreenSettings")) throw new Error(`calls were ${calls.join(", ")}`);
-  if (!calls.includes("openListenerSettings")) throw new Error(`calls were ${calls.join(", ")}`);
-});
-
-await step("coming back from Settings ticks the step without a refresh", async () => {
-  await page.evaluate(() => {
-    window.__phone.set({ listening: true, screen: true });
-    window.__phone.fire("resume", {});
-  });
-  await waitFor("no SMS needed");
-  await waitFor("Catches GPay, CRED");
-});
-
-await step("Allow asks for notifications, and the card goes green", async () => {
-  await page
-    .locator("li", { hasText: "Let DockIn notify you" })
-    .getByRole("button", { name: "Allow" })
-    .click();
-  await waitFor("Reading your payments");
-  await page.waitForTimeout(900);
-  await page.screenshot({ path: `${SHOTS}/native-setup-on.png`, fullPage: true });
-});
-
-await step("the detection log opens and shows how fast a payment was caught", async () => {
-  await page.getByRole("button", { name: "Detection log" }).click();
-  await waitFor("140 ms");
+  await page.locator("li", { hasText: "Let DockIn notify you" }).getByRole("button", { name: "Allow" }).click();
+  await waitFor("Reminders are set up");
   await page.waitForTimeout(500);
-  await page.screenshot({ path: `${SHOTS}/native-permissions.png`, fullPage: false });
-  await page.getByRole("button", { name: "Hide" }).click();
-});
-
-await step("Money shows the bank's and GPay's copy as one payment, and money in apart", async () => {
-  await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("to place");
-  const t = await text();
-  if (!t.includes("24/7 Kathi")) throw new Error("the payee from GPay is missing");
-  if (!/\+₹250\s*from Rahul/.test(t)) throw new Error("the money from Rahul is not shown as money in");
-  if (/turn on payment reading/i.test(t)) throw new Error("the setup nudge shows although everything is on");
-  // the advert was never shown and has left the phone's inbox
-  const left = await page.evaluate(() => window.__phone.get().inbox.map((n) => n.id));
-  if (left.includes("n3")) throw new Error("the advert is still in the phone's inbox");
-  await page.waitForTimeout(900);
-  await page.screenshot({ path: `${SHOTS}/native-money-tray.png`, fullPage: true });
-});
-
-await step("dismissing a payment clears both copies on the phone", async () => {
-  await page.getByRole("button", { name: /Ignore ₹60/ }).click();
-  await page.waitForTimeout(400);
-  const left = await page.evaluate(() => window.__phone.get().inbox.map((n) => n.id));
-  if (left.includes("n1") || left.includes("n2")) throw new Error(`still on the phone: ${left.join(", ")}`);
-});
-
-await step("a payment arriving while Money is open shows up by itself", async () => {
-  await page.evaluate((at) => {
-    const n = { id: "n9", app: "com.phonepe.app", title: "Payment successful", body: "₹149 paid to Monginis", at };
-    window.__phone.set({ inbox: [...window.__phone.get().inbox, n] });
-    window.__phone.fire("notice", n);
-  }, Date.now());
-  await waitFor("Monginis");
-});
-
-await step("a payment for a friend goes to lena-dena, not spending", async () => {
-  const row = page.locator("div.flex.items-center.gap-3", { hasText: "Monginis" }).last();
-  await row.getByRole("button", { name: "Place" }).click();
-  await page.getByRole("tab", { name: "For someone" }).click();
-  await page.getByPlaceholder("Who? (Rahul)").fill("Rahul");
-  await page.getByRole("button", { name: "Add to lena-dena" }).click();
-  await waitFor("owes you");
-  const t = await text();
-  if (!/You.ll get\s*₹149/i.test(t)) throw new Error("Lend & Borrow does not show ₹149 to get back: " + t.slice(t.indexOf("owes you") - 300, t.indexOf("owes you") + 200));
-  await page.waitForTimeout(600);
-  await page.screenshot({ path: `${SHOTS}/native-money-udhaar.png`, fullPage: true });
-});
-
-await step("an answer given in the payment popup is filed as soon as the app opens", async () => {
-  await page.evaluate((now) => {
-    const p = window.__phone.get();
-    window.__phone.set({
-      inbox: [
-        ...p.inbox,
-        {
-          id: "pop1",
-          app: "com.google.android.apps.messaging",
-          title: "VM-SLICEIT",
-          body: "Successfully paid Rs.450.00 from slice credit card XX1284 to DOMINOS PIZZA on 09-Nov-26 via UPI.",
-          at: now,
-          answer: { who: "other", person: "Rohan" },
-        },
-      ],
-    });
-    window.__phone.fire("resume", {});
-  }, Date.now());
-  await waitFor("Rohan owes you ₹450");
-  await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("Rohan");
-  const left = await page.evaluate(() => window.__phone.get().inbox.filter((n) => n.answer).length);
-  if (left !== 0) throw new Error("the answered payment was not cleared from the phone");
-  const t = await text();
-  if (/₹450[\s\S]{0,40}to place/i.test(t)) throw new Error("an answered payment is still asked about in the tray");
-});
-
-await step("money in from someone who owes you ticks them off in one tap", async () => {
-  await waitFor("Rahul owes you ₹149");
-  await page.getByRole("button", { name: "Paid back" }).click();
-  await waitFor("Money in");
-  const t = await text();
-  if (/Rahul[\s\S]{0,80}owes you/.test(t)) throw new Error("Rahul still shows as owing");
-  if (!t.includes("+₹101")) throw new Error("the extra ₹101 was not noted as money in");
-});
-
-await step("a payment notification's For someone button opens that payment, ready", async () => {
-  const at = Date.now();
-  await page.evaluate((at) => {
-    const n = { id: "n10", app: "com.google.android.apps.nbu.paisa.user", title: "You paid ₹99", body: "to Chai Point", at };
-    window.__phone.set({ inbox: [...window.__phone.get().inbox, n] });
-    window.__phone.fire("notice", n);
-    window.__phone.fire("open", { path: `/money?pay=99&at=${at}&who=other` });
-  }, at);
-  await page.getByRole("tab", { name: "For someone", selected: true }).waitFor({ timeout: 8000 });
-  const t = await text();
-  if (!t.includes("₹99 at Chai Point")) throw new Error("the sheet is not about the ₹99 payment");
-  await page.keyboard.press("Escape");
-});
-
-await step("tapping the payment notification opens Money", async () => {
-  await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
-  await waitFor("Timetable");
-  await page.evaluate(() => window.__phone.fire("open", { path: "/money" }));
-  await page.waitForURL(/\/money$/, { timeout: 8000 });
-});
-
-await step("Money nudges while payment reading is off", async () => {
-  await page.evaluate(() => window.__phone.set({ listening: false, screen: false }));
-  await page.goto(`${BASE}/money`, { waitUntil: "domcontentloaded" });
-  await waitFor("Payment detection is off");
+  await page.screenshot({ path: `${SHOTS}/native-setup.png`, fullPage: true });
 });
 
 await step("connecting Camu turns Attendance into Camu's numbers", async () => {

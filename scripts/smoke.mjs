@@ -183,14 +183,12 @@ const SCREENS = [
   { path: "/", name: "today", expect: "Attendance" },
   { path: "/attendance", name: "attendance", expect: "Overall attendance" },
   { path: "/attendance/timetable", name: "timetable", expect: "" },
-  { path: "/money", name: "money", expect: "Spent this month" },
   { path: "/tasks", name: "tasks", expect: "To do" },
   { path: "/settings", name: "profile", expect: "Appearance" },
   { path: "/calendar", name: "calendar", expect: "" },
-  { path: "/add", name: "quick-add", expect: "" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
-  { path: "/privacy", name: "privacy", expect: "Payment detection" },
+  { path: "/privacy", name: "privacy", expect: "" },
   // Friends is switched off: the old address lands on Today instead.
   { path: "/circle", name: "friends-off", expect: "Timetable" },
 ];
@@ -332,16 +330,6 @@ await step("deleting a task asks first", async () => {
   if (!/Overdue/.test(back)) throw new Error("the task did not come back");
 });
 
-await step("adding an expense again takes one tap", async () => {
-  await page.goto(`${BASE}/money`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(900);
-  const before = await page.evaluate(() => document.body.innerText.match(/₹[\d,]+/)[0]);
-  await page.getByRole("button", { name: /24\/7 Kathi/ }).first().click();
-  await page.waitForTimeout(700);
-  const after = await page.evaluate(() => document.body.innerText.match(/₹[\d,]+/)[0]);
-  if (before === after) throw new Error(`the month total did not move (${before})`);
-});
-
 await step("marking a class updates attendance", async () => {
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.waitForTimeout(1200);
@@ -395,7 +383,6 @@ await step("moving between tabs never reloads the page", async () => {
   for (const [label, expect] of [
     ["Today", "Timetable"],
     ["Attendance", "Overall attendance"],
-    ["Money", "Spent"],
     ["Attendance", "Overall attendance"],
     ["Tasks", "To do"],
   ]) {
@@ -436,7 +423,6 @@ await step("the app opens with no network at all", async () => {
 
 await step("the tab bar moves between screens", async () => {
   for (const [label, expect] of [
-    ["Money", "Spent"],
     ["Tasks", "To do"],
     ["Today", "Timetable"],
   ]) {

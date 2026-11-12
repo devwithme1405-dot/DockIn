@@ -8,47 +8,13 @@
 
 import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 
-/** One payment notification as the phone kept it, account numbers already removed. */
-export interface NativeNotice {
-  id: string;
-  /** Android package that posted it. */
-  app: string;
-  title: string;
-  body: string;
-  /** When it was posted, in ms. */
-  at: number;
-  /** What was chosen in the payment popup, before the app was even open. */
-  answer?: PopupAnswer;
-  /** "screen" when read off the app's success screen, else a notification. */
-  via?: string;
-  /** The phone's alert this copy belongs to: copies with the same one are one payment. */
-  nid?: number;
-}
-
-/** The payment popup's answer: for me (with a category), for someone, or not a spend. */
-export interface PopupAnswer {
-  who: "me" | "other" | "split" | "ignore";
-  category?: string;
-  person?: string;
-  /** Split: my own share (0 when it was all theirs) and what each person owes. */
-  mine?: number;
-  parts?: { person: string; amount: number }[];
-  answeredAt?: number;
-}
-
 export type NotifState = "granted" | "denied" | "prompt";
 
 export interface PhoneStatus {
-  /** Notification access is switched on, so payments are being read. */
-  listening: boolean;
-  /** Whether DockIn may post its own notifications (the "where did it go?" prompt). */
+  /** Whether DockIn may post its own notifications (class, assignment and exam reminders). */
   notifications: NotifState;
-  /** Payments waiting in the phone's inbox. */
-  pending: number;
-  /** Left out of battery saving, so detection keeps running with DockIn closed. */
+  /** Left out of battery saving, so reminders fire on time with DockIn closed. */
   battery?: boolean;
-  /** Payment apps' "Payment successful" screens are read (Accessibility). */
-  screen?: boolean;
   /** Android version number, e.g. 34 for Android 14. */
   sdk: number;
   maker: string;
@@ -146,13 +112,9 @@ export interface CollegeState {
 
 interface DockInPlugin {
   status(): Promise<PhoneStatus>;
-  openListenerSettings(): Promise<void>;
   openAppSettings(): Promise<void>;
   openNotificationSettings(): Promise<void>;
   requestNotifications(): Promise<{ notifications: NotifState }>;
-  testPrompt(): Promise<{ notifications: NotifState }>;
-  pending(): Promise<{ notices: NativeNotice[] }>;
-  ack(options: { ids: string[] }): Promise<void>;
   college(): Promise<CollegeState>;
   connectCamu(): Promise<CollegeState>;
   /** Quietly renew an expired Camu session, showing the page only if a tap is needed. */
@@ -162,20 +124,9 @@ interface DockInPlugin {
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;
   openBatterySettings(): Promise<void>;
-  /** The phone maker's own run-in-background screens, or the payment alerts' channel. */
-  openOemSettings(options: { which: "autostart" | "battery" | "channel" }): Promise<void>;
-  /** What detection saw lately, as a JSON array string. */
-  payLog(): Promise<{ lines: string }>;
-  clearPayLog(): Promise<void>;
-  /** Log every payment-app screen for a few minutes, to teach DockIn a new app. */
-  recordScreens(options: { minutes: number }): Promise<void>;
-  openScreenSettings(): Promise<void>;
-  setPayChoices(options: {
-    categories: { id: string; label: string; emoji: string }[];
-    people: string[];
-  }): Promise<void>;
+  /** The phone maker's own run-in-background screens, so reminders keep firing. */
+  openOemSettings(options: { which: "autostart" | "battery" }): Promise<void>;
   appReady(): Promise<void>;
-  addListener(event: "notice", fn: (n: NativeNotice) => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
@@ -225,11 +176,10 @@ export function isNativeApp(): boolean {
  * Subscribes to a plugin event and returns a plain cleanup function, which is
  * what a React effect wants. Safe to call outside the app: it does nothing.
  */
-export function onPhone(event: "notice", fn: (n: NativeNotice) => void): () => void;
 export function onPhone(event: "open", fn: (d: { path: string }) => void): () => void;
 export function onPhone(event: "resume", fn: () => void): () => void;
 export function onPhone(event: "college", fn: (s: CollegeState) => void): () => void;
-export function onPhone(event: "notice" | "open" | "resume" | "college", fn: (arg: never) => void): () => void {
+export function onPhone(event: "open" | "resume" | "college", fn: (arg: never) => void): () => void {
   if (!isNativeApp()) return () => {};
   let handle: PluginListenerHandle | null = null;
   let gone = false;

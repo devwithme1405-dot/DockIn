@@ -41,9 +41,4 @@ done
 grep -q 'registerPlugin(DockInPlugin.class)' "$java/com/dockin/student/MainActivity.java" \
   || { echo "android: MainActivity does not register DockInPlugin" >&2; exit 1; }
 
-# The phone's copy of the debit rules must agree with the web app's.
-javac -nowarn -d "$out" -cp "$out" "$here/android-checks/com/dockin/student/PayChecks.java" >"$log" 2>&1 \
-  || { cat "$log" >&2; echo "android: the payment checks do not compile" >&2; exit 1; }
-java -cp "$out" com.dockin.student.PayChecks 2>/dev/null || { echo "android: the phone reads payments differently from the app" >&2; exit 1; }
-
-echo "android: javac is happy, every resource exists, and payments read the same as on the web"
+echo "android: javac is happy and every resource exists"

@@ -2,11 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Android 13+: the "where did it go?" prompt after each payment. -->
+    <!-- Android 13+: class, assignment and exam reminders. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Keeps the hourly Camu/LMS check scheduled across a restart of the phone. -->
+    <!-- Keeps the hourly Camu/LMS check and reminders scheduled across a restart of the phone. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Lets DockIn ask to be left out of battery saving, so payments are caught when closed. -->
+    <!-- Lets DockIn ask to be left out of battery saving, so reminders fire on time. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
@@ -39,18 +39,7 @@
             android:theme="@style/AppTheme.NoActionBar"
             android:exported="false" />
 
-        <!-- The small "what was it for?" sheet after a payment. Its own task, so it
-             never drags the whole app to the front, and never shows in Recents. -->
-        <activity
-            android:name=".PayAskActivity"
-            android:theme="@style/AppTheme.PayAsk"
-            android:taskAffinity="com.dockin.student.payask"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:windowSoftInputMode="adjustResize"
-            android:exported="false" />
-
-        <!-- Payment reading comes back after a restart or an app update, without opening DockIn. -->
+        <!-- Reschedules reminders and the Camu/LMS check after a restart or an app update. -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
@@ -66,56 +55,11 @@
             android:name=".ReminderReceiver"
             android:exported="false" />
 
-        <!-- "For me" on the payment notification: saves without opening anything. -->
-        <receiver
-            android:name=".PayActionReceiver"
-            android:exported="false" />
-
-        <!-- Every 15 minutes: is payment detection still on? Says so if the phone switched it off. -->
-        <service
-            android:name=".PayHealthJob"
-            android:permission="android.permission.BIND_JOB_SERVICE"
-            android:exported="false" />
-
         <!-- The hourly check of Camu and the LMS. -->
         <service
             android:name=".CollegeJob"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
-
-        <!--
-            Payment detection. Reads only the payment apps listed in
-            PayWatchService, keeps what it finds on the phone, and runs only
-            once it is switched on in Android's notification-access screen.
-        -->
-        <service
-            android:name=".PayWatchService"
-            android:label="@string/pay_watch_label"
-            android:exported="true"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
-        <!--
-            Payment success screens. Android sends this only the payment apps
-            named in res/xml/pay_screen.xml, and only once the person switches
-            it on in Accessibility. Being bound by Android, it also brings the
-            payment watch back when DockIn is swiped out of Recents.
-        -->
-        <service
-            android:name=".PayScreenService"
-            android:label="@string/pay_screen_label"
-            android:exported="true"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/pay_screen" />
-        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

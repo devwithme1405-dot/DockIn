@@ -109,11 +109,8 @@ public class DockInPlugin extends Plugin {
     public void status(PluginCall call) {
         Context c = getContext();
         JSObject r = new JSObject();
-        r.put("listening", listening(c));
         r.put("notifications", notificationState());
-        r.put("pending", PayInbox.size(c));
         r.put("battery", unrestricted(c));
-        r.put("screen", PayScreenService.enabled(c));
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("maker", Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
         try {
@@ -127,10 +124,6 @@ public class DockInPlugin extends Plugin {
         call.resolve(r);
     }
 
-    static boolean listening(Context c) {
-        return NotificationManagerCompat.getEnabledListenerPackages(c).contains(c.getPackageName());
-    }
-
     private String notificationState() {
         if (NotificationManagerCompat.from(getContext()).areNotificationsEnabled()) return "granted";
         if (Build.VERSION.SDK_INT >= 33) {
@@ -142,20 +135,6 @@ public class DockInPlugin extends Plugin {
 
     // -------------------------------------------------------------------------
     // Switches
-
-    /** Straight to DockIn's own switch where Android allows it, the list otherwise. */
-    @PluginMethod
-    public void openListenerSettings(PluginCall call) {
-        Context c = getContext();
-        Intent exact = null;
-        if (Build.VERSION.SDK_INT >= 30) {
-            exact = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
-                    .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
-                            new ComponentName(c, PayWatchService.class).flattenToString());
-        }
-        Intent list = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
-        launch(call, exact, list);
-    }
 
     /**
      * App info. On Android 13 and later a sideloaded app has to be allowed
@@ -198,15 +177,7 @@ public class DockInPlugin extends Plugin {
         Context c = getContext();
         String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT);
         java.util.List<Intent> tries = new java.util.ArrayList<>();
-        if ("channel".equals(which)) {
-            // The payment alerts' own switches: "Floating notifications" / "Pop on screen".
-            PayNotifier.ensureChannel(c);
-            tries.add(new Intent("android.settings.CHANNEL_NOTIFICATION_SETTINGS")
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, c.getPackageName())
-                    .putExtra("android.provider.extra.CHANNEL_ID", PayNotifier.CHANNEL));
-            tries.add(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(Settings.EXTRA_APP_PACKAGE, c.getPackageName()));
-        } else if (maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco")) {
+        if (maker.contains("xiaomi") || maker.contains("redmi") || maker.contains("poco")) {
             if ("battery".equals(which)) {
                 tries.add(cmp("com.miui.powerkeeper", "com.miui.powerkeeper.ui.HiddenAppsConfigActivity")
                         .putExtra("package_name", c.getPackageName())
@@ -248,37 +219,6 @@ public class DockInPlugin extends Plugin {
 
     private static Intent cmp(String pkg, String cls) {
         return new Intent().setComponent(new ComponentName(pkg, cls));
-    }
-
-    /** What payment detection saw lately, for Settings and for "Copy" when one is missed. */
-    @PluginMethod
-    public void payLog(PluginCall call) {
-        JSObject r = new JSObject();
-        r.put("lines", PayLog.all(getContext()).toString());
-        call.resolve(r);
-    }
-
-    /** For the next few minutes, every payment-app screen goes in the log, to teach DockIn a new app. */
-    @PluginMethod
-    public void recordScreens(PluginCall call) {
-        int minutes = Math.max(1, Math.min(10, call.getInt("minutes", 3)));
-        getContext().getSharedPreferences("dockin-pay", Context.MODE_PRIVATE).edit()
-                .putLong("recordUntil", System.currentTimeMillis() + minutes * 60_000L).apply();
-        call.resolve();
-    }
-
-    @PluginMethod
-    public void clearPayLog(PluginCall call) {
-        PayLog.clear(getContext());
-        call.resolve();
-    }
-
-
-    /** The categories and people the payment popup offers, as the app knows them. */
-    @PluginMethod
-    public void setPayChoices(PluginCall call) {
-        PayInbox.setChoices(getContext(), call.getData() == null ? "{}" : call.getData().toString());
-        call.resolve();
     }
 
     @PluginMethod
@@ -338,18 +278,6 @@ public class DockInPlugin extends Plugin {
 
     @PermissionCallback
     private void notificationsAnswered(PluginCall call) {
-        if (NotificationManagerCompat.from(getContext()).areNotificationsEnabled()) {
-            PayNotifier.ensureChannel(getContext());
-        }
-        JSObject r = new JSObject();
-        r.put("notifications", notificationState());
-        call.resolve(r);
-    }
-
-    /** Shows what a payment prompt looks like, so the whole path can be checked without paying. */
-    @PluginMethod
-    public void testPrompt(PluginCall call) {
-        PayNotifier.post(getContext(), 3999, 1, "DockIn test", "Test", System.currentTimeMillis());
         JSObject r = new JSObject();
         r.put("notifications", notificationState());
         call.resolve(r);
@@ -460,37 +388,6 @@ public class DockInPlugin extends Plugin {
         } catch (JSONException e) {
             call.reject("Could not read what was saved.");
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Payments waiting
-
-    @PluginMethod
-    public void pending(PluginCall call) {
-        JSObject r = new JSObject();
-        try {
-            r.put("notices", new JSArray(PayInbox.list(getContext()).toString()));
-        } catch (JSONException e) {
-            r.put("notices", new JSArray());
-        }
-        call.resolve(r);
-    }
-
-    @PluginMethod
-    public void ack(PluginCall call) {
-        JSArray ids = call.getArray("ids");
-        Set<String> set = new HashSet<>();
-        if (ids != null) {
-            try {
-                List<Object> raw = ids.toList();
-                for (Object o : raw) if (o != null) set.add(o.toString());
-            } catch (JSONException e) {
-                call.reject("ids must be a list of strings");
-                return;
-            }
-        }
-        PayInbox.ack(getContext(), set);
-        call.resolve();
     }
 
     /** The app hands over the upcoming reminders (class, task, attendance); the

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -39,9 +39,8 @@ import {
   saveProfile,
 } from "@/lib/repo";
 import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar } from "@/lib/avatars";
-import { useExpenses, useTasks } from "@/lib/hooks";
+import { useTasks } from "@/lib/hooks";
 import { fmtPct } from "@/lib/attendance";
-import { fmtMoney, inMonth, monthKey, sum } from "@/lib/money";
 import { toDateStr } from "@/lib/dates";
 import type { ThemePref } from "@/lib/types";
 import {
@@ -93,7 +92,6 @@ export default function ProfilePage() {
   const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
   const { data } = useAttendanceData(profile?.target ?? 75);
   const tasks = useTasks();
-  const expenses = useExpenses();
 
   const [sheet, setSheet] = useState<SheetName>(null);
   const phone = usePhoneStatus();
@@ -103,9 +101,9 @@ export default function ProfilePage() {
     ? "Checking…"
     : phoneOff === 0
       ? "Everything is on"
-      : `${phoneOff} of ${checks.length} still off — payments may be missed`;
+      : `${phoneOff} of ${checks.length} still off — reminders may not reach you`;
 
-  // /settings#phone (from Money's nudge) opens the permissions straight away.
+  // /settings#phone opens the permissions straight away.
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.hash === "#phone") void Promise.resolve().then(() => setSheet("phone"));
   }, []);
@@ -135,10 +133,6 @@ export default function ProfilePage() {
     });
   }, [configured, signedInNow]);
 
-  const monthSpent = useMemo(() => {
-    if (!expenses) return null;
-    return sum(inMonth(expenses, monthKey(toDateStr())));
-  }, [expenses]);
   const tasksDone = tasks ? tasks.filter((t) => t.done).length : null;
 
   if (!profile)
@@ -327,7 +321,6 @@ export default function ProfilePage() {
             ink={overall ? STATE_TEXT[overall.state] : "text-muted"}
           />
           <Stat label="Tasks done" value={tasksDone === null ? "--" : String(tasksDone)} ink="text-safe" />
-          <Stat label="Spent this month" value={monthSpent === null ? "--" : fmtMoney(monthSpent)} ink="text-text" />
         </section>
 
         {/* everything else, one row per kind, each opening its own sheet */}
@@ -461,7 +454,7 @@ export default function ProfilePage() {
 
       <Sheet open={sheet === "about"} onClose={close} title="About DockIn">
         <p className="text-[14px] leading-relaxed text-muted">
-          Attendance, money and assignments for college, in one place. Camu, the LMS and your payments are read on
+          Attendance and assignments for college, in one place. Camu and the LMS are read on
           this phone and stay on it.
         </p>
         <p className="mt-3 mb-2 text-[13px] text-muted">

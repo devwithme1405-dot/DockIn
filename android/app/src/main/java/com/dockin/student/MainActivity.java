@@ -47,15 +47,6 @@ public class MainActivity extends BridgeActivity {
 
         super.onCreate(savedInstanceState);
 
-        // From here on payment reading survives the app being closed.
-        // The old always-on "Watching for payments" notification is gone for good.
-        try {
-            androidx.core.app.NotificationManagerCompat.from(this).deleteNotificationChannel("guard");
-        } catch (RuntimeException ignored) {
-        }
-        PayHealth.schedule(this);
-        PayHealth.check(this);
-
         // Back goes back a screen, the way it does in every other app. Without
         // this Android would close DockIn from wherever you were.
         getOnBackPressedDispatcher().addCallback(new OnBackPressedCallback(true) {

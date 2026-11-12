@@ -7,8 +7,7 @@ import { InstallApp } from "@/components/InstallApp";
  * One address for getting DockIn onto a phone: dock-in.vercel.app/app
  *
  * It leads with the Android app, which is the site plus what a site cannot
- * do: read the notifications your payment apps post and ask where the money
- * went. Installing the site from the browser stays underneath as the fallback.
+ * do: read Camu and the LMS with your own sign-in, and remind you before classes.
  */
 
 export const metadata: Metadata = {
@@ -48,9 +47,8 @@ export default function GetTheApp() {
               percentage — what it becomes if you skip tomorrow.
             </li>
             <li>
-              <span className="text-text">Money without typing.</span> Pay with GPay or PhonePe and
-              DockIn asks what it was for, right then. One tap, and a budget that tells you what you
-              can spend a day.
+              <span className="text-text">Your whole timetable, from Camu.</span> Today&rsquo;s classes
+              with rooms, and reminders before each one — no setup, no typing.
             </li>
             <li>
               <span className="text-text">Nothing due sneaks up.</span> Assignments, quizzes and exams
@@ -64,10 +62,9 @@ export default function GetTheApp() {
             <ShieldCheck size={17} className="text-safe" /> What it can see
           </h2>
           <p className="mt-2 text-[14px] text-muted">
-            Your data lives on your phone and in your own account. If you switch payment reading on,
-            DockIn reads what GPay, PhonePe, Paytm and your bank put in your notification bar — those
-            apps and nothing else — and keeps it on the phone. Account and card numbers are removed
-            the moment it is read, and no payment is added to your spending until you tap it.
+            Your data lives on your phone and in your own account. Camu and the LMS are read with your
+            own sign-in so attendance, your timetable and assignments come in by themselves, and it
+            all stays on your phone and in your account — nowhere else.
           </p>
         </section>
 
