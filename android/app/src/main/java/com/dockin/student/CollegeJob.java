@@ -7,6 +7,8 @@ import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
 
+import java.util.Calendar;
+
 /**
  * Checks Camu and the LMS about once an hour, whether DockIn is open or not.
  *
@@ -40,13 +42,36 @@ public class CollegeJob extends JobService {
         }
     }
 
+    /**
+     * The quiet hours when nobody is checking their attendance, so neither are
+     * we. A background job that keeps hitting Camu's servers at 3am, night after
+     * night, is exactly the kind of clockwork a human never produces — and the
+     * easiest pattern to notice. Between 1am and 6am the job wakes, does nothing,
+     * and goes back to sleep.
+     */
+    private static boolean quietHours() {
+        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        return hour >= 1 && hour < 6;
+    }
+
     @Override
     public boolean onStartJob(final JobParameters params) {
+        if (quietHours()) {
+            jobFinished(params, false);
+            return false;
+        }
         final Context app = getApplicationContext();
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
+                    // A little human slack before the request. Android already
+                    // batches these runs, but landing every sync on the same tidy
+                    // phase still reads as a machine; a random 0–90s wait blurs it.
+                    try {
+                        Thread.sleep((long) (Math.random() * 90_000));
+                    } catch (InterruptedException ignored) {
+                    }
                     College.sync(app, false);
                 } finally {
                     jobFinished(params, false);
