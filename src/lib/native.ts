@@ -67,6 +67,27 @@ export interface CamuHoliday {
   end: string;
 }
 
+/** One meal of the day's mess menu, as Camu's cafeteria page serves it. */
+export interface CamuMeal {
+  /** "Breakfast" / "Lunch" / "Snack" / "Dinner". */
+  meal: string;
+  /** Camu's own label with timing, e.g. "Breakfast 07:30 AM - 09:30 AM". */
+  label: string;
+  /** The food, exactly as Camu writes it — one item per line, calories and all. */
+  items: string;
+  color?: string;
+}
+
+/** The cafeteria: today's menu and the reusable pass, both read from Camu. */
+export interface CamuCafeteria {
+  facility?: string;
+  /** Camu's own "current date" for the menu, ISO. */
+  date?: string;
+  meals?: CamuMeal[];
+  /** The permanent cafeteria QR's payload, drawn on the phone as the pass. */
+  qr?: string;
+}
+
 export interface CamuState {
   connected: boolean;
   /** Camu ended the session; attendance shown is the last good copy. */
@@ -79,6 +100,7 @@ export interface CamuState {
   holidays?: CamuHoliday[];
   history?: Record<string, CamuClass[]>;
   historyAt?: number;
+  cafeteria?: CamuCafeteria;
 }
 
 /** Something on the LMS with a deadline that still needs doing. */

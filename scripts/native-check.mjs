@@ -43,6 +43,17 @@ function camuFixture() {
       p(day(-1), "09:25", "10:25", "Database Management Systems ( P-LA-203 )", "CSET200", "s-dbms", "P-LA-203"),
     ],
     holidays: [{ title: "Diwali Holidays", start: day(-5), end: day(-3) }],
+    cafeteria: {
+      facility: "First Floor",
+      date: new Date().toISOString(),
+      qr: "663474b11dd0e9412a1f793f,6899a3e84245c98c34c20825,PERM_CAF_QRCODE,6af67386ab597b7312276d14,80dd59d1fe5aa7e965ee5d6fa655222d8803a0a47cc99e891947f4bc669c6709",
+      meals: [
+        { meal: "Breakfast", label: "Breakfast 07:30 AM - 09:30 AM", color: "#8ed1fc", items: "Indori Poha\nBoiled Egg\nTea / Coffee" },
+        { meal: "Lunch", label: "Lunch 12:00 PM - 03:00 PM", color: "#8ed1fc", items: "Kadai Paneer\nChana Dal\nSteamed Rice\nRoti" },
+        { meal: "Snack", label: "Snack 5:00 PM - 06:00 PM", color: "#8ed1fc", items: "Jhal Muri\nTea" },
+        { meal: "Dinner", label: "Dinner 08:00 PM - 10:00 PM", color: "#8ed1fc", items: "Aloo Gobhi\nHariyali Dal\nOnion Rice\nRoti" },
+      ],
+    },
     history: {
       "s-dbms": [
         { date: day(-1), from: "09:25", to: "10:25", present: false, leave: "" },
@@ -385,6 +396,20 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
   if (!t.includes("LMS")) throw new Error("the task does not say it came from the LMS");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-lms-tasks.png`, fullPage: true });
+});
+
+await step("Cafeteria shows Camu's mess menu and draws the pass", async () => {
+  await page.goto(`${BASE}/cafeteria`, { waitUntil: "domcontentloaded" });
+  await waitFor("On the menu");
+  const t = await text();
+  if (!t.includes("Kadai Paneer")) throw new Error("Camu's menu items are missing");
+  if (!t.includes("Breakfast 07:30")) throw new Error("the meal label with timing is missing");
+  if (!/Straight from MyCamu/.test(t)) throw new Error("the pass is not sourced from Camu");
+  // Scroll to the pass and confirm a QR actually drew.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForFunction(() => !!document.querySelector('[aria-label="Cafeteria QR code"] svg'), null, { timeout: 8000 });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${SHOTS}/native-cafeteria.png`, fullPage: true });
 });
 
 await browser.close();

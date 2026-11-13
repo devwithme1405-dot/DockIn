@@ -100,6 +100,47 @@ final class Camu {
     }
 
     /**
+     * Today's mess menu and the student's reusable cafeteria pass, from the same
+     * cafeteria page MyCamu shows. Both endpoints take no body — the session
+     * cookie identifies the student — so this needs none of the ids attendance does.
+     */
+    static JSONObject cafeteria(Context c) throws IOException, Expired, JSONException {
+        need(c);
+        JSONObject out = new JSONObject();
+
+        JSONObject menu = data(c, "/api/mess-management/get-student-menu-list", new JSONObject()).optJSONObject("data");
+        if (menu != null) {
+            out.put("facility", menu.optString("facNme", ""));
+            out.put("date", menu.optString("curntDte", ""));
+            JSONArray meals = new JSONArray();
+            JSONArray list = menu.optJSONArray("oMealList");
+            for (int i = 0; list != null && i < list.length(); i++) {
+                JSONObject m = list.optJSONObject(i);
+                if (m == null) continue;
+                String code = m.optString("msCde", "");
+                int paren = code.indexOf('(');
+                String meal = paren > 0 ? code.substring(0, paren).trim() : code;
+                meals.put(new JSONObject()
+                        .put("meal", meal)
+                        .put("label", m.optString("mealTm", meal))
+                        .put("items", m.optString("msNme", ""))
+                        .put("color", m.optString("mealClr", "")));
+            }
+            out.put("meals", meals);
+        }
+
+        // The pass is a second call; if it misbehaves the menu is still worth showing.
+        try {
+            JSONObject qr = data(c, "/api/mess-management/generate-permanent-qr-code", new JSONObject()).optJSONObject("data");
+            if (qr != null) out.put("qr", qr.optString("prQrCd", ""));
+        } catch (Expired e) {
+            throw e;
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    /**
      * The timetable between two dates ("YYYY-MM-DD"), with holidays.
      * Camu answers [periods, ?, holidays, semester]; only the first and third matter.
      */

@@ -7,6 +7,8 @@ import { Pencil, QrCode, ScanLine, Sparkles, UtensilsCrossed } from "lucide-reac
 import { BackHeader } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
+import { useCollege } from "@/lib/college";
+import type { CamuMeal } from "@/lib/native";
 import type { MessDay } from "@/lib/types";
 import { toDateStr, fmtDayLong } from "@/lib/dates";
 import { Notebook, SectionTitle } from "@/components/Paper";
@@ -14,8 +16,17 @@ import { Sheet, cx } from "@/components/ui";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+/** Split Camu's one-blob menu text into clean lines. */
+function foodLines(items: string): string[] {
+  return items
+    .split("\n")
+    .map((l) => l.replace(/^["']|["']$/g, "").trim())
+    .filter(Boolean);
+}
+
 export default function CafeteriaPage() {
   const profile = useLiveQuery(() => getProfile(), []);
+  const { state } = useCollege();
   const today = toDateStr();
   const weekday = new Date().getDay();
   const nowHm = useMemo(() => {
@@ -24,17 +35,22 @@ export default function CafeteriaPage() {
   }, []);
   const active = currentMeal(nowHm);
 
-  const menu = profile?.messMenu;
-  const todayMenu = menuForDay(menu, weekday);
-  const hasMenu = dayHasFood(todayMenu);
+  // Camu is the source when it is connected and has sent the cafeteria across;
+  // otherwise the student's own weekly menu and pasted pass fill in.
+  const caf = state.camu?.connected ? state.camu.cafeteria : undefined;
+  const camuMeals = caf?.meals ?? [];
+  const fromCamu = camuMeals.length > 0;
+
+  const manualMenu = profile?.messMenu;
+  const todayManual = menuForDay(manualMenu, weekday);
+  const hasManual = dayHasFood(todayManual);
 
   const [qrSheet, setQrSheet] = useState(false);
   const [menuSheet, setMenuSheet] = useState(false);
 
-  // The QR is drawn once from its text and never again — it is the same pass
-  // every day, so there is nothing to refresh.
+  // The pass: Camu's live one if connected, else what the student pasted.
+  const qrValue = (caf?.qr || profile?.messQr || "").trim();
   const [svg, setSvg] = useState("");
-  const qrValue = profile?.messQr?.trim() || "";
   useEffect(() => {
     let alive = true;
     if (!qrValue) {
@@ -55,8 +71,8 @@ export default function CafeteriaPage() {
     };
   }, [qrValue]);
 
-  // The pass grows as it is scrolled into view. Driven straight on the node in a
-  // rAF, not through React state, so the scaling stays buttery on a mid phone.
+  // The pass grows as it is scrolled into view — driven straight on the node in
+  // a rAF, not through React state, so it stays smooth on a mid phone.
   const qrRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = qrRef.current;
@@ -89,13 +105,15 @@ export default function CafeteriaPage() {
         backLabel="Today"
         title="Cafeteria"
         right={
-          <button
-            onClick={() => setMenuSheet(true)}
-            aria-label="Edit the mess menu"
-            className="grid size-10 place-items-center rounded-full text-accent active:scale-95"
-          >
-            <Pencil size={18} />
-          </button>
+          fromCamu ? undefined : (
+            <button
+              onClick={() => setMenuSheet(true)}
+              aria-label="Edit the mess menu"
+              className="grid size-10 place-items-center rounded-full text-accent active:scale-95"
+            >
+              <Pencil size={18} />
+            </button>
+          )
         }
       />
 
@@ -110,11 +128,18 @@ export default function CafeteriaPage() {
             <UtensilsCrossed size={21} />
           </span>
         </div>
+        {caf?.facility && <p className="mt-0.5 text-[12px] font-semibold text-muted">{caf.facility}</p>}
 
-        {hasMenu ? (
+        {fromCamu ? (
+          <ul className="mt-3 space-y-2.5">
+            {camuMeals.map((m, i) => (
+              <CamuMealRow key={i} meal={m} active={active} />
+            ))}
+          </ul>
+        ) : hasManual ? (
           <ul className="mt-3 space-y-2.5">
             {MEALS.map(({ key, label, from, icon }) => {
-              const text = todayMenu[key];
+              const text = todayManual[key];
               const isNow = key === active;
               return (
                 <li
@@ -134,9 +159,7 @@ export default function CafeteriaPage() {
                       </span>
                     )}
                   </div>
-                  <p className={cx("mt-1 text-[14px] leading-snug", text ? "text-text" : "text-muted")}>
-                    {text || "—"}
-                  </p>
+                  <p className={cx("mt-1 text-[14px] leading-snug", text ? "text-text" : "text-muted")}>{text || "—"}</p>
                 </li>
               );
             })}
@@ -162,7 +185,7 @@ export default function CafeteriaPage() {
           <div className="flex flex-col items-center">
             <div
               ref={qrRef}
-              className="qr-card will-change-transform rounded-[28px] bg-white p-5 shadow-[0_18px_40px_-12px_rgb(var(--shadow-ink)/0.4)]"
+              className="will-change-transform rounded-[28px] bg-white p-5 shadow-[0_18px_40px_-12px_rgb(var(--shadow-ink)/0.4)]"
               style={{ transformOrigin: "center" }}
             >
               {svg ? (
@@ -177,10 +200,12 @@ export default function CafeteriaPage() {
               )}
             </div>
             <div className="mt-6 flex items-center gap-2 text-[12.5px] font-semibold text-muted">
-              <QrCode size={15} /> Same pass every day
-              <button onClick={() => setQrSheet(true)} className="ml-1 text-accent underline-offset-2 active:underline">
-                change
-              </button>
+              <QrCode size={15} /> {fromCamu || caf?.qr ? "Straight from MyCamu" : "Same pass every day"}
+              {!caf?.qr && (
+                <button onClick={() => setQrSheet(true)} className="ml-1 text-accent underline-offset-2 active:underline">
+                  change
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -188,28 +213,60 @@ export default function CafeteriaPage() {
             <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent">
               <QrCode size={26} />
             </span>
-            <p className="mt-4 font-bold">Add your mess pass</p>
+            <p className="mt-4 font-bold">Your pass will appear here</p>
             <p className="mt-1 text-[13px] text-muted">
-              Open the cafeteria QR in MyCamu, scan it with any QR scanner, and paste what it reads here. It&rsquo;s the
-              same code forever, so you only do this once.
+              Connect Camu in Settings and your cafeteria pass comes in by itself — same as your attendance. No
+              signal needed once it has.
             </p>
             <button
               onClick={() => setQrSheet(true)}
-              className="btn-leather mt-5 inline-flex h-11 items-center rounded-2xl px-5 text-[14px] font-bold"
+              className="btn-paper mt-5 inline-flex h-11 items-center rounded-2xl px-5 text-[13.5px] font-bold text-muted"
             >
-              Add pass
+              Or paste it manually
             </button>
           </Notebook>
         )}
       </div>
 
       <QrSheet open={qrSheet} onClose={() => setQrSheet(false)} value={profile?.messQr ?? ""} />
-      <MenuSheet open={menuSheet} onClose={() => setMenuSheet(false)} menu={menu} startDay={weekday} />
+      <MenuSheet open={menuSheet} onClose={() => setMenuSheet(false)} menu={manualMenu} startDay={weekday} />
     </div>
   );
 }
 
-/** Paste (or edit) the pass the QR reads out. */
+/** One meal straight from Camu: its label with timing, then the food. */
+function CamuMealRow({ meal, active }: { meal: CamuMeal; active: Meal }) {
+  const isNow = meal.meal.toLowerCase().startsWith(active.slice(0, 4));
+  const lines = foodLines(meal.items);
+  return (
+    <li
+      className={cx(
+        "rounded-2xl border-[1.5px] px-3.5 py-3 transition",
+        isNow ? "border-accent/50 bg-accent-soft/60" : "border-card-edge bg-card",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] font-extrabold">{meal.label || meal.meal}</span>
+        {isNow && (
+          <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-on-accent">now</span>
+        )}
+      </div>
+      {lines.length > 0 ? (
+        <ul className="mt-1.5 space-y-0.5">
+          {lines.map((l, i) => (
+            <li key={i} className="text-[13.5px] leading-snug text-text">
+              {l}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-[13.5px] text-muted">Not published yet</p>
+      )}
+    </li>
+  );
+}
+
+/** Paste (or edit) the pass the QR reads out — the manual fallback. */
 function QrSheet({ open, onClose, value }: { open: boolean; onClose: () => void; value: string }) {
   const [text, setText] = useState(value);
   useEffect(() => {
@@ -219,7 +276,8 @@ function QrSheet({ open, onClose, value }: { open: boolean; onClose: () => void;
   return (
     <Sheet open={open} onClose={onClose} title="Your mess pass">
       <p className="mb-3 text-[13.5px] text-muted">
-        Scan the cafeteria QR in MyCamu and paste exactly what it reads. Usually a short code or a link.
+        If Camu is connected this fills in by itself. To set it by hand, scan the cafeteria QR in MyCamu and paste
+        exactly what it reads.
       </p>
       <textarea
         value={text}
@@ -246,7 +304,7 @@ function QrSheet({ open, onClose, value }: { open: boolean; onClose: () => void;
   );
 }
 
-/** Fill the week once; the screen shows the right day by itself. */
+/** Fill the week once; the screen shows the right day by itself. (Manual mode.) */
 function MenuSheet({
   open,
   onClose,
@@ -269,8 +327,7 @@ function MenuSheet({
   }, [open, menu, startDay]);
 
   const d = draft[day] ?? {};
-  const set = (meal: Meal, v: string) =>
-    setDraft((prev) => ({ ...prev, [day]: { ...(prev[day] ?? {}), [meal]: v } }));
+  const set = (meal: Meal, v: string) => setDraft((prev) => ({ ...prev, [day]: { ...(prev[day] ?? {}), [meal]: v } }));
 
   return (
     <Sheet open={open} onClose={onClose} title="Weekly mess menu">

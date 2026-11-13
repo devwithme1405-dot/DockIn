@@ -111,6 +111,15 @@ final class College {
                 if (!camu.has("periods")) camu.put("periods", new JSONArray());
             }
 
+            // The cafeteria — today's mess menu and the reusable pass — is an extra
+            // of the same kind: a bad moment keeps the last copy and never fails the
+            // attendance sync.
+            try {
+                camu.put("cafeteria", Camu.cafeteria(c));
+            } catch (IOException | JSONException e) {
+                // Keep the last menu and pass; the next sync tries again.
+            }
+
             boolean subjectsChanged = before == null || !sameCounts(before, subjects);
             if (full || subjectsChanged || now - camu.optLong("historyAt", 0) > HISTORY_EVERY_MS) try {
                 JSONObject history = new JSONObject();
