@@ -51,6 +51,8 @@
   --violet-soft: #dbe7ec;
   --rose: #b23a5b;
   --rose-soft: #f5dde3;
+  --mess: #7a63e6;
+  --mess-soft: #ece8fc;
   --shadow-ink: 90 50 20;
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .1 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
   --leather: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .12 0 0 0 0 .05 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -94,6 +96,8 @@
   --violet-soft: #172a33;
   --rose: #e68aa3;
   --rose-soft: #2e1a21;
+  --mess: #a99cf6;
+  --mess-soft: #241d3c;
   --shadow-ink: 0 0 0;
 }
 
@@ -122,6 +126,8 @@
   --color-violet-soft: var(--violet-soft);
   --color-rose: var(--rose);
   --color-rose-soft: var(--rose-soft);
+  --color-mess: var(--mess);
+  --color-mess-soft: var(--mess-soft);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-on-ink: var(--on-ink);
@@ -153,6 +159,22 @@ body {
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-y: none;
+}
+
+/*
+ * A page colour that always covers the whole webview, pinned to the viewport
+ * and reaching every edge (behind the status and gesture bars too). On a short
+ * screen the dynamic viewport can be smaller than the webview, which used to
+ * leave a bare dark band under a page that did not fill — the welcome and sign-in
+ * screens especially. This layer sits behind everything so there is never a
+ * strip of the wrong colour, whatever the phone's size or bars.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg);
 }
 
 /* Display face for headings and figures, with tabular, slashed-zero numerals. */

@@ -56,7 +56,8 @@ import {
 import { BackHeader } from "@/components/PageHeader";
 import { PhoneSetup, phoneChecklist, usePhoneStatus } from "@/components/PhoneSetup";
 import { ConnectCamu, ConnectLms } from "@/components/College";
-import { useAttendanceData, useCollege } from "@/lib/college";
+import { disconnect, useAttendanceData, useCollege } from "@/lib/college";
+import { isNativeApp } from "@/lib/native";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { accountName, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
@@ -228,6 +229,13 @@ export default function ProfilePage() {
   async function leave() {
     setBusy(true);
     if (session) await signOutCloud();
+    // Logging out must wipe Camu and the LMS from the phone too, or the next
+    // person to sign in on this phone inherits your college sign-in and sees
+    // your attendance. Each account connects its own.
+    if (isNativeApp()) {
+      await disconnect("camu").catch(() => {});
+      await disconnect("lms").catch(() => {});
+    }
     await resetAll();
     await clearSocial();
     clearSyncState();
