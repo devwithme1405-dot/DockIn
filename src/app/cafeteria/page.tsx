@@ -7,7 +7,7 @@ import { Pencil, QrCode, ScanLine, Sparkles, UtensilsCrossed } from "lucide-reac
 import { BackHeader } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
-import { useCollege } from "@/lib/college";
+import { useCollege, syncCollege } from "@/lib/college";
 import type { CamuMeal } from "@/lib/native";
 import type { MessDay } from "@/lib/types";
 import { toDateStr, fmtDayLong } from "@/lib/dates";
@@ -40,6 +40,19 @@ export default function CafeteriaPage() {
   const caf = state.camu?.connected ? state.camu.cafeteria : undefined;
   const camuMeals = caf?.meals ?? [];
   const fromCamu = camuMeals.length > 0;
+
+  // When Camu is connected but the cafeteria has not come across yet (a fresh
+  // install, or the last sync predates this feature), pull it now rather than
+  // make the student wait for the next scheduled sync — this is the tab that
+  // needs it. Once per open, and only when it is actually missing.
+  const pulled = useRef(false);
+  useEffect(() => {
+    if (pulled.current) return;
+    if (state.camu?.connected && !caf?.meals?.length) {
+      pulled.current = true;
+      void syncCollege();
+    }
+  }, [state.camu?.connected, caf?.meals?.length]);
 
   const manualMenu = profile?.messMenu;
   const todayManual = menuForDay(manualMenu, weekday);

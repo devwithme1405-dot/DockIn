@@ -24,7 +24,9 @@ const SHELL = ${JSON.stringify(SHELL)};
 
 self.addEventListener("install", (event) => {
   // Warm the shell so the first launch after an update is instant too. One
-  // failed page must not fail the install, hence the per-URL catch.
+  // failed page must not fail the install, hence the per-URL catch. The scripts
+  // and route-data a page needs are cached as they are first used (below), not
+  // up front — warming them here floods the first load with requests.
   event.waitUntil(
     caches.open(CACHE).then((c) =>
       Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: "reload" })).catch(() => {}))),
@@ -65,7 +67,9 @@ self.addEventListener("fetch", (event) => {
   // every single launch waited on the network, so a bad signal was a spinner
   // and no signal was a browser error page — on an app whose data is all on the
   // phone anyway. Now the screen is there immediately and the copy on disk is
-  // brought up to date behind it.
+  // brought up to date behind it. When a page is not cached yet, a stalled
+  // socket must never become a minute-long freeze: after a short wait, fall back
+  // to the app shell, which boots and renders the right screen from the URL.
   if (req.mode === "navigate") {
     event.respondWith(
       caches.match(req, { ignoreSearch: true }).then((hit) => {
@@ -78,7 +82,12 @@ self.addEventListener("fetch", (event) => {
             return res;
           })
           .catch(() => hit || caches.match("/"));
-        return hit || fresh;
+        if (hit) {
+          fresh.catch(function () {});
+          return hit;
+        }
+        const bail = new Promise((r) => setTimeout(r, 2500)).then(() => caches.match("/"));
+        return Promise.race([fresh, bail]).then((r) => r || fresh);
       }),
     );
     return;
