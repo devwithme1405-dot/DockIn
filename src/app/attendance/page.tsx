@@ -210,6 +210,9 @@ export default function AttendancePage() {
                 </div>
               </div>
             </div>
+            {overall.state !== "none" && (
+              <WhatIf className="mt-3" attended={overall.attended} total={overall.total} target={target} />
+            )}
           </Notebook>
 
           <section className="mt-5 grid grid-cols-2 gap-3 px-5">
@@ -244,24 +247,6 @@ export default function AttendancePage() {
               <b className={cx("font-extrabold tnum", bunk.pct >= target ? "text-safe" : "text-warn")}>{fmtPct(bunk.pct)}</b>
               {bunk.pct >= target ? " — still above target." : ` — below your ${target}%.`}
             </p>
-          )}
-
-          {overall.state !== "none" && (
-            <WhatIf
-              className="mx-5 mt-4"
-              target={target}
-              options={[
-                { id: "all", label: "Overall", attended: overall.attended, total: overall.total },
-                ...stats
-                  .filter((s) => s.summary.total > 0)
-                  .map((s) => ({
-                    id: s.subject.id,
-                    label: s.subject.code || s.subject.name,
-                    attended: s.summary.attended,
-                    total: s.summary.total,
-                  })),
-              ]}
-            />
           )}
 
           {(onHoliday || coming) && (

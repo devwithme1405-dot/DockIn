@@ -20,7 +20,11 @@ export default function OnboardingPage() {
   const [stepRaw, setStep] = useState<number | null>(null);
   // Someone who is already signed in (e.g. just back from a sign-in link) skips straight to their name.
   const step = stepRaw ?? (session ? 2 : 0);
-  const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "")
+  const metaName = String(
+    session?.user.user_metadata?.full_name ??
+      session?.user.user_metadata?.name ??
+      "",
+  )
     .trim()
     .split(" ")[0];
   const [nameRaw, setName] = useState<string | null>(null);
@@ -37,82 +41,110 @@ export default function OnboardingPage() {
   if (step === 0) return <Welcome onStart={() => setStep(1)} />;
 
   return (
-    <div className="flex min-h-dvh flex-col px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex items-center gap-1.5" aria-label={`Step ${step} of 2`}>
-        {[1, 2].map((i) => (
-          <span
-            key={i}
-            className={cx(
-              "h-1 flex-1 rounded-full transition-colors",
-              i <= step ? "bg-accent" : "bg-surface-2",
-            )}
-          />
-        ))}
-      </div>
-
-      <div className="flex-1 pt-10">
-        {step === 1 && (
-          <>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-              Sign in to back things up
-            </h1>
-            <p className="mt-3 text-muted">
-              Your money, tasks and settings come back on a new phone. You can skip this and do it
-              later.
-            </p>
-            <div className="mt-8">
-              {session ? (
-                <div className="rounded-2xl bg-safe-soft px-4 py-3.5">
-                  <p className="text-[13px] text-muted">Signed in as</p>
-                  <p className="font-semibold text-safe">{accountName(session.user.email)}</p>
-                </div>
-              ) : (
-                <SignIn />
+    // Pinned to the real screen edges (like the welcome) and scrolling inside:
+    // the app's text-size zoom on <html> makes dvh heights lie, which pushed
+    // these steps off the top of the screen on phones.
+    <div className="paper-page fixed inset-0 z-40 overflow-y-auto overscroll-contain">
+      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div
+          className="flex items-center gap-1.5"
+          aria-label={`Step ${step} of 2`}
+        >
+          {[1, 2].map((i) => (
+            <span
+              key={i}
+              className={cx(
+                "h-1 flex-1 rounded-full transition-colors",
+                i <= step ? "bg-accent" : "bg-surface-2",
               )}
-            </div>
-          </>
-        )}
+            />
+          ))}
+        </div>
 
-        {step === 2 && (
-          <>
-            <h1 className="text-[28px] font-semibold leading-tight tracking-tight">About you</h1>
-            <p className="mt-3 text-muted">Two quick things, both changeable later.</p>
-            <div className="mt-8">
-              <Field label="What should we call you?">
-                <input
-                  className={inputCls}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Sachin"
-                  autoComplete="given-name"
-                />
-              </Field>
-              <p className="mb-2.5 text-[13px] font-medium text-muted">Attendance your college asks for</p>
-              <div className="flex flex-wrap gap-2.5">
-                {[75, 70, 65, 80, 85].map((t) => (
-                  <Chip key={t} active={target === t} onClick={() => setTarget(t)}>
-                    {t}%
-                  </Chip>
-                ))}
+        <div className="flex-1 pt-10">
+          {step === 1 && (
+            <>
+              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                Sign in to back things up
+              </h1>
+              <p className="mt-3 text-muted">
+                Your tasks and settings come back on a new phone. You can
+                skip this and do it later.
+              </p>
+              <div className="mt-8">
+                {session ? (
+                  <div className="rounded-2xl bg-safe-soft px-4 py-3.5">
+                    <p className="text-[13px] text-muted">Signed in as</p>
+                    <p className="font-semibold text-safe">
+                      {accountName(session.user.email)}
+                    </p>
+                  </div>
+                ) : (
+                  <SignIn />
+                )}
               </div>
-            </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
 
-      <div className="flex gap-3">
-        <Button variant="secondary" onClick={() => setStep(step - 1)} disabled={busy}>
-          Back
-        </Button>
-        {step < 2 ? (
-          <Button className="flex-1" variant={!session ? "secondary" : "primary"} onClick={() => setStep(step + 1)}>
-            {!session ? "Skip for now" : "Continue"}
+          {step === 2 && (
+            <>
+              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
+                About you
+              </h1>
+              <p className="mt-3 text-muted">
+                Two quick things, both changeable later.
+              </p>
+              <div className="mt-8">
+                <Field label="What should we call you?">
+                  <input
+                    className={inputCls}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Sachin"
+                    autoComplete="given-name"
+                  />
+                </Field>
+                <p className="mb-2.5 text-[13px] font-medium text-muted">
+                  Attendance your college asks for
+                </p>
+                <div className="flex flex-wrap gap-2.5">
+                  {[75, 70, 65, 80, 85].map((t) => (
+                    <Chip
+                      key={t}
+                      active={target === t}
+                      onClick={() => setTarget(t)}
+                    >
+                      {t}%
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setStep(step - 1)}
+            disabled={busy}
+          >
+            Back
           </Button>
-        ) : (
-          <Button className="flex-1" onClick={finish} disabled={busy}>
-            {busy ? "Setting up…" : "Continue"}
-          </Button>
-        )}
+          {step < 2 ? (
+            <Button
+              className="flex-1"
+              variant={!session ? "secondary" : "primary"}
+              onClick={() => setStep(step + 1)}
+            >
+              {!session ? "Skip for now" : "Continue"}
+            </Button>
+          ) : (
+            <Button className="flex-1" onClick={finish} disabled={busy}>
+              {busy ? "Setting up…" : "Continue"}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -147,14 +179,17 @@ function Welcome({ onStart }: { onStart: () => void }) {
         <div>
           <div className="flex items-center gap-2.5">
             <Logo size={34} />
-            <span className="text-[20px] font-semibold tracking-tight drop-shadow">DockIn</span>
+            <span className="text-[20px] font-semibold tracking-tight drop-shadow">
+              DockIn
+            </span>
           </div>
           <h1 className="mt-9 text-[40px] leading-[1.08] tracking-tight drop-shadow-[0_2px_14px_rgba(5,10,35,0.55)]">
             <span className="block font-bold">Your College Life.</span>
             <span className="block font-light">In One Place.</span>
           </h1>
           <p className="mt-4 max-w-[19rem] text-[15px] leading-relaxed text-white/90 drop-shadow-[0_1px_8px_rgba(5,10,35,0.6)]">
-            Track attendance, manage expenses, never miss a deadline, and stay ahead.
+            Track attendance, manage expenses, never miss a deadline, and stay
+            ahead.
           </p>
         </div>
 

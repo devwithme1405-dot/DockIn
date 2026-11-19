@@ -142,6 +142,9 @@ export function TaskRow({
           >
             {task.title}
           </span>
+          {!subject && task.source === "lms" && task.notes && (
+            <span className="mt-0.5 block truncate text-[12.5px] font-semibold text-mess">{task.notes}</span>
+          )}
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-muted">
             {task.done ? (
               <span className="font-medium text-safe">Completed</span>

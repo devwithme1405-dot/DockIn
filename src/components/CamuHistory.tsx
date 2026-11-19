@@ -7,6 +7,7 @@ import { fmtDay, fmtTime } from "@/lib/dates";
 import type { CamuState } from "@/lib/native";
 import type { AttendanceSummary, Subject } from "@/lib/types";
 import { ProgressBar, STATE_TEXT, Sheet, cx } from "./ui";
+import { WhatIf } from "./WhatIf";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -60,6 +61,7 @@ export function CamuHistorySheet({
           <ProgressBar pct={summary.pct} target={target} state={summary.state} />
         </div>
         <p className={cx("mt-3 text-[13.5px] font-medium", STATE_TEXT[summary.state])}>{describe(summary)}</p>
+        <WhatIf className="mt-3 bg-card" attended={summary.attended} total={summary.total} target={target} />
       </div>
 
       {groups.length === 0 ? (

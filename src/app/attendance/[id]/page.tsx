@@ -178,14 +178,8 @@ export default function SubjectPage() {
               <Stat label="Cancelled" value={cancelled} tone="text-muted" />
               <Stat label="Total" value={summary.total} tone="text-text" />
             </dl>
+            <WhatIf className="mt-3" attended={summary.attended} total={summary.total} target={target} />
           </section>
-
-          {summary.total > 0 && (
-            <WhatIf
-              target={target}
-              options={[{ id: subject.id, label: subject.name, attended: summary.attended, total: summary.total }]}
-            />
-          )}
 
           <section className="lift rounded-3xl bg-surface p-4">
             <h2 className="mb-3 text-[15px] font-semibold">Mark today&apos;s class</h2>
