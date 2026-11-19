@@ -144,7 +144,7 @@ await step("the Chats list shows the friend and the group, with unread", async (
 });
 
 await step("a one-to-one chat opens and sends", async () => {
-  await page.getByRole("button", { name: /^Y\s*Yash/ }).first().click();
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_)/ }).first().click();
   await page.getByRole("dialog").getByText("Bhai DBMS lab 7 kiya?").waitFor({ timeout: 4000 });
   await page.getByLabel("Message", { exact: true }).fill("Bhej diya 👍");
   await page.getByLabel("Send").click();
@@ -165,10 +165,11 @@ await step("the group chat shows who said what and the task card", async () => {
 });
 
 await step("friend requests show on the Chats tab with accept, reject and block", async () => {
-  await page.getByText("1 friend request").waitFor({ timeout: 4000 });
-  await page.getByLabel("Reject Aman Verma").waitFor({ timeout: 2000 });
+  await page.getByRole("button", { name: /Friend requests/ }).click();
+  await page.getByRole("button", { name: "Reject", exact: true }).waitFor({ timeout: 3000 });
   await page.getByLabel("Block Aman Verma").waitFor({ timeout: 2000 });
   await page.screenshot({ path: `${SHOTS}/chat-requests.png` });
+  await page.getByRole("button", { name: "Chats", exact: true }).click();
 });
 
 await step("a group poll takes a vote, and the chat can be pinned", async () => {
@@ -186,7 +187,7 @@ await step("a group poll takes a vote, and the chat can be pinned", async () => 
 });
 
 await step("the + menu offers task, poll and document; a document shows as a card", async () => {
-  await page.getByRole("button", { name: /^Y\s*Yash/ }).first().click();
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_)/ }).first().click();
   const dlg = page.getByRole("dialog");
   await dlg.getByText("DBMS_Lab7_question.pdf").waitFor({ timeout: 4000 });
   await dlg.getByLabel("Add a task, poll or document").click();

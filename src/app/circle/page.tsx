@@ -67,7 +67,6 @@ import { ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
 import { LMS_URL } from "@/components/AssignmentFile";
-import { Segmented } from "@/components/Paper";
 import { ChatView } from "@/components/ChatView";
 import { QrScanner, type Scanned } from "@/components/QrScanner";
 import { directThread, groupThread, otherIn, usePeople, useThreads, type ThreadId } from "@/lib/chat";
@@ -84,8 +83,8 @@ const GROUP_EMOJIS = ["📚", "🧪", "💻", "🏠", "⚽", "🎓", "🎬", "�
 type Tab = "chats" | "friends" | "groups" | "work";
 const TABS = [
   ["chats", "Chats"],
-  ["friends", "Friends"],
   ["groups", "Groups"],
+  ["friends", "People"],
   ["work", "Work"],
 ] as const;
 type SheetName = "add" | "confirm" | "newGroup" | "joinGroup" | "me" | "share" | null;
@@ -176,8 +175,8 @@ function Circle() {
 
   useEffect(() => {
     // Drop the code from the address bar so a reload does not re-open the sheet.
-    if (incoming) router.replace("/circle");
-  }, [incoming, router]);
+    if (incoming || joining) window.history.replaceState({ dockinFromToday: false }, "", "/circle");
+  }, [incoming, joining]);
 
   const accepted = useMemo(() => (friends ?? []).filter((f) => f.status === "accepted"), [friends]);
   const requests = useMemo(
@@ -258,7 +257,7 @@ function Circle() {
               const I = Icon as typeof Users;
               return (
                 <li key={title as string} className="flex gap-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface text-accent shadow-[0_0_0_1px_var(--line)]">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface text-mess shadow-[0_0_0_1px_var(--line)]">
                     <I size={17} />
                   </span>
                   <span className="min-w-0">
@@ -473,84 +472,94 @@ function Circle() {
     }
   }
 
+  const unreadBy = new Map((threads ?? []).map((t) => [t.thread, t.unread]));
+
   return (
-    <div className="page-wash">
-      <PageHeader
-        title="Friends"
-        subtitle="Your people, groups and shared work"
-        right={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setScanning(true)}
-              aria-label="Scan a QR"
-              className="btn-paper grid size-11 place-items-center rounded-full text-mess"
-            >
-              <ScanLine size={20} />
+    <div className="page-wash pb-4">
+      {/* Header: the title and two plain icons, Instagram-style. */}
+      <header className="flex items-center gap-2 px-4 pt-[max(0.9rem,env(safe-area-inset-top))] pb-1">
+        <h1 className="font-display min-w-0 flex-1 truncate text-[27px] font-extrabold tracking-[-0.03em]">Friends</h1>
+        <button onClick={() => setScanning(true)} aria-label="Scan a QR" className="grid size-11 place-items-center rounded-full text-text active:bg-surface-2">
+          <ScanLine size={23} />
+        </button>
+        <button onClick={() => setSheet("me")} aria-label="Your code and adding friends" className="relative grid size-11 place-items-center rounded-full text-text active:bg-surface-2">
+          <UserPlus size={23} />
+          {requests.length > 0 && <span className="absolute top-2 right-2 size-2.5 rounded-full bg-orange ring-2 ring-bg" />}
+        </button>
+      </header>
+
+      {/* People in a row, like stories: you first (your QR), then friends —
+          a ring means they have written to you. Tap to chat. */}
+      <div className="no-scrollbar mt-1 flex gap-3.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
+        <button onClick={() => setSheet("me")} className="flex w-[66px] shrink-0 flex-col items-center gap-1">
+          <span className="relative grid size-[62px] place-items-center rounded-full border-2 border-dashed border-card-edge bg-card">
+            <QrIcon size={24} className="text-mess" />
+            <span className="absolute -right-0.5 -bottom-0.5 grid size-5 place-items-center rounded-full bg-orange text-white ring-2 ring-bg">
+              <Plus size={13} strokeWidth={3} />
+            </span>
+          </span>
+          <span className="w-full truncate text-center text-[11.5px] text-muted">Your QR</span>
+        </button>
+        {accepted.map((f) => {
+          const unread = me ? (unreadBy.get(directThread(me, f.id)) ?? 0) : 0;
+          return (
+            <button key={f.id} onClick={() => me && openChat(directThread(me, f.id))} className="flex w-[66px] shrink-0 flex-col items-center gap-1">
+              <span
+                className={cx(
+                  "grid size-[62px] place-items-center rounded-full p-[2.5px]",
+                  unread ? "bg-gradient-to-tr from-orange via-[#e0662b] to-ink" : "bg-card-edge/60",
+                )}
+              >
+                <span className="grid size-full place-items-center rounded-full bg-bg p-[2px]">
+                  <Avatar name={f.name} avatar={f.avatar} size={52} />
+                </span>
+              </span>
+              <span className={cx("w-full truncate text-center text-[11.5px]", unread ? "font-bold text-text" : "text-muted")}>
+                {f.name.split(" ")[0]}
+              </span>
             </button>
+          );
+        })}
+      </div>
+
+      {/* Sections as underlined words, not chunky pills: they never wrap. */}
+      <nav className="sticky top-0 z-10 mt-1 flex border-b border-card-edge/70 bg-bg/95 px-2 backdrop-blur" aria-label="Friends sections">
+        {TABS.map(([id, label]) => {
+          const count = id === "friends" ? requests.length : id === "work" ? toHandIn : 0;
+          return (
             <button
-              onClick={() => setSheet("me")}
-              aria-label="Your code and adding friends"
-              className="btn-leather grid size-11 place-items-center rounded-full"
+              key={id}
+              onClick={() => setTab(id)}
+              aria-current={tab === id ? "page" : undefined}
+              className={cx(
+                "relative flex h-11 min-w-0 flex-1 items-center justify-center gap-1 text-[14px] font-bold transition-colors",
+                tab === id ? "text-text" : "text-muted",
+              )}
             >
-              <UserPlus size={20} />
+              <span className="truncate">{label}</span>
+              {count > 0 && (
+                <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-orange px-1 text-[10.5px] text-white">{count}</span>
+              )}
+              {tab === id && <span className="absolute inset-x-4 bottom-0 h-[2.5px] rounded-full bg-ink" />}
             </button>
-          </div>
-        }
-      />
-      <div className="h-4" />
+          );
+        })}
+      </nav>
 
-      {/* Three numbers, one surface. The counts are the reason to open a tab,
-          so they belong above the tabs rather than inside them. */}
-      <section
-        className="mx-5 grid grid-cols-3 divide-x divide-line overflow-hidden lift rounded-3xl bg-surface"
-        aria-label="Summary"
-      >
-        <Tally label="Friends" value={accepted.length} onClick={() => setTab("friends")} />
-        <Tally label="Groups" value={groups?.length ?? 0} onClick={() => setTab("groups")} />
-        <Tally
-          label="To hand in"
-          value={toHandIn}
-          ink={toHandIn > 0 ? "text-accent" : undefined}
-          onClick={() => setTab("work")}
-        />
-      </section>
-
-      <Segmented value={tab} onChange={setTab} options={TABS} label="Friends sections" className="mx-5 mt-4" small />
-
-      {requests.length > 0 && (
-        <section className="mx-5 mt-4" aria-label="Friend requests">
-          <p className="mb-2 text-[13px] font-bold tracking-wide text-mess uppercase">
-            {requests.length} friend {requests.length === 1 ? "request" : "requests"}
-          </p>
-          <ul className="overflow-hidden rounded-3xl border-[1.5px] border-orange/50 bg-card">
-            {requests.map((f, i) => (
-              <li key={f.id} className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}>
-                <Avatar name={f.name} avatar={f.avatar} size={42} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold">{f.name}</p>
-                  <p className="truncate text-[12.5px] text-muted">{describe(f)}</p>
-                </div>
-                <button onClick={() => void accept(f)} className="btn-leather h-9 rounded-full px-3.5 text-[13.5px]">
-                  Accept
-                </button>
-                <button
-                  onClick={() => void reject(f)}
-                  aria-label={`Reject ${f.name}`}
-                  className="btn-paper grid size-9 place-items-center rounded-full"
-                >
-                  <X size={16} />
-                </button>
-                <button
-                  onClick={() => setBlocking(f)}
-                  aria-label={`Block ${f.name}`}
-                  className="grid size-9 place-items-center rounded-full text-muted"
-                >
-                  <Ban size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {requests.length > 0 && tab === "chats" && (
+        <button
+          onClick={() => setTab("friends")}
+          className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-2xl bg-orange/10 px-3.5 py-3 text-left active:scale-[0.99]"
+        >
+          <span className="grid size-10 place-items-center rounded-full bg-orange text-white">
+            <UserPlus size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14.5px] font-bold">Friend requests</span>
+            <span className="block truncate text-[12.5px] text-muted">{requests.map((r) => r.name.split(" ")[0]).join(", ")}</span>
+          </span>
+          <span className="grid h-6 min-w-6 place-items-center rounded-full bg-orange px-1.5 text-[12px] font-bold text-white">{requests.length}</span>
+        </button>
       )}
 
       {problem && (
@@ -572,7 +581,39 @@ function Circle() {
       )}
 
       {tab === "friends" && (
-        <div className="space-y-5 px-5 pt-4">
+        <div className="space-y-5 px-4 pt-4">
+          {requests.length > 0 && (
+            <section aria-label="Friend requests">
+              <SectionTitle>Requests</SectionTitle>
+              <ul className="space-y-2">
+                {requests.map((f) => (
+                  <li key={f.id} className="flex items-center gap-3 rounded-2xl border-[1.5px] border-orange/40 bg-card p-3">
+                    <Avatar name={f.name} avatar={f.avatar} size={46} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-bold">{f.name}</p>
+                      <p className="truncate text-[12.5px] text-muted">{describe(f) || "Wants to be friends"}</p>
+                      <div className="mt-2 flex gap-2">
+                        <button onClick={() => void accept(f)} className="btn-leather h-9 flex-1 rounded-xl text-[13.5px]">
+                          Accept
+                        </button>
+                        <button onClick={() => void reject(f)} className="btn-paper h-9 flex-1 rounded-xl text-[13.5px] font-bold">
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => setBlocking(f)}
+                          aria-label={`Block ${f.name}`}
+                          className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted"
+                        >
+                          <Ban size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section>
             <SectionTitle>Friends</SectionTitle>
             {accepted.length > 6 && (
@@ -694,7 +735,7 @@ function Circle() {
             </span>
             <input
               type="checkbox"
-              className="size-6 shrink-0 accent-accent"
+              className="size-6 shrink-0 accent-[#7c3d1b]"
               checked={sharesAttendance}
               onChange={(e) => void toggleAttendance(e.target.checked)}
             />
@@ -703,7 +744,7 @@ function Circle() {
       )}
 
       {tab === "groups" && (
-        <div className="space-y-4 px-5 pt-4">
+        <div className="space-y-4 px-4 pt-4">
           <div className="flex gap-2.5">
             <Button
               className="flex-1"
@@ -765,7 +806,7 @@ function Circle() {
                         </span>
                       </span>
                       {open > 0 && (
-                        <span className="shrink-0 rounded-full bg-accent-soft px-2.5 py-1 text-[12px] font-semibold text-accent tabular-nums">
+                        <span className="shrink-0 rounded-full bg-orange/15 px-2.5 py-1 text-[12px] font-semibold text-mess tabular-nums">
                           {open} open
                         </span>
                       )}
@@ -780,7 +821,7 @@ function Circle() {
       )}
 
       {tab === "work" && (
-        <div className="space-y-4 px-5 pt-4">
+        <div className="space-y-4 px-4 pt-4">
           {work.length > 3 && (
             <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
               {(
@@ -832,7 +873,7 @@ function Circle() {
         <button
           onClick={() => setSheet("share")}
           aria-label="Share an assignment"
-          className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-accent text-on-accent shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
+          className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-ink text-on-ink shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
         >
           <Share2 size={23} />
         </button>
@@ -1128,24 +1169,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Tally({
-  label,
-  value,
-  ink,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  ink?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="px-3 py-3.5 text-center transition active:scale-[0.97]">
-      <p className={cx("text-[22px] font-semibold leading-none tabular-nums", ink)}>{value}</p>
-      <p className="mt-1.5 text-[12px] text-muted">{label}</p>
-    </button>
-  );
-}
 
 /**
  * One shared assignment, all the way to handed in.
@@ -1237,10 +1260,14 @@ function describe(f: Friend): string {
   );
 }
 
+/** "now", "5m", "3h", "2d", or a date — the way chat lists say it. */
 function ago(ms: number): string {
-  const d = new Date(ms);
-  if (toDateStr(d) === toDateStr()) return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d`;
+  return new Date(ms).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 /** Conversations, newest first; friends and groups you have not talked to yet sit below. */
@@ -1306,7 +1333,7 @@ function ChatList({
 
   if (rows.length === 0)
     return (
-      <div className="px-5 pt-4">
+      <div className="px-4 pt-4">
         <EmptyState
           flush
           icon={MessageCircle}
@@ -1322,36 +1349,45 @@ function ChatList({
     );
 
   return (
-    <ul className="mx-5 mt-4 divide-y divide-line/70 overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card">
+    <ul className="mt-2 pb-2">
       {rows.map((r) => (
         <li key={r.thread}>
-          <button onClick={() => onOpen(r.thread)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-surface-2">
-            <span className="grid size-12 shrink-0 place-items-center rounded-full bg-mess-soft text-[20px] font-bold text-mess">
-              {r.emoji ?? r.name.charAt(0).toUpperCase()}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-baseline gap-2">
-                <span className="min-w-0 flex-1 truncate text-[15.5px] font-bold">{r.name}</span>
-                {r.pinned && <Pin size={13} className="shrink-0 text-mess" aria-label="Pinned" />}
-                {r.muted && <BellOff size={13} className="shrink-0 text-muted" aria-label="Muted" />}
-                <span className={cx("shrink-0 text-[11.5px]", r.unread ? "font-bold text-orange" : "text-muted")}>{r.when}</span>
-              </span>
-              <span className="mt-0.5 flex items-center gap-2">
-                <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", r.unread ? "font-semibold text-text" : "text-muted")}>
-                  {r.preview}
-                </span>
-                {r.unread > 0 && (
-                  <span
-                    className={cx(
-                      "grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[11px] font-bold text-white",
-                      r.muted ? "bg-muted" : "bg-orange",
-                    )}
-                  >
-                    {r.unread > 99 ? "99+" : r.unread}
-                  </span>
+          <button onClick={() => onOpen(r.thread)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left active:bg-surface-2/70">
+            <span
+              className={cx(
+                "grid size-[58px] shrink-0 place-items-center rounded-full p-[2.5px]",
+                r.unread && !r.muted ? "bg-gradient-to-tr from-orange via-[#e0662b] to-ink" : "bg-transparent",
+              )}
+            >
+              <span className="grid size-full place-items-center rounded-full bg-bg p-[2px]">
+                {r.emoji ? (
+                  <span className="grid size-full place-items-center rounded-full bg-mess-soft text-[24px]">{r.emoji}</span>
+                ) : (
+                  <Avatar name={r.name} size={48} />
                 )}
               </span>
             </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5">
+                <span className={cx("min-w-0 truncate text-[15.5px]", r.unread ? "font-extrabold" : "font-semibold")}>{r.name}</span>
+                {r.pinned && <Pin size={13} className="shrink-0 text-mess" aria-label="Pinned" />}
+                {r.muted && <BellOff size={13} className="shrink-0 text-muted" aria-label="Muted" />}
+              </span>
+              <span className={cx("mt-0.5 flex min-w-0 text-[13.5px]", r.unread ? "font-semibold text-text" : "text-muted")}>
+                <span className="min-w-0 truncate">{r.preview}</span>
+                {r.when && <span className="shrink-0 text-muted">&nbsp;· {r.when}</span>}
+              </span>
+            </span>
+            {r.unread > 0 && (
+              <span
+                className={cx(
+                  "grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-full px-1.5 text-[11.5px] font-bold text-white",
+                  r.muted ? "bg-muted" : "bg-orange",
+                )}
+              >
+                {r.unread > 99 ? "99+" : r.unread}
+              </span>
+            )}
           </button>
         </li>
       ))}

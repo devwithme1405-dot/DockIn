@@ -143,6 +143,8 @@ interface DockInPlugin {
   renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
   /** Hand a file in to this student's own LMS assignment (base64 data). Rejects "WEB_ONLY" when the LMS login cannot upload. */
+  /** Open a document (base64) in the phone's own viewer app. */
+  openFile(options: { name: string; mime: string; data: string }): Promise<void>;
   lmsSubmit(options: { instance: number; name: string; mime: string; data: string }): Promise<void>;
   /** Open Camu, signed in, at a path, with a note in the top bar. */
   openCamu(options: { path?: string; note?: string }): Promise<void>;

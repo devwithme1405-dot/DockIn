@@ -13,17 +13,18 @@ export interface Palette {
   to: string;
 }
 
+// Warm, earthy tones that sit on DockIn's paper and leather — not neon app colours.
 export const PALETTES: Palette[] = [
-  { from: "#4f8dfb", to: "#1f3fd6" },
-  { from: "#8b5cf6", to: "#5b21b6" },
-  { from: "#f472b6", to: "#be185d" },
-  { from: "#fb7185", to: "#be123c" },
-  { from: "#fb923c", to: "#c2410c" },
-  { from: "#fbbf24", to: "#b45309" },
-  { from: "#34d399", to: "#047857" },
-  { from: "#2dd4bf", to: "#0f766e" },
-  { from: "#38bdf8", to: "#0369a1" },
-  { from: "#a3a3a3", to: "#404040" },
+  { from: "#c9773f", to: "#8a3f17" }, // terracotta
+  { from: "#b5838d", to: "#6d4552" }, // dusty plum
+  { from: "#d4a373", to: "#9c6b3c" }, // caramel
+  { from: "#c46a4b", to: "#7f2f1d" }, // rust
+  { from: "#e0a345", to: "#a8661c" }, // mustard
+  { from: "#a3a565", to: "#5f6233" }, // olive
+  { from: "#7a9e7e", to: "#3f5f45" }, // moss
+  { from: "#6f9aa0", to: "#355a60" }, // slate teal
+  { from: "#9a7b6c", to: "#5a4136" }, // clay
+  { from: "#8c6a54", to: "#4a3122" }, // cocoa
 ];
 
 export const AVATAR_EMOJIS = [

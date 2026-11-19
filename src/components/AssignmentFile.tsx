@@ -18,6 +18,7 @@ import { countIn, guessRolls, readDocxText } from "@/lib/docx";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { Button, Field, Sheet, cx, inputCls, useToast } from "./ui";
 import { LmsSubmitSheet } from "./LmsSubmit";
+import { openDocument } from "@/lib/files";
 
 /** Where the finished file actually has to go. */
 export const LMS_URL = "https://lms.bennett.edu.in/";
@@ -32,22 +33,7 @@ const kb = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(
  * there is no share sheet, so it falls back to a plain download.
  */
 export async function handOver(blob: Blob, name: string): Promise<void> {
-  const file = new File([blob], name, { type: blob.type });
-  if (navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: name });
-      return;
-    } catch (e) {
-      // The person closed the sheet: that is a choice, not a failure.
-      if (e instanceof DOMException && e.name === "AbortError") return;
-    }
-  }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await openDocument(blob, name);
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +146,7 @@ export function AttachPicker({
   return (
     <div className="mb-4 rounded-2xl bg-surface-2 p-3.5">
       <div className="flex items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-accent">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-mess">
           {reading ? <Loader2 size={17} className="animate-spin" /> : <FileText size={17} />}
         </span>
         <div className="min-w-0 flex-1">
@@ -341,7 +327,7 @@ export function SharedFileRow({
   return (
     <>
       <div className="mt-2 flex items-center gap-2.5 rounded-2xl bg-surface-2 px-3 py-2.5">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-accent">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-mess">
           <FileText size={16} />
         </span>
         <div className="min-w-0 flex-1">
@@ -362,7 +348,7 @@ export function SharedFileRow({
           disabled={busy}
           className={cx(
             "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium",
-            "bg-accent text-on-accent disabled:opacity-60",
+            "bg-ink text-on-ink disabled:opacity-60",
           )}
         >
           {busy ? (
@@ -381,7 +367,7 @@ export function SharedFileRow({
           href={LMS_URL}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-accent-soft px-3.5 py-2.5 text-[13px] font-medium text-accent"
+          className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-orange/15 px-3.5 py-2.5 text-[13px] font-medium text-mess"
         >
           <span>
             Check it, save it as PDF, then upload

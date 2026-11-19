@@ -5,6 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { db } from "./db";
 import { getSupabase } from "./supabase";
 import { notifyPush } from "./push";
+import { mimeOf } from "./files";
 
 /**
  * Chat: one-to-one with a friend, or a whole group.
@@ -96,6 +97,25 @@ export function chatMe(): string | null {
   return myId;
 }
 
+/**
+ * Who is signed in, from the session saved on this phone — no network. Every
+ * send path uses this, so a pull that failed on a weak signal can never leave
+ * chat thinking nobody is signed in.
+ */
+async function ensureMe(): Promise<string | null> {
+  if (myId) return myId;
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data } = await sb.auth.getSession();
+  myId = data.session?.user.id ?? null;
+  return myId;
+}
+
+/** Hook: your user id, resolved from the saved session. */
+export function useChatMe(): string | null {
+  return useLiveQuery(async () => (await ensureMe()) ?? "", []) || null;
+}
+
 interface Row {
   id: string;
   thread: string;
@@ -134,9 +154,8 @@ function since(): string {
 export async function pullChat(): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
-  const { data: auth } = await sb.auth.getUser();
-  myId = auth.user?.id ?? null;
-  if (!myId) return;
+  myId = null;
+  if (!(await ensureMe())) return;
 
   const from = since();
   const [msgs, reads, people] = await Promise.all([
@@ -214,7 +233,7 @@ export async function sendMessage(
 ): Promise<void> {
   const { task, poll, file, replyTo, silent } = opts;
   const sb = getSupabase();
-  if (!sb || !myId) throw new Error("Sign in to chat.");
+  if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to chat.");
   const text = body.trim();
   if (!text && !task && !poll && !file) return;
   const id = crypto.randomUUID();
@@ -269,7 +288,7 @@ export async function markRead(thread: ThreadId): Promise<void> {
   const prev = await db.chatReads.get(thread);
   await db.chatReads.put({ ...prev, thread, readAt });
   const sb = getSupabase();
-  if (!sb || !myId) return;
+  if (!sb || !(await ensureMe()) || !myId) return;
   await sb.from("thread_reads").upsert({ user_id: myId, thread, read_at: new Date(readAt).toISOString() });
 }
 
@@ -278,14 +297,14 @@ export async function setThreadPref(thread: ThreadId, pref: { muted?: boolean; p
   const prev = await db.chatReads.get(thread);
   await db.chatReads.put({ thread, readAt: prev?.readAt ?? 0, muted: prev?.muted, pinned: prev?.pinned, ...pref });
   const sb = getSupabase();
-  if (!sb || !myId) return;
+  if (!sb || !(await ensureMe()) || !myId) return;
   await sb.from("thread_reads").upsert({ user_id: myId, thread, read_at: new Date(prev?.readAt || Date.now()).toISOString(), ...pref });
 }
 
 /** Your vote on a poll; tapping your current choice again takes the vote back. */
 export async function votePoll(messageId: string, choice: number): Promise<void> {
   const sb = getSupabase();
-  if (!sb || !myId) return;
+  if (!sb || !(await ensureMe()) || !myId) return;
   const id = `${messageId}:${myId}`;
   const prev = await db.pollVotes.get(id);
   if (prev?.choice === choice) {
@@ -308,18 +327,19 @@ const CHAT_MAX = 10 * 1024 * 1024;
 /** Uploads a document for a chat (PDF/Word/PowerPoint/Excel/text, up to 10 MB). */
 export async function uploadChatFile(thread: ThreadId, file: File): Promise<ChatFile> {
   const sb = getSupabase();
-  if (!sb || !myId) throw new Error("Sign in to send files.");
+  if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to send files.");
   if (file.size > CHAT_MAX) throw new Error("That file is over 10 MB.");
   if (!/\.(pdf|docx?|pptx?|xlsx?|txt)$/i.test(file.name)) throw new Error("Only documents: PDF, Word, PowerPoint, Excel or text.");
   const clean = file.name.normalize("NFKD").replace(/[^\w.\- ]+/g, "").replace(/\s+/g, " ").trim().slice(-80) || "document";
   const path = `${thread.replace(/:/g, "_")}/${crypto.randomUUID()}/${clean}`;
-  const { error } = await sb.storage.from("chat-files").upload(path, file, { contentType: file.type || undefined, upsert: false });
+  const contentType = mimeOf(file.name, file.type);
+  const { error } = await sb.storage.from("chat-files").upload(path, file, { contentType, upsert: false });
   if (error) {
     if (/Bucket not found/i.test(error.message)) throw new Error("Documents are not set up on the server yet.");
     if (/mime type/i.test(error.message)) throw new Error("Only documents: PDF, Word, PowerPoint, Excel or text.");
     throw new Error(error.message);
   }
-  return { name: clean, size: file.size, type: file.type, path };
+  return { name: clean, size: file.size, type: contentType, path };
 }
 
 export async function downloadChatFile(f: ChatFile): Promise<Blob> {

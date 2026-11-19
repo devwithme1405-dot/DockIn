@@ -382,6 +382,44 @@ public class DockInPlugin extends Plugin {
         }, "dockin-lms-connect").start();
     }
 
+    /**
+     * Opens a document in whichever app the phone has for it (PDF viewer, Word…).
+     * The WebView cannot download a file the page made, so the page hands the
+     * bytes here; they go to the app's cache and out through the FileProvider.
+     */
+    @PluginMethod
+    public void openFile(PluginCall call) {
+        String name = call.getString("name", "document");
+        String mime = call.getString("mime", "application/octet-stream");
+        String b64 = call.getString("data");
+        if (b64 == null) {
+            call.reject("No file.");
+            return;
+        }
+        try {
+            java.io.File dir = new java.io.File(getContext().getCacheDir(), "shared");
+            dir.mkdirs();
+            String safe = name.replaceAll("[^A-Za-z0-9._ -]", "_");
+            java.io.File out = new java.io.File(dir, safe.isEmpty() ? "document" : safe);
+            try (java.io.FileOutputStream f = new java.io.FileOutputStream(out)) {
+                f.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT));
+            }
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    getContext(), getContext().getPackageName() + ".fileprovider", out);
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, mime);
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(view, "Open " + name);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("No app on this phone opens this kind of file.");
+        } catch (Exception e) {
+            call.reject("Could not open the file.");
+        }
+    }
+
     /** Submits a file to this student's own LMS assignment, with their saved login. */
     @PluginMethod
     public void lmsSubmit(final PluginCall call) {

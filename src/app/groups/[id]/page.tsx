@@ -171,7 +171,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             <button
               onClick={invite}
               aria-label="Invite someone"
-              className="grid size-10 place-items-center rounded-full bg-accent text-on-accent"
+              className="grid size-10 place-items-center rounded-full bg-ink text-on-ink"
             >
               <Share2 size={16} />
             </button>
@@ -247,7 +247,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                   <p className="truncate font-medium">
                     {p.userId === me ? "You" : p.name}
                     {p.role === "owner" && (
-                      <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                      <span className="ml-2 rounded-full bg-orange/15 px-2 py-0.5 text-[11px] font-medium text-mess">
                         made this
                       </span>
                     )}

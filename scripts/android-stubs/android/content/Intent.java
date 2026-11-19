@@ -27,4 +27,8 @@ public class Intent {
   public String getAction() { return null; }
   public Intent setClassName(String p, String c) { return this; }
   public Intent setComponent(android.content.ComponentName c) { return this; }
+  public static final String ACTION_VIEW = "android.intent.action.VIEW";
+  public static final int FLAG_GRANT_READ_URI_PERMISSION = 1;
+  public Intent setDataAndType(Uri u, String t) { return this; }
+  public static Intent createChooser(Intent target, CharSequence title) { return target; }
 }

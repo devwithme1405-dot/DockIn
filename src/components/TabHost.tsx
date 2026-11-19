@@ -48,7 +48,9 @@ export function TabHost({ active }: { active: TabPath | null }) {
     const step = (left: number) => {
       if (cancelled || left <= 0) return;
       setMounted((prev) => {
-        const next = TAB_PATHS.find((p) => !prev.has(p));
+        // Friends and Profile are heavier and opened less: they mount on first
+        // open instead, so start-up stays light.
+        const next = TAB_PATHS.find((p) => !prev.has(p) && p !== "/circle" && p !== "/settings");
         return next ? new Set([...prev, next]) : prev;
       });
       idle(() => step(left - 1));

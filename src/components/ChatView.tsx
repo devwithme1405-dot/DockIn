@@ -17,7 +17,6 @@ import {
   Pin,
   Plus,
   RotateCw,
-  SendHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -46,7 +45,7 @@ import { shareTask, type ShareDraft } from "@/lib/social";
 import { lmsRef } from "@/lib/lmsSubmit";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Task } from "@/lib/types";
-import { Sheet, cx, useToast } from "./ui";
+import { Avatar, Sheet, cx, useToast } from "./ui";
 
 const KIND_LABEL: Record<string, string> = {
   assignment: "Assignment",
@@ -184,42 +183,51 @@ export function ChatView({
   }
 
   const rows = useMemo(() => {
-    const out: ({ day: string } | { msg: ChatMessage; first: boolean })[] = [];
+    // Messages from one person within a few minutes read as one run: name on
+    // the first, time and avatar on the last, tight spacing in between.
+    const out: ({ day: string } | { msg: ChatMessage; first: boolean; last: boolean })[] = [];
+    const list = msgs ?? [];
     let lastDay = "";
-    let lastAuthor = "";
-    for (const m of msgs ?? []) {
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
       const d = dayLabel(m.createdAt);
       if (d !== lastDay) {
         out.push({ day: d });
         lastDay = d;
-        lastAuthor = "";
       }
-      out.push({ msg: m, first: m.author !== lastAuthor });
-      lastAuthor = m.author;
+      const prev = list[i - 1];
+      const next = list[i + 1];
+      const joins = (a?: ChatMessage, b?: ChatMessage) =>
+        !!a && !!b && a.author === b.author && Math.abs(b.createdAt - a.createdAt) < 5 * 60_000 && dayLabel(a.createdAt) === dayLabel(b.createdAt);
+      out.push({ msg: m, first: !joins(prev, m), last: !joins(m, next) });
     }
     return out;
   }, [msgs]);
 
   return (
     <div className="paper-page fixed inset-0 z-50 flex flex-col" role="dialog" aria-label={`Chat with ${title}`}>
-      <header className="leather flex items-center gap-2 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 text-on-ink">
-        <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:scale-95">
-          <ArrowLeft size={22} />
+      <header className="flex items-center gap-1.5 border-b border-card-edge/70 bg-bg/95 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5 backdrop-blur">
+        <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
+          <ArrowLeft size={23} />
         </button>
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/15 text-[18px] font-bold">
-          {emoji ?? title.charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[16.5px] font-extrabold">{title}</span>
-          {subtitle && <span className="block truncate text-[12px] text-ink-muted">{subtitle}</span>}
-        </span>
-        {pref?.muted && <BellOff size={16} className="shrink-0 text-ink-muted" aria-label="Muted" />}
-        <button onClick={() => setMenu(true)} aria-label="Chat options" className="grid size-11 place-items-center rounded-full active:scale-95">
-          <MoreVertical size={20} />
+        {emoji ? (
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-mess-soft text-[19px]">{emoji}</span>
+        ) : (
+          <Avatar name={title} size={40} />
+        )}
+        <button onClick={onInfo ?? (() => setMenu(true))} className="min-w-0 flex-1 px-1.5 text-left">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[16.5px] font-extrabold">{title}</span>
+            {pref?.muted && <BellOff size={14} className="shrink-0 text-muted" aria-label="Muted" />}
+          </span>
+          {subtitle && <span className="block truncate text-[12px] text-muted">{subtitle}</span>}
+        </button>
+        <button onClick={() => setMenu(true)} aria-label="Chat options" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
+          <MoreVertical size={21} />
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-3">
         {msgs && msgs.length === 0 && (
           <p className="mx-auto mt-10 max-w-[16rem] text-center text-[13.5px] text-muted">
             {isGroup ? "Say hi to the group. Tasks anyone shares here show up as cards." : `Start chatting with ${title}.`}
@@ -236,6 +244,10 @@ export function ChatView({
               m={r.msg}
               mine={r.msg.author === me}
               showName={isGroup && r.first && r.msg.author !== me}
+              showAvatar={isGroup && r.last && r.msg.author !== me}
+              group={isGroup}
+              first={r.first}
+              last={r.last}
               name={people.get(r.msg.author)?.name ?? "Someone"}
               onHold={() => r.msg.author === me && !r.msg.deleted && setHolding(r.msg)}
               onRetry={() => void retryMessage(r.msg)}
@@ -245,15 +257,8 @@ export function ChatView({
         <div ref={end} />
       </div>
 
-      <footer className="flex items-end gap-2 border-t border-card-edge/60 bg-bg/90 px-2.5 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] backdrop-blur">
-        <button
-          onClick={() => setAdding(true)}
-          aria-label="Add a task, poll or document"
-          disabled={uploading}
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-2 text-mess active:scale-95 disabled:opacity-50"
-        >
-          {uploading ? <Clock size={19} className="animate-pulse" /> : <Plus size={21} />}
-        </button>
+      {/* Composer: one pill, like a messenger — attach on the left, send appears with text. */}
+      <footer className="bg-bg/95 px-3 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] backdrop-blur">
         <input
           ref={docInput}
           type="file"
@@ -264,22 +269,46 @@ export function ChatView({
             e.target.value = "";
           }}
         />
-        <textarea
-          rows={1}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Message"
-          aria-label="Message"
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-[22px] border-[1.5px] border-card-edge bg-card px-4 py-2.5 text-[15px] leading-snug outline-none focus:border-orange"
-        />
-        <button
-          onClick={() => void send()}
-          disabled={!text.trim()}
-          aria-label="Send"
-          className="btn-leather grid size-11 shrink-0 place-items-center rounded-full disabled:opacity-50"
-        >
-          <SendHorizontal size={19} />
-        </button>
+        <div className="flex items-end gap-1 rounded-[26px] border-[1.5px] border-card-edge bg-card p-1 focus-within:border-orange/70">
+          <button
+            onClick={() => setAdding(true)}
+            aria-label="Add a task, poll or document"
+            disabled={uploading}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-orange to-[#d9601f] text-white active:scale-95 disabled:opacity-60"
+          >
+            {uploading ? <Clock size={18} className="animate-pulse" /> : <Plus size={21} strokeWidth={2.5} />}
+          </button>
+          <textarea
+            rows={1}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              const el = e.target;
+              el.style.height = "auto";
+              el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+            }}
+            placeholder={uploading ? "Sending the file…" : "Message…"}
+            aria-label="Message"
+            className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15.5px] leading-snug outline-none placeholder:text-muted"
+          />
+          {text.trim() ? (
+            <button
+              onClick={() => void send()}
+              aria-label="Send"
+              className="h-10 shrink-0 rounded-full px-3.5 text-[15px] font-extrabold text-mess active:scale-95"
+            >
+              Send
+            </button>
+          ) : (
+            <button
+              onClick={() => docInput.current?.click()}
+              aria-label="Send a document"
+              className="grid size-10 shrink-0 place-items-center rounded-full text-muted active:scale-95"
+            >
+              <Paperclip size={20} />
+            </button>
+          )}
+        </div>
       </footer>
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="Send">
@@ -377,6 +406,10 @@ function Bubble({
   m,
   mine,
   showName,
+  showAvatar,
+  group,
+  first,
+  last,
   name,
   onHold,
   onRetry,
@@ -384,6 +417,10 @@ function Bubble({
   m: ChatMessage;
   mine: boolean;
   showName: boolean;
+  showAvatar: boolean;
+  group: boolean;
+  first: boolean;
+  last: boolean;
   name: string;
   onHold: () => void;
   onRetry: () => void;
@@ -402,14 +439,20 @@ function Bubble({
   };
 
   return (
-    <div className={cx("mt-1 flex", mine ? "justify-end" : "justify-start")}>
-      <div className={cx("max-w-[80%]", showName && "mt-2")}>
-        {showName && <p className="mb-0.5 ml-3 text-[12px] font-bold text-mess">{name}</p>}
+    <div className={cx("flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-2.5" : "mt-[3px]")}>
+      {group && !mine && (
+        <span className="w-7 shrink-0">{showAvatar && <Avatar name={name} size={28} />}</span>
+      )}
+      <div className={cx("max-w-[78%] min-w-0", mine && "flex flex-col items-end")}>
+        {showName && <p className="mb-1 ml-3 text-[12px] font-bold text-mess">{name}</p>}
         <div
           {...press}
           className={cx(
-            "rounded-[20px] px-3.5 py-2 text-[15px] leading-snug [overflow-wrap:anywhere] select-none",
-            mine ? "rounded-br-md bg-ink text-on-ink" : "rounded-bl-md border-[1.5px] border-card-edge bg-card",
+            "px-3.5 py-2 text-[15px] leading-snug [overflow-wrap:anywhere] select-none",
+            mine
+              ? cx("bg-gradient-to-br from-[#8a4520] to-ink text-on-ink shadow-[0_2px_8px_-4px_rgba(60,25,8,0.6)]",
+                  "rounded-[22px]", !first && "rounded-tr-[8px]", !last && "rounded-br-[8px]")
+              : cx("border border-card-edge bg-card", "rounded-[22px]", !first && "rounded-tl-[8px]", !last && "rounded-bl-[8px]"),
             m.deleted && "italic opacity-70",
           )}
         >
@@ -424,10 +467,12 @@ function Bubble({
           ) : (
             <span className="whitespace-pre-wrap">{m.body}</span>
           )}
-          <span className={cx("mt-0.5 flex items-center justify-end gap-1 text-[10.5px]", mine ? "text-ink-muted" : "text-muted")}>
-            {clock(m.createdAt)}
-            {mine && (m.failed ? null : m.pending ? <Clock size={11} /> : m.deleted ? null : <CheckCheck size={12} />)}
-          </span>
+          {(last || m.pending || m.failed) && (
+            <span className={cx("mt-0.5 flex items-center justify-end gap-1 text-[10.5px]", mine ? "text-ink-muted" : "text-muted")}>
+              {clock(m.createdAt)}
+              {mine && (m.failed ? null : m.pending ? <Clock size={11} /> : m.deleted ? null : <CheckCheck size={12} />)}
+            </span>
+          )}
         </div>
         {m.failed && (
           <button onClick={onRetry} className="mt-1 ml-auto flex items-center gap-1 text-[12px] font-semibold text-danger">
