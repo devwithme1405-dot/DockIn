@@ -71,6 +71,11 @@ window.addEventListener('error',function(e){
   if(t&&t.tagName==='SCRIPT'&&t.src&&t.src.indexOf('/_next/')>-1){ heal(); return; }
   if(e.message&&CHUNK.test(e.message)) heal();
 },true);
+// A script that never answers raises no error at all — the app just sits on
+// its splash. If nothing has drawn after 12 seconds while online, heal too.
+setTimeout(function(){
+  if(!window.__dockinReady&&navigator.onLine!==false) heal();
+},12000);
 window.addEventListener('unhandledrejection',function(e){
   var r=e.reason; if(!r)return;
   var m=(r.name||'')+' '+(r.message||r);

@@ -147,6 +147,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (screenReady) appReady();
   }, [screenReady]);
+  // The app's code is running: the boot watchdog in the layout can stand down.
+  useEffect(() => {
+    (window as unknown as { __dockinReady?: boolean }).__dockinReady = true;
+  }, []);
 
   /**
    * DockIn's own notifications say which screen to open ("Spent ₹250 at

@@ -15,24 +15,53 @@ import { FRIENDS } from "@/lib/features";
 const BUILD = process.env.NEXT_PUBLIC_BUILD ?? "dev";
 
 /** Pages worth having before they are asked for, so a cold start never waits. */
-const SHELL = ["/", "/attendance", "/timetable", "/cafeteria", "/tasks", ...(FRIENDS ? ["/circle"] : []), "/settings"];
+const SHELL = ["/", "/attendance", "/timetable", "/cafeteria", "/tasks", ...(FRIENDS ? ["/circle"] : []), "/settings", "/onboarding"];
 
 const source = `
 const BUILD = ${JSON.stringify(BUILD)};
 const CACHE = "dockin-" + BUILD;
 const SHELL = ${JSON.stringify(SHELL)};
 
+// Network with a deadline and one retry: a stalled connection must never leave
+// the app waiting forever for a file (that was the stuck brown screen).
+function fetchSoon(req, ms) {
+  const once = () => {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), ms);
+    return fetch(req, { signal: ctl.signal }).finally(() => clearTimeout(t));
+  };
+  return once().catch(() => once());
+}
+
+// Install = download the WHOLE new version first: every shell page and every
+// script/style those pages load. Only when all of it is safely cached does the
+// new version take over. If anything fails (weak signal), this install fails
+// and the previous version — complete, cached — keeps running; the browser
+// tries the update again on the next open.
 self.addEventListener("install", (event) => {
-  // Warm the shell so the first launch after an update is instant too. One
-  // failed page must not fail the install, hence the per-URL catch. The scripts
-  // and route-data a page needs are cached as they are first used (below), not
-  // up front — warming them here floods the first load with requests.
   event.waitUntil(
-    caches.open(CACHE).then((c) =>
-      Promise.all(SHELL.map((u) => c.add(new Request(u, { cache: "reload" })).catch(() => {}))),
-    ),
+    (async () => {
+      const c = await caches.open(CACHE);
+      const assets = new Set();
+      for (const u of SHELL) {
+        const res = await fetchSoon(new Request(u, { cache: "reload" }), 15000);
+        if (!res.ok) throw new Error("shell " + u + " " + res.status);
+        const html = await res.clone().text();
+        await c.put(u, res);
+        for (const part of html.split("/_next/static/").slice(1)) {
+          const path = part.slice(0, part.search(/["'\\s)\\\\]/));
+          if (/\\.(js|css)$/.test(path)) assets.add("/_next/static/" + path);
+        }
+      }
+      for (const a of assets) {
+        if (await c.match(a)) continue;
+        const res = await fetchSoon(new Request(a, { cache: "reload" }), 20000);
+        if (!res.ok) throw new Error("asset " + a + " " + res.status);
+        await c.put(a, res);
+      }
+      await self.skipWaiting();
+    })(),
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
@@ -103,7 +132,7 @@ self.addEventListener("fetch", (event) => {
       caches.match(req).then(
         (hit) =>
           hit ||
-          fetch(req).then((res) => {
+          fetchSoon(req, 15000).then((res) => {
             if (res && res.ok) {
               const copy = res.clone();
               caches.open(CACHE).then((c) => c.put(req, copy));
