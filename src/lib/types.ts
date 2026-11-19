@@ -307,6 +307,8 @@ export interface Share {
   room: string;
   priority: Priority;
   file?: ShareFile | null;
+  /** When it is an LMS assignment: the same Moodle assignment for everyone in the class. */
+  lms?: { module: string; instance: number } | null;
   /** How far each person it went to has got (group / friends). */
   progress?: { userId: string; name: string; done: boolean; submitted: boolean }[];
   createdAt: number;

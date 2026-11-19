@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
+import { lmsRef } from "@/lib/lmsSubmit";
 import { Check, Clock, MapPin, Send, Undo2, Users } from "lucide-react";
 import type { Group, Priority, Reaction, Share, ShareState, Subject, TaskKind } from "@/lib/types";
 import { KINDS, dueLabel } from "@/lib/tasks";
@@ -13,6 +16,7 @@ import {
   shareTask,
   unshare,
   uploadAssignment,
+  setShareSubmitted,
 } from "@/lib/social";
 import { Avatar, Button, Chip, Field, cx, inputCls, useToast } from "./ui";
 import { KIND_ICON } from "./TaskParts";
@@ -108,7 +112,18 @@ export function ShareRow({
         </p>
         {share.notes && <p className="mt-1 text-[13px] text-muted">{share.notes}</p>}
 
-        {share.file && <SharedFileRow file={share.file} mine={mine} />}
+        {share.file && (
+          <SharedFileRow
+            file={share.file}
+            mine={mine}
+            lms={share.lms}
+            title={share.title}
+            onSubmitted={() => {
+              void setShareSubmitted(share.id, true);
+              onChanged?.();
+            }}
+          />
+        )}
 
         {reactions && <Reactions shareId={share.id} list={reactions} me={me ?? null} />}
 
@@ -177,6 +192,12 @@ export function ShareForm({
     defaultGroupId || groups.length > 0 ? "group" : "friends",
   );
   const [attach, setAttach] = useState<Attachment | null>(null);
+  // Linking it to one of your LMS assignments lets everyone hand in their own copy from DockIn.
+  const [lms, setLms] = useState<{ module: string; instance: number } | null>(null);
+  const lmsTasks = useLiveQuery(
+    () => db.tasks.filter((t) => t.source === "lms" && !t.deletedAt && !t.done && t.id.startsWith("lms-assign-")).toArray(),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -194,7 +215,7 @@ export function ShareForm({
     try {
       if (attach) {
         setStage("Uploading the file…");
-        file = await uploadAssignment(attach.file);
+        file = await uploadAssignment(attach.file, { name: attach.name, roll: attach.roll });
       }
       setStage("Sharing…");
       await shareTask(
@@ -208,6 +229,7 @@ export function ShareForm({
           room: room.trim(),
           priority,
           file,
+          lms,
         },
         mode === "group" ? { groupId } : { friendIds: picked },
       );
@@ -224,6 +246,38 @@ export function ShareForm({
 
   return (
     <div>
+      {(lmsTasks?.length ?? 0) > 0 && (
+        <>
+          <p className="mb-1.5 text-[13px] font-medium text-muted">From your LMS (optional)</p>
+          <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {(lmsTasks ?? []).map((t) => {
+              const ref = lmsRef(t.id);
+              const on = !!ref && lms?.instance === ref.instance;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    if (on) return setLms(null);
+                    setLms(ref);
+                    setTitle(t.title);
+                    setKind(t.kind);
+                    setSubjectName(t.notes || "");
+                    setDueDate(t.dueDate ?? "");
+                    setDueTime(t.dueTime ?? "");
+                  }}
+                  className={cx(
+                    "max-w-[14rem] shrink-0 truncate rounded-full px-3.5 py-2 text-[13px] font-semibold",
+                    on ? "bg-ink text-on-ink" : "bg-surface-2",
+                  )}
+                >
+                  {t.title}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
       <Field label="What is it?">
         <input
           className={inputCls}

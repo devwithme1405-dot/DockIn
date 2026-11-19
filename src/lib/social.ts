@@ -16,7 +16,7 @@ import { notifyPush } from "./push";
 import { groupThread, sendMessage } from "./chat";
 import { getSupabase } from "./supabase";
 import { summarize, withBase } from "./attendance";
-import { DOCX_MIME } from "./docx";
+import { DOCX_MIME, renameFile, replaceInDocx, type Swap } from "./docx";
 import type {
   AttendanceState,
   Friend,
@@ -301,6 +301,7 @@ export interface ShareDraft {
   room: string;
   priority: Priority;
   file?: ShareFile | null;
+  lms?: { module: string; instance: number } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,12 +386,31 @@ export async function dropAssignment(path: string): Promise<void> {
  */
 export async function copyAssignment(
   file: ShareFile,
-): Promise<{ blob: Blob; name: string; personalised: false }> {
-  // Shared work is a reference, handed over exactly as its author made it.
-  // DockIn does not rewrite someone else's name into it, or submit it for you.
+  me: { name?: string; roll?: string } = {},
+): Promise<{ blob: Blob; name: string; personalised: boolean }> {
   const { data, error } = await client().storage.from(BUCKET).download(file.path);
   if (error || !data) throw new SocialError(readableStorage(error?.message ?? "download failed"));
-  return { blob: data, name: file.name, personalised: false };
+
+  const swaps: Swap[] = [];
+  if (file.authorName && me.name?.trim()) {
+    swaps.push({ find: file.authorName, replace: me.name.trim() });
+  }
+  if (file.authorRoll && me.roll?.trim()) {
+    swaps.push({ find: file.authorRoll, replace: me.roll.trim() });
+  }
+
+  const name = renameFile(file.name, swaps);
+  if (file.type !== "docx" || swaps.length === 0) {
+    return { blob: data, name, personalised: false };
+  }
+
+  try {
+    return { blob: await replaceInDocx(data, swaps), name, personalised: true };
+  } catch {
+    // A document we cannot rewrite is still a document they need; hand over the
+    // author's file under their own name and let the screen say so.
+    return { blob: data, name, personalised: false };
+  }
 }
 
 function readableStorage(message: string): string {
@@ -768,6 +788,7 @@ async function doPull(): Promise<void> {
       room: String(r.data?.room ?? ""),
       priority: (r.data?.priority ?? "normal") as Priority,
       file: r.data?.file ?? null,
+      lms: r.data?.lms ?? null,
       progress: (progressBy.get(r.id) ?? []).map((p) => ({
         ...p,
         name: p.userId === me ? "You" : (names.get(p.userId)?.name ?? "A student"),

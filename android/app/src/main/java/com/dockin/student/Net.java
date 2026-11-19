@@ -79,6 +79,44 @@ final class Net {
         return send("POST", url, b.toString(), "application/x-www-form-urlencoded", headers);
     }
 
+    /** A multipart/form-data POST: text fields plus one file. */
+    static Res postMultipart(String url, Map<String, String> fields, String fileField, String fileName,
+                             String mime, byte[] data) throws IOException {
+        String boundary = "----dockin" + Long.toHexString(System.nanoTime());
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        for (Map.Entry<String, String> e : fields.entrySet()) {
+            body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + e.getKey()
+                    + "\"\r\n\r\n" + (e.getValue() == null ? "" : e.getValue()) + "\r\n").getBytes(StandardCharsets.UTF_8));
+        }
+        String safe = fileName.replace("\"", "");
+        body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + fileField + "\"; filename=\""
+                + safe + "\"\r\nContent-Type: " + mime + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        body.write(data);
+        body.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        byte[] bytes = body.toByteArray();
+
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(TIMEOUT_MS);
+            c.setReadTimeout(TIMEOUT_MS * 3);
+            c.setInstanceFollowRedirects(false);
+            c.setUseCaches(false);
+            c.setDoOutput(true);
+            c.setRequestProperty("Accept", "application/json, text/plain, */*");
+            c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            c.setFixedLengthStreamingMode(bytes.length);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(bytes);
+            }
+            int code = c.getResponseCode();
+            InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            return new Res(code, in == null ? "" : read(in), c.getHeaderFields());
+        } finally {
+            c.disconnect();
+        }
+    }
+
     private static Res send(String method, String url, String body, String type, Map<String, String> headers)
             throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();

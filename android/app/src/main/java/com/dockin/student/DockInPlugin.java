@@ -382,6 +382,36 @@ public class DockInPlugin extends Plugin {
         }, "dockin-lms-connect").start();
     }
 
+    /** Submits a file to this student's own LMS assignment, with their saved login. */
+    @PluginMethod
+    public void lmsSubmit(final PluginCall call) {
+        final Long instance = call.getLong("instance");
+        final String name = call.getString("name");
+        final String mime = call.getString("mime", "application/octet-stream");
+        final String b64 = call.getString("data");
+        if (instance == null || name == null || b64 == null) {
+            call.reject("Missing the assignment or the file.");
+            return;
+        }
+        final Context c = getContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                    Lms.submitAssignment(c, instance, name, mime, data);
+                    call.resolve();
+                } catch (Lms.WebOnly e) {
+                    call.reject("WEB_ONLY");
+                } catch (Lms.Refused e) {
+                    call.reject(e.getMessage());
+                } catch (Exception e) {
+                    call.reject(e.getMessage() == null ? "Could not reach the LMS." : e.getMessage());
+                }
+            }
+        }, "dockin-lms-submit").start();
+    }
+
     @PluginMethod
     public void disconnectCollege(PluginCall call) {
         String which = call.getString("which");

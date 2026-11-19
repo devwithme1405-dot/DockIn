@@ -9,4 +9,5 @@ public class PluginCall {
   public Boolean getBoolean(String name, Boolean def) { return def; }
   public JSObject getData() { return null; }
   public String getString(String name, String def) { return def; }
+  public Long getLong(String name) { return null; }
 }

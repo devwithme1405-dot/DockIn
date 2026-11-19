@@ -27,6 +27,9 @@ import {
 import { addDays, toDateStr, weekdayOf } from "@/lib/dates";
 import type { Priority, Subject, Subtask, Task, TaskKind } from "@/lib/types";
 import { Button, cx, useToast } from "./ui";
+import { LmsSubmitSheet } from "./LmsSubmit";
+import { handOver } from "./AssignmentFile";
+import { lmsRef } from "@/lib/lmsSubmit";
 
 export const KIND_ICON: Record<TaskKind, typeof FileText> = {
   assignment: FileText,
@@ -309,17 +312,7 @@ export function TaskForm({
 
   return (
     <div>
-      {task?.source === "lms" && task.url && (
-        <a
-          href={task.url}
-          target="_blank"
-          rel="noreferrer"
-          className="mb-4 flex items-center justify-between rounded-2xl bg-accent-soft px-4 py-3 text-[14px] font-medium text-accent"
-        >
-          From the LMS · open it to submit
-          <span aria-hidden>↗</span>
-        </a>
-      )}
+      {task?.source === "lms" && <LmsHandIn task={task} />}
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="radiogroup" aria-label="Type">
         {KINDS.map((k) => {
           const Icon = KIND_ICON[k.id];
@@ -591,6 +584,62 @@ export function TaskForm({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * An LMS assignment's own hand-in: pick your file, check it, submit it to your
+ * own submission with your saved LMS login. Quizzes and the rest just open.
+ */
+function LmsHandIn({ task }: { task: Task }) {
+  const ref = lmsRef(task.id);
+  const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<{ blob: Blob; name: string } | null>(null);
+  const isAssign = ref?.module === "assign";
+  return (
+    <div className="mb-4 flex gap-2">
+      {isAssign && (
+        <>
+          <input
+            ref={input}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) setFile({ blob: f, name: f.name });
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => input.current?.click()}
+            className="btn-leather flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-[14.5px]"
+          >
+            Upload to LMS
+          </button>
+        </>
+      )}
+      {task.url && (
+        <a
+          href={task.url}
+          target="_blank"
+          rel="noreferrer"
+          className={cx("btn-paper flex h-12 items-center justify-center gap-1.5 rounded-2xl px-4 text-[14px]", !isAssign && "flex-1")}
+        >
+          Open on LMS ↗
+        </a>
+      )}
+      <LmsSubmitSheet
+        open={!!file}
+        onClose={() => setFile(null)}
+        title={task.title}
+        file={file}
+        instance={isAssign && ref ? ref.instance : null}
+        lmsUrl={task.url}
+        onOpenFile={() => file && void handOver(file.blob, file.name)}
+        onSubmitted={() => void setTaskDone(task.id, true)}
+      />
     </div>
   );
 }

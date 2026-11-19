@@ -142,6 +142,8 @@ interface DockInPlugin {
   /** Quietly renew an expired Camu session, showing the page only if a tap is needed. */
   renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
+  /** Hand a file in to this student's own LMS assignment (base64 data). Rejects "WEB_ONLY" when the LMS login cannot upload. */
+  lmsSubmit(options: { instance: number; name: string; mime: string; data: string }): Promise<void>;
   /** Open Camu, signed in, at a path, with a note in the top bar. */
   openCamu(options: { path?: string; note?: string }): Promise<void>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */

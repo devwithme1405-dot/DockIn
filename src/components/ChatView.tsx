@@ -16,6 +16,7 @@ import {
   useThread,
 } from "@/lib/chat";
 import { shareTask, type ShareDraft } from "@/lib/social";
+import { lmsRef } from "@/lib/lmsSubmit";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Task } from "@/lib/types";
 import { Sheet, cx, useToast } from "./ui";
@@ -112,6 +113,7 @@ export function ChatView({
       room: t.room,
       priority: t.priority,
       file: null,
+      lms: t.source === "lms" ? lmsRef(t.id) : null,
     } as ShareDraft;
     try {
       if (groupId) {

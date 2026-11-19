@@ -156,6 +156,75 @@ final class Lms {
         return simplify(events);
     }
 
+    /**
+     * Puts a file into this student's OWN submission for an assignment and hands
+     * it in, with their own saved login. Moodle's app web services: upload the
+     * file to a draft area, attach that draft to the submission, then submit for
+     * grading (ignored when the assignment has no separate submit step).
+     *
+     * Only the app door (a token) can do this; on the website door it answers
+     * {@link WebOnly} and the app opens the assignment page instead.
+     */
+    static void submitAssignment(Context c, long assignId, String fileName, String mime, byte[] data)
+            throws IOException, Refused, JSONException, WebOnly {
+        String user = Vault.get(c, V_USER);
+        if (user == null) throw new Refused("Connect the LMS first.");
+        String token = Vault.get(c, V_TOKEN);
+        if (token == null) throw new WebOnly();
+        try {
+            submitWithToken(token, assignId, fileName, mime, data);
+        } catch (Refused e) {
+            token = appToken(user, savedPassword(c));
+            Vault.put(c, V_TOKEN, token);
+            submitWithToken(token, assignId, fileName, mime, data);
+        }
+    }
+
+    /** The LMS only lets this login in through the website, where DockIn cannot upload. */
+    static final class WebOnly extends Exception {
+        WebOnly() {
+            super("WEB_ONLY");
+        }
+    }
+
+    private static void submitWithToken(String token, long assignId, String fileName, String mime, byte[] data)
+            throws IOException, Refused, JSONException {
+        Map<String, String> f = new LinkedHashMap<>();
+        f.put("token", token);
+        f.put("filearea", "draft");
+        f.put("itemid", "0");
+        Net.Res up = Net.postMultipart(BASE + "/webservice/upload.php", f, "file_1", fileName, mime, data);
+        if (!up.ok()) throw new IOException("The LMS answered " + up.code + " to the upload");
+        String body = up.body.trim();
+        if (!body.startsWith("[")) {
+            JSONObject err = new JSONObject(body);
+            String code = err.optString("errorcode", "");
+            if ("invalidtoken".equals(code)) throw new Refused("Sign in to the LMS again.");
+            throw new IOException(err.optString("error", err.optString("message", "The LMS refused the file")));
+        }
+        JSONObject first = new JSONArray(body).optJSONObject(0);
+        long itemId = first == null ? 0 : first.optLong("itemid", 0);
+        if (itemId <= 0) throw new IOException("The LMS did not keep the file");
+
+        Map<String, String> save = new LinkedHashMap<>();
+        save.put("assignmentid", String.valueOf(assignId));
+        save.put("plugindata[files_filemanager]", String.valueOf(itemId));
+        JSONArray warnings = call(token, "mod_assign_save_submission", save).optJSONArray("list");
+        if (warnings != null && warnings.length() > 0) {
+            JSONObject w = warnings.optJSONObject(0);
+            throw new IOException(w == null ? "The LMS did not save it" : w.optString("message", "The LMS did not save it"));
+        }
+
+        Map<String, String> submit = new LinkedHashMap<>();
+        submit.put("assignmentid", String.valueOf(assignId));
+        submit.put("acceptsubmissionstatement", "1");
+        try {
+            call(token, "mod_assign_submit_for_grading", submit);
+        } catch (IOException ignored) {
+            // No separate "submit" step on this assignment: saving was handing it in.
+        }
+    }
+
     private static String savedPassword(Context c) throws Refused {
         String pass = Vault.get(c, V_PASS);
         if (pass == null) throw new Refused("Connect the LMS again.");

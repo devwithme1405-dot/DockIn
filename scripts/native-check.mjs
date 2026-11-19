@@ -396,6 +396,14 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
   if (!t.includes("LMS")) throw new Error("the task does not say it came from the LMS");
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-lms-tasks.png`, fullPage: true });
+  // An LMS assignment offers to hand in your own file from DockIn.
+  await page.locator("li:visible", { hasText: "Lab 7: Joins" }).first().locator("button").nth(1).click();
+  await waitFor("Upload to LMS");
+  await page.locator('input[type="file"]').first().setInputFiles({ name: "Lab7_Sachin.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
+  await waitFor("Submit to my LMS");
+  await page.screenshot({ path: `${SHOTS}/native-lms-submit.png` });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
 });
 
 await step("Cafeteria shows Camu's mess menu and draws the pass", async () => {
