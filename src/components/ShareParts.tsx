@@ -112,6 +112,22 @@ export function ShareRow({
 
         {reactions && <Reactions shareId={share.id} list={reactions} me={me ?? null} />}
 
+        {(() => {
+          // Who has finished it — the group-wide tracking.
+          const fin = (share.progress ?? []).filter((p) => p.done || p.submitted);
+          if (!fin.length) return null;
+          const names = fin.map((p) => (p.userId === me ? "You" : p.name.split(" ")[0]));
+          return (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-safe">
+              <Check size={13} strokeWidth={3} />
+              <span className="truncate">
+                {names.slice(0, 3).join(", ")}
+                {names.length > 3 ? ` +${names.length - 3}` : ""} done
+              </span>
+            </p>
+          );
+        })()}
+
         <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted">
           <Avatar name={share.authorName} avatar={share.authorAvatar} size={16} />
           <span className="truncate">
@@ -178,7 +194,7 @@ export function ShareForm({
     try {
       if (attach) {
         setStage("Uploading the file…");
-        file = await uploadAssignment(attach.file, { name: attach.name, roll: attach.roll });
+        file = await uploadAssignment(attach.file);
       }
       setStage("Sharing…");
       await shareTask(

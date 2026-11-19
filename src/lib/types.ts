@@ -307,6 +307,8 @@ export interface Share {
   room: string;
   priority: Priority;
   file?: ShareFile | null;
+  /** How far each person it went to has got (group / friends). */
+  progress?: { userId: string; name: string; done: boolean; submitted: boolean }[];
   createdAt: number;
   updatedAt: number;
 }

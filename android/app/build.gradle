@@ -72,3 +72,14 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// Push notifications (Firebase): only when google-services.json is present, so
+// a build without it still works — it just has no push.
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch (Exception e) {
+    logger.info("google-services.json not found, push notifications are off")
+}

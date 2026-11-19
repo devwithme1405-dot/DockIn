@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Lets DockIn ask to be left out of battery saving, so reminders fire on time. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- The QR scanner on the Friends tab (adding friends, joining groups). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:allowBackup="true"

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "907830012820",
+    "project_id": "dockin-9661c",
+    "storage_bucket": "dockin-9661c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907830012820:android:761947bb20dc9af228fd81",
+        "android_client_info": {
+          "package_name": "com.dockin.student"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK-airH4FwHn07xYTo0mD8FxVFIfdoP2A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

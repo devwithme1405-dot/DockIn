@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import type { ChatMessage, ChatPerson, ChatRead } from "./chat";
 import type {
   ClassNote,
   CalEvent,
@@ -49,6 +50,9 @@ export class DockinDB extends Dexie {
   incomes!: Table<Income, string>;
   /** Your own note on a class Camu left unmarked: cancelled, or teacher yet to mark. */
   classNotes!: Table<ClassNote, string>;
+  messages!: Table<ChatMessage, string>;
+  chatReads!: Table<ChatRead, string>;
+  chatPeople!: Table<ChatPerson, string>;
 
   constructor() {
     super("dockin");
@@ -86,6 +90,11 @@ export class DockinDB extends Dexie {
     });
     this.version(9).stores({
       classNotes: "id",
+    });
+    this.version(10).stores({
+      messages: "id, thread, createdAt",
+      chatReads: "thread",
+      chatPeople: "id",
     });
   }
 }

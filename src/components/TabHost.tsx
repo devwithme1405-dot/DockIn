@@ -6,6 +6,8 @@ import AttendancePage from "@/app/attendance/page";
 import TimetablePage from "@/app/timetable/page";
 import CafeteriaPage from "@/app/cafeteria/page";
 import TasksPage from "@/app/tasks/page";
+import CirclePage from "@/app/circle/page";
+import SettingsPage from "@/app/settings/page";
 import RouteError from "@/app/error";
 import { TAB_PATHS, TAB_SHOWN, type TabPath } from "@/lib/tabs";
 
@@ -15,6 +17,8 @@ const SCREENS: Record<TabPath, ComponentType> = {
   "/timetable": TimetablePage,
   "/cafeteria": CafeteriaPage,
   "/tasks": TasksPage,
+  "/circle": CirclePage,
+  "/settings": SettingsPage,
 };
 
 /**

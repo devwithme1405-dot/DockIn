@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, LogOut, Plus, Share2 } from "lucide-react";
+import { QrCode } from "@/components/QrCode";
 import {
   useFriends,
   useGroups,
@@ -106,7 +107,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
   async function invite() {
     if (!group) return;
-    const text = `Join "${group.name}" on DockIn with the code ${group.code}`;
+    const text = `Join "${group.name}" on DockIn: https://dock-in.vercel.app/circle?join=${group.code} (code ${group.code})`;
     try {
       if (navigator.share) await navigator.share({ title: group.name, text });
       else {
@@ -174,6 +175,10 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             >
               <Share2 size={16} />
             </button>
+          </div>
+          {/* Friends scan this from the Friends tab's scanner to join. */}
+          <div className="mt-3 flex justify-center rounded-2xl bg-white p-3">
+            <QrCode value={`https://dock-in.vercel.app/circle?join=${group.code}`} size={150} />
           </div>
         </section>
 

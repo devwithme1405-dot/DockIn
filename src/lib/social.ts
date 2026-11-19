@@ -12,9 +12,11 @@
  */
 
 import { db } from "./db";
+import { notifyPush } from "./push";
+import { groupThread, sendMessage } from "./chat";
 import { getSupabase } from "./supabase";
 import { summarize, withBase } from "./attendance";
-import { DOCX_MIME, renameFile, replaceInDocx, type Swap } from "./docx";
+import { DOCX_MIME } from "./docx";
 import type {
   AttendanceState,
   Friend,
@@ -176,6 +178,7 @@ export async function addFriend(code: string): Promise<"pending" | "accepted"> {
     { wanted: cleanCode(code) },
   );
   const r = Array.isArray(row) ? row[0] : row;
+  notifyPush({ type: "friend", code: cleanCode(code) });
   return r?.status ?? "pending";
 }
 
@@ -192,6 +195,7 @@ export async function acceptFriend(userId: string): Promise<void> {
     .eq("b", b);
   if (error) throw new SocialError(readable(error.message));
   await db.friends.update(userId, { status: "accepted", theyAsked: false });
+  notifyPush({ type: "friend", to: userId });
 }
 
 export async function removeFriend(userId: string): Promise<void> {
@@ -381,31 +385,12 @@ export async function dropAssignment(path: string): Promise<void> {
  */
 export async function copyAssignment(
   file: ShareFile,
-  me: { name?: string; roll?: string } = {},
-): Promise<{ blob: Blob; name: string; personalised: boolean }> {
+): Promise<{ blob: Blob; name: string; personalised: false }> {
+  // Shared work is a reference, handed over exactly as its author made it.
+  // DockIn does not rewrite someone else's name into it, or submit it for you.
   const { data, error } = await client().storage.from(BUCKET).download(file.path);
   if (error || !data) throw new SocialError(readableStorage(error?.message ?? "download failed"));
-
-  const swaps: Swap[] = [];
-  if (file.authorName && me.name?.trim()) {
-    swaps.push({ find: file.authorName, replace: me.name.trim() });
-  }
-  if (file.authorRoll && me.roll?.trim()) {
-    swaps.push({ find: file.authorRoll, replace: me.roll.trim() });
-  }
-
-  const name = renameFile(file.name, swaps);
-  if (file.type !== "docx" || swaps.length === 0) {
-    return { blob: data, name, personalised: false };
-  }
-
-  try {
-    return { blob: await replaceInDocx(data, swaps), name, personalised: true };
-  } catch {
-    // A document we cannot rewrite is still a document they need; hand over the
-    // author's file under their own name and let the screen say so.
-    return { blob: data, name, personalised: false };
-  }
+  return { blob: data, name: file.name, personalised: false };
 }
 
 function readableStorage(message: string): string {
@@ -461,6 +446,22 @@ export async function shareTask(
       throw new SocialError(readable(tErr.message));
     }
   }
+  notifyPush({ type: "share", id: data.id });
+  // In a group, the task also lands in the group chat as a card, so the
+  // conversation shows who added what (the push above already told everyone).
+  if (groupId) {
+    void sendMessage(groupThread(groupId), "", {
+      silent: true,
+      task: {
+        title: draft.title,
+        kind: draft.kind,
+        dueDate: draft.dueDate ?? null,
+        dueTime: draft.dueTime ?? null,
+        subject: draft.subjectName ?? null,
+        shareId: data.id,
+      },
+    }).catch(() => {});
+  }
   await pullSocial();
 }
 
@@ -491,6 +492,30 @@ export async function setShareDone(shareId: string, done: boolean): Promise<void
     updatedAt: t,
     deletedAt: null,
   });
+  void shareProgress(shareId, { done, submitted: done ? (existing?.submitted ?? false) : false });
+}
+
+/** Tells the group how far you have got. Best-effort: your own state is already saved. */
+async function shareProgress(shareId: string, p: { done: boolean; submitted: boolean }): Promise<void> {
+  try {
+    const sb = client();
+    const { data: auth } = await sb.auth.getUser();
+    if (!auth.user) return;
+    await sb.from("share_progress").upsert({
+      share_id: shareId,
+      user_id: auth.user.id,
+      done: p.done,
+      submitted: p.submitted,
+      updated_at: new Date().toISOString(),
+    });
+    const local = await db.shares.get(shareId);
+    if (local) {
+      const others = (local.progress ?? []).filter((x) => x.userId !== auth.user!.id);
+      await db.shares.update(shareId, { progress: [...others, { userId: auth.user.id, name: "You", ...p }] });
+    }
+  } catch {
+    /* offline: the next change or pull carries it */
+  }
 }
 
 /**
@@ -565,6 +590,7 @@ export async function setShareSubmitted(shareId: string, submitted: boolean): Pr
     updatedAt: t,
     deletedAt: null,
   });
+  void shareProgress(shareId, { done: submitted ? true : (existing?.done ?? false), submitted });
 }
 
 export async function hideShare(shareId: string, hidden = true): Promise<void> {
@@ -621,6 +647,19 @@ async function doPull(): Promise<void> {
       .limit(500),
     sb.from("share_reactions").select("share_id,user_id,emoji"),
   ]);
+  // Newer table; a project without it yet still shows everything else.
+  const progressRows = await sb.from("share_progress").select("share_id,user_id,done,submitted");
+  const progressBy = new Map<string, { userId: string; done: boolean; submitted: boolean }[]>();
+  for (const r of (progressRows.error ? [] : (progressRows.data ?? [])) as {
+    share_id: string;
+    user_id: string;
+    done: boolean;
+    submitted: boolean;
+  }[]) {
+    const list = progressBy.get(r.share_id) ?? [];
+    list.push({ userId: r.user_id, done: r.done, submitted: r.submitted });
+    progressBy.set(r.share_id, list);
+  }
 
   const firstError =
     people.error || groupRows.error || memberRows.error || profileRows.error || shareRows.error;
@@ -729,6 +768,10 @@ async function doPull(): Promise<void> {
       room: String(r.data?.room ?? ""),
       priority: (r.data?.priority ?? "normal") as Priority,
       file: r.data?.file ?? null,
+      progress: (progressBy.get(r.id) ?? []).map((p) => ({
+        ...p,
+        name: p.userId === me ? "You" : (names.get(p.userId)?.name ?? "A student"),
+      })),
       createdAt: r.created_at ?? now(),
       updatedAt: r.updated_at ?? now(),
     };

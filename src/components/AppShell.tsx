@@ -3,13 +3,15 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, UtensilsCrossed } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, UsersRound, UtensilsCrossed } from "lucide-react";
+import { useUnreadChats } from "@/lib/chat";
 import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
 import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
+import { SocialSync } from "./SocialSync";
 import { useAuth } from "@/lib/auth";
 import { appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -48,6 +50,7 @@ const TABS = [
   { href: "/timetable", label: "Timetable", icon: CalendarDays },
   { href: "/cafeteria", label: "Cafeteria", icon: UtensilsCrossed },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
+  ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: UsersRound }] : []),
 ];
 
 /**
@@ -287,6 +290,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
         {ready && !onboarding && isNativeApp() && <RemindersSync />}
+        {ready && !onboarding && FRIENDS && <SocialSync />}
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second
           brown web overlay would only bring back the very gap it holds through.
@@ -317,6 +321,7 @@ function BrandHold({ show }: { show: boolean }) {
 
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
+  const unread = useUnreadChats();
   return (
     // A strip of stitched leather floating over the page; the current tab is a
     // glowing orange tile, the way a lit key looks on a desk.
@@ -324,7 +329,12 @@ function TabBar({ pathname }: { pathname: string }) {
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
     >
-      <ul className="leather stitched grid h-[70px] grid-cols-5 items-center gap-1 rounded-[24px] px-2">
+      <ul
+        className={cx(
+          "leather stitched grid h-[70px] items-center gap-0.5 rounded-[24px] px-1.5",
+          TABS.length > 5 ? "grid-cols-6" : "grid-cols-5",
+        )}
+      >
         {TABS.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
@@ -334,11 +344,11 @@ function TabBar({ pathname }: { pathname: string }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "flex h-[54px] flex-col items-center justify-center gap-0.5 rounded-[16px] text-[10.5px] font-bold tracking-[0.01em] transition-[color,transform] duration-200 active:scale-95",
+                  "flex h-[54px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-[16px] text-[9.5px] font-bold tracking-[0.01em] transition-[color,transform] duration-200 active:scale-95",
                   active ? "tab-glow" : "text-[#f6dcbd]/85",
                 )}
               >
-                <Tab label={label} icon={Icon} active={active} badge={href === "/tasks" ? attention : 0} />
+                <Tab label={label} icon={Icon} active={active} badge={href === "/tasks" ? attention : href === "/circle" ? unread : 0} />
               </a>
             </li>
           );
@@ -376,7 +386,7 @@ function Tab({
           </span>
         )}
       </span>
-      {label}
+      <span className="max-w-full truncate px-0.5">{label}</span>
     </>
   );
 }

@@ -11,7 +11,12 @@
  * then leaves — rather than replaying every tab you ever tapped.
  */
 
-export const TAB_PATHS = ["/", "/attendance", "/timetable", "/cafeteria", "/tasks"] as const;
+/**
+ * Screens kept alive in the TabHost: the bottom-bar tabs plus Profile, which
+ * opens from Today's header. Opening any of these is a show/hide, never a
+ * page load, so none of them can freeze on a weak signal.
+ */
+export const TAB_PATHS = ["/", "/attendance", "/timetable", "/cafeteria", "/tasks", "/circle", "/settings"] as const;
 export type TabPath = (typeof TAB_PATHS)[number];
 
 const SET = new Set<string>(TAB_PATHS);

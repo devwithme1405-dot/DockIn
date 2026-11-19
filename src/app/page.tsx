@@ -11,7 +11,6 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
-  DoorOpen,
   GraduationCap,
   Layers,
   Minus,
@@ -308,7 +307,7 @@ export default function TodayPage() {
           <h2 className="font-display mb-2.5 text-[16px] font-extrabold tracking-[-0.02em]">Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2.5">
             <QuickAction href="/tasks?new=1" icon={<SquareCheckBig size={18} strokeWidth={2.5} />} label="Add Task" />
-            <QuickAction href="/leave" icon={<DoorOpen size={18} strokeWidth={2.5} />} label="Outpass" />
+            <QuickAction href="/timetable" icon={<CalendarDays size={18} strokeWidth={2.5} />} label="Timetable" />
           </div>
         </div>
       </section>

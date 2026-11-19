@@ -1,11 +1,11 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
-  ChevronRight,
+  MessageCircle,
+  ScanLine,
   Copy,
   ExternalLink,
   Inbox,
@@ -60,6 +60,10 @@ import { ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
 import { LMS_URL } from "@/components/AssignmentFile";
+import { Segmented } from "@/components/Paper";
+import { ChatView } from "@/components/ChatView";
+import { QrScanner, type Scanned } from "@/components/QrScanner";
+import { directThread, groupThread, otherIn, usePeople, useThreads, type ThreadId } from "@/lib/chat";
 
 const ATTENDANCE_WORD = {
   safe: "Safe",
@@ -70,7 +74,13 @@ const ATTENDANCE_WORD = {
 
 const GROUP_EMOJIS = ["📚", "🧪", "💻", "🏠", "⚽", "🎓", "🎬", "🍜", "🎵", "🧠"];
 
-type Tab = "friends" | "groups" | "work";
+type Tab = "chats" | "friends" | "groups" | "work";
+const TABS = [
+  ["chats", "Chats"],
+  ["friends", "Friends"],
+  ["groups", "Groups"],
+  ["work", "Work"],
+] as const;
 type SheetName = "add" | "confirm" | "newGroup" | "joinGroup" | "me" | "share" | null;
 
 export default function CirclePage() {
@@ -103,16 +113,23 @@ function Circle() {
 
   const [tab, setTab] = useState<Tab>(() => {
     const t = params.get("tab");
-    return t === "groups" || t === "work" ? t : "friends";
+    return t === "groups" || t === "work" || t === "friends" ? t : "chats";
   });
+  // An open conversation lives in the address (?chat=…), so a notification can
+  // open it and the phone's back button closes it.
+  const chat = params.get("chat");
+  const threads = useThreads();
+  const people = usePeople();
+  const [scanning, setScanning] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Arriving from someone's QR (/circle?add=ABCD1234) opens the add sheet with
   // their code already in it.
   const incoming = cleanCode(params.get("add") ?? "");
-  const [sheet, setSheet] = useState<SheetName>(incoming ? "add" : null);
-  const [typed, setTyped] = useState(incoming);
+  const joining = (params.get("join") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const [sheet, setSheet] = useState<SheetName>(incoming ? "add" : joining ? "joinGroup" : null);
+  const [typed, setTyped] = useState(incoming || joining);
   const [preview, setPreview] = useState<CodePreview | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupEmoji, setGroupEmoji] = useState(GROUP_EMOJIS[0]);
@@ -294,6 +311,38 @@ function Circle() {
     setBusy(false);
   }
 
+  function openChat(thread: ThreadId) {
+    const url = `/circle?chat=${encodeURIComponent(thread)}`;
+    // A fresh state object: Next only treats a push as a navigation (and
+    // updates useSearchParams) when the state is not its own.
+    window.history.pushState({ dockinChat: true }, "", url);
+  }
+
+  function closeChat() {
+    if ((window.history.state as { dockinChat?: boolean } | null)?.dockinChat) window.history.back();
+    else window.history.replaceState({ dockinChat: false }, "", "/circle");
+  }
+
+  async function onScanned(hit: Scanned) {
+    setScanning(false);
+    setProblem(null);
+    setTyped(hit.code);
+    if (hit.kind === "group") {
+      setSheet("joinGroup");
+      return;
+    }
+    try {
+      const found = await peekCode(hit.code);
+      if (!found) setProblem("That QR did not match anyone.");
+      else {
+        setPreview(found);
+        setSheet("confirm");
+      }
+    } catch (e) {
+      setProblem(e instanceof SocialError ? e.message : "Could not check that code.");
+    }
+  }
+
   async function confirmAdd() {
     setBusy(true);
     try {
@@ -380,13 +429,22 @@ function Circle() {
         title="Friends"
         subtitle="Your people, groups and shared work"
         right={
-          <button
-            onClick={() => setSheet("me")}
-            aria-label="Your code and adding friends"
-            className="grid size-11 place-items-center rounded-full bg-accent text-on-accent shadow-[0_6px_18px_-6px_rgba(31,95,214,0.8)]"
-          >
-            <UserPlus size={20} />
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setScanning(true)}
+              aria-label="Scan a QR"
+              className="btn-paper grid size-11 place-items-center rounded-full text-mess"
+            >
+              <ScanLine size={20} />
+            </button>
+            <button
+              onClick={() => setSheet("me")}
+              aria-label="Your code and adding friends"
+              className="btn-leather grid size-11 place-items-center rounded-full"
+            >
+              <UserPlus size={20} />
+            </button>
+          </div>
         }
       />
       <div className="h-4" />
@@ -407,35 +465,24 @@ function Circle() {
         />
       </section>
 
-      <div className="mt-4 px-5">
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1" role="tablist">
-          {(
-            [
-              ["friends", "Friends"],
-              ["groups", "Groups"],
-              ["work", "Shared work"],
-            ] as [Tab, string][]
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-              className={cx(
-                "h-9 rounded-lg text-[13.5px] font-medium transition",
-                tab === id ? "bg-surface text-text shadow-sm" : "text-muted",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Segmented value={tab} onChange={setTab} options={TABS} label="Friends sections" className="mx-5 mt-4" small />
 
       {problem && (
         <p className="mx-5 mt-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13.5px] text-danger">
           {problem}
         </p>
+      )}
+
+      {tab === "chats" && (
+        <ChatList
+          threads={threads ?? []}
+          friends={accepted}
+          groups={groups ?? []}
+          people={people}
+          me={me}
+          onOpen={openChat}
+          onAdd={() => setSheet("me")}
+        />
       )}
 
       {tab === "friends" && (
@@ -622,9 +669,9 @@ function Circle() {
                 ).length;
                 return (
                   <li key={g.id}>
-                    <Link
-                      href={`/groups/${g.id}`}
-                      className="flex items-center gap-3.5 lift rounded-3xl bg-surface p-4 transition active:scale-[0.99]"
+                    <button
+                      onClick={() => openChat(groupThread(g.id))}
+                      className="flex w-full items-center gap-3.5 lift rounded-3xl bg-surface p-4 text-left transition active:scale-[0.99]"
                     >
                       <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[22px]">
                         {g.emoji ?? "👥"}
@@ -643,8 +690,8 @@ function Circle() {
                           {open} open
                         </span>
                       )}
-                      <ChevronRight size={18} className="shrink-0 text-muted" />
-                    </Link>
+                      <MessageCircle size={18} className="shrink-0 text-mess" />
+                    </button>
                   </li>
                 );
               })}
@@ -892,8 +939,18 @@ function Circle() {
             </dl>
 
             <Button
-              variant="secondary"
               className="mt-5 w-full"
+              onClick={() => {
+                const f = showing;
+                setShowing(null);
+                if (me) openChat(directThread(me, f.id));
+              }}
+            >
+              <MessageCircle size={17} /> Message
+            </Button>
+            <Button
+              variant="secondary"
+              className="mt-2.5 w-full"
               onClick={() => {
                 setShowing(null);
                 setTab("work");
@@ -913,6 +970,29 @@ function Circle() {
           </>
         )}
       </Sheet>
+
+      {chat && me && (() => {
+        const gid = chat.startsWith("g:") ? chat.slice(2) : null;
+        const g = gid ? (groups ?? []).find((x) => x.id === gid) : null;
+        const fid = otherIn(chat, me);
+        const f = fid ? people.get(fid) : null;
+        return (
+          <ChatView
+            key={chat}
+            thread={chat}
+            title={g ? g.name : (f?.name ?? "Chat")}
+            subtitle={g ? `${g.members} ${g.members === 1 ? "person" : "people"} · code ${g.code}` : "Friend"}
+            emoji={g ? (g.emoji ?? "👥") : null}
+            people={people}
+            groupId={gid}
+            friendId={fid}
+            onClose={closeChat}
+            onInfo={gid ? () => router.push(`/groups/${gid}`) : undefined}
+          />
+        );
+      })()}
+
+      {scanning && <QrScanner onResult={(h) => void onScanned(h)} onClose={() => setScanning(false)} />}
 
       <ConfirmSheet
         open={!!removing}
@@ -1053,5 +1133,101 @@ function SubmissionCard({
 function describe(f: Friend): string {
   return (
     [f.branch, f.year ? `Year ${f.year}` : null, f.section].filter(Boolean).join(" · ") || "Student"
+  );
+}
+
+function ago(ms: number): string {
+  const d = new Date(ms);
+  if (toDateStr(d) === toDateStr()) return d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+/** Conversations, newest first; friends and groups you have not talked to yet sit below. */
+function ChatList({
+  threads,
+  friends,
+  groups,
+  people,
+  me,
+  onOpen,
+  onAdd,
+}: {
+  threads: import("@/lib/chat").ThreadSummary[];
+  friends: Friend[];
+  groups: import("@/lib/types").Group[];
+  people: Map<string, import("@/lib/chat").ChatPerson>;
+  me: string | null;
+  onOpen: (t: ThreadId) => void;
+  onAdd: () => void;
+}) {
+  if (!me) return null;
+  const seen = new Set(threads.map((t) => t.thread));
+  const groupBy = new Map(groups.map((g) => [g.id, g]));
+  const rows = [
+    ...threads
+      .map((t) => {
+        const gid = t.thread.startsWith("g:") ? t.thread.slice(2) : null;
+        const g = gid ? groupBy.get(gid) : null;
+        if (gid && !g) return null; // left that group
+        const fid = otherIn(t.thread, me);
+        const name = g ? g.name : (people.get(fid ?? "")?.name ?? "Friend");
+        const who = t.last.author === me ? "You: " : g ? `${people.get(t.last.author)?.name?.split(" ")[0] ?? "Someone"}: ` : "";
+        const text = t.last.deleted ? "Message deleted" : t.last.kind === "task" ? `📌 ${t.last.data?.title ?? "Task"}` : t.last.body;
+        return { thread: t.thread, name, emoji: g ? (g.emoji ?? "👥") : null, preview: who + text, when: ago(t.last.createdAt), unread: t.unread };
+      })
+      .filter((r): r is NonNullable<typeof r> => !!r),
+    ...groups
+      .filter((g) => !seen.has(groupThread(g.id)))
+      .map((g) => ({ thread: groupThread(g.id), name: g.name, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0 })),
+    ...friends
+      .filter((f) => !seen.has(directThread(me, f.id)))
+      .map((f) => ({ thread: directThread(me, f.id), name: f.name, emoji: null, preview: "Say hi 👋", when: "", unread: 0 })),
+  ];
+
+  if (rows.length === 0)
+    return (
+      <div className="px-5 pt-4">
+        <EmptyState
+          flush
+          icon={MessageCircle}
+          title="No chats yet"
+          body="Add friends with your QR or code, or make a group for your section."
+          action={
+            <Button size="sm" onClick={onAdd}>
+              <UserPlus size={16} /> Add a friend
+            </Button>
+          }
+        />
+      </div>
+    );
+
+  return (
+    <ul className="mx-5 mt-4 divide-y divide-line/70 overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card">
+      {rows.map((r) => (
+        <li key={r.thread}>
+          <button onClick={() => onOpen(r.thread)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-surface-2">
+            <span className="grid size-12 shrink-0 place-items-center rounded-full bg-mess-soft text-[20px] font-bold text-mess">
+              {r.emoji ?? r.name.charAt(0).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate text-[15.5px] font-bold">{r.name}</span>
+                <span className={cx("shrink-0 text-[11.5px]", r.unread ? "font-bold text-orange" : "text-muted")}>{r.when}</span>
+              </span>
+              <span className="mt-0.5 flex items-center gap-2">
+                <span className={cx("min-w-0 flex-1 truncate text-[13.5px]", r.unread ? "font-semibold text-text" : "text-muted")}>
+                  {r.preview}
+                </span>
+                {r.unread > 0 && (
+                  <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-orange px-1.5 text-[11px] font-bold text-white">
+                    {r.unread > 99 ? "99+" : r.unread}
+                  </span>
+                )}
+              </span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -65,6 +65,8 @@ import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
 import { FRIENDS } from "@/lib/features";
+import { clearChat } from "@/lib/chat";
+import { forgetPushToken } from "@/lib/push";
 
 type SheetName =
   | "details"
@@ -239,6 +241,7 @@ export default function ProfilePage() {
     }
     await resetAll();
     await clearSocial();
+    await clearChat();
     clearSyncState();
     resetSyncStatus();
     try {
@@ -250,6 +253,8 @@ export default function ProfilePage() {
 
   async function leave() {
     setBusy(true);
+    // Before signing out: this phone must stop getting this account's pushes.
+    await forgetPushToken().catch(() => {});
     if (session) await signOutCloud();
     await wipeDevice();
   }

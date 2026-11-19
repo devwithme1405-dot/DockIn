@@ -1,3 +1,4 @@
+// Kept for Version 3 (Leave & Outpass): the parser is built and tested, the screen is not shipped yet.
 import { addDays, fromDateStr, toDateStr, fmtTime } from "./dates";
 
 /**
