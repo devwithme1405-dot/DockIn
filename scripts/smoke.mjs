@@ -185,7 +185,7 @@ const SCREENS = [
   { path: "/attendance/timetable", name: "timetable", expect: "" },
   { path: "/tasks", name: "tasks", expect: "To do" },
   { path: "/settings", name: "profile", expect: "Appearance" },
-  { path: "/cafeteria", name: "cafeteria", expect: "Mess Pass" },
+  { path: "/cafeteria", name: "cafeteria", expect: "Mess pass" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
   { path: "/privacy", name: "privacy", expect: "" },
@@ -458,7 +458,7 @@ await step("tabs switch instantly with no network at all, and keep their place",
     for (const [label, expect] of [
       ["Attendance", "Overall attendance"],
       ["Timetable", "Week"],
-      ["Cafeteria", "Mess Pass"],
+      ["Cafeteria", "Mess pass"],
       ["Tasks", "To do"],
       ["Today", "Timetable"],
     ]) {

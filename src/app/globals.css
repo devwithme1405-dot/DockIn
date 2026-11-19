@@ -18,9 +18,9 @@
   --text: #3a2314;
   --muted: #86684d;
   --line: #e3cba5;
-  --accent: #6a3de8;
-  --accent-2: #8c66f6;
-  --accent-soft: #ebe2fc;
+  --accent: #c2611c;
+  --accent-2: #dd8638;
+  --accent-soft: #f6e2c6;
   --on-accent: #ffffff;
   /* Leather: what you press. */
   --ink: #7c3d1b;
@@ -71,10 +71,10 @@
   --text: #f3e4cc;
   --muted: #b69c80;
   --line: #45331f;
-  --accent: #a88cff;
-  --accent-2: #bba5ff;
-  --accent-soft: #2d2346;
-  --on-accent: #170d2c;
+  --accent: #f0a25a;
+  --accent-2: #f5b97a;
+  --accent-soft: #3b2a1a;
+  --on-accent: #2a1608;
   --ink: #8a4520;
   --ink-2: #6e3517;
   --on-ink: #fff3e0;
@@ -766,20 +766,20 @@ html[data-navved] .stagger > * {
 
 /* Glass: frosted, warm, see-through — for bars and floating surfaces. */
 .glass-bar {
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   backdrop-filter: blur(18px) saturate(1.4);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   border-bottom: 1px solid color-mix(in srgb, var(--card-edge) 55%, transparent);
 }
 .glass-card {
-  background: color-mix(in srgb, var(--card) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 90%, transparent);
   backdrop-filter: blur(16px) saturate(1.3);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   border: 1px solid color-mix(in srgb, #ffffff 45%, var(--card-edge) 55%);
   box-shadow: 0 8px 24px -16px rgb(var(--shadow-ink) / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.5);
 }
 .glass-pill {
-  background: color-mix(in srgb, var(--card) 55%, transparent);
+  background: color-mix(in srgb, var(--card) 84%, transparent);
   backdrop-filter: blur(14px) saturate(1.4);
   -webkit-backdrop-filter: blur(14px) saturate(1.4);
   border: 1px solid color-mix(in srgb, #ffffff 40%, transparent);
@@ -787,7 +787,7 @@ html[data-navved] .stagger > * {
 }
 /* The tab bar: dark leather glass, the page shows through. */
 .glass-nav {
-  background: linear-gradient(180deg, rgb(124 61 27 / 0.78), rgb(84 38 14 / 0.86));
+  background: linear-gradient(180deg, rgb(124 61 27 / 0.93), rgb(84 38 14 / 0.97));
   backdrop-filter: blur(20px) saturate(1.5);
   -webkit-backdrop-filter: blur(20px) saturate(1.5);
   border: 1px solid rgb(255 220 180 / 0.22);

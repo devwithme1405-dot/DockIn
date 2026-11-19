@@ -408,7 +408,7 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
 
 await step("Cafeteria shows Camu's mess menu and draws the pass", async () => {
   await page.goto(`${BASE}/cafeteria`, { waitUntil: "domcontentloaded" });
-  await waitFor("Mess Pass");
+  await waitFor("Mess pass");
   const t = await text();
   if (!t.includes("Kadai Paneer")) throw new Error("Camu's menu items are missing");
   if (!t.includes("Breakfast") || !t.includes("07:30 AM")) throw new Error("the meal and its timing are missing");

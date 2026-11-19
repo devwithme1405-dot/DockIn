@@ -597,6 +597,9 @@ function LmsHandIn({ task }: { task: Task }) {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<{ blob: Blob; name: string } | null>(null);
   const isAssign = ref?.module === "assign";
+  // Only a quiz has to be done on the LMS itself; everything else stays in DockIn.
+  const quiz = !isAssign && !!task.url && (ref?.module === "quiz" || task.kind === "quiz");
+  if (!isAssign && !quiz) return null;
   return (
     <div className="mb-4 flex gap-2">
       {isAssign && (
@@ -620,14 +623,14 @@ function LmsHandIn({ task }: { task: Task }) {
           </button>
         </>
       )}
-      {task.url && (
+      {quiz && (
         <a
           href={task.url}
           target="_blank"
           rel="noreferrer"
-          className={cx("btn-paper flex h-12 items-center justify-center gap-1.5 rounded-2xl px-4 text-[14px]", !isAssign && "flex-1")}
+          className="btn-paper flex h-12 flex-1 items-center justify-center gap-1.5 rounded-2xl px-4 text-[14px]"
         >
-          Open on LMS ↗
+          Take the quiz on LMS ↗
         </a>
       )}
       <LmsSubmitSheet

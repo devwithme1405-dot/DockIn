@@ -244,6 +244,9 @@ public class DockInPlugin extends Plugin {
             ((MainActivity) a).markContentReady();
         }
         call.resolve();
+        // Opened cold from a link (QR seen by Google Lens, a shared invite) or a
+        // notification: now that the screens are up, go where it pointed.
+        if (a != null) handleOnNewIntent(a.getIntent());
     }
 
     private void launch(PluginCall call, Intent first, Intent fallback) {
@@ -588,6 +591,18 @@ public class DockInPlugin extends Plugin {
     protected void handleOnNewIntent(Intent intent) {
         if (intent == null) return;
         String path = intent.getStringExtra(MainActivity.EXTRA_OPEN);
+        // A DockIn link: https://dock-in.vercel.app/circle?join=… or dockin://open/circle?add=…
+        Uri link = intent.getData();
+        if (path == null && link != null) {
+            String host = link.getHost();
+            if ("dock-in.vercel.app".equals(host) || "dockin".equals(link.getScheme())) {
+                String p = link.getPath() == null || link.getPath().isEmpty() ? "/" : link.getPath();
+                if ("dockin".equals(link.getScheme()) && "open".equals(host)) p = p.isEmpty() ? "/" : p;
+                String q = link.getQuery();
+                path = q == null ? p : p + "?" + q;
+                intent.setData(null);
+            }
+        }
         if (path == null || !path.startsWith("/")) return;
         // Taken, so reopening the app from recents does not jump there again.
         intent.removeExtra(MainActivity.EXTRA_OPEN);

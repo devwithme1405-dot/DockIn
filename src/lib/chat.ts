@@ -58,6 +58,8 @@ export interface ChatFile {
   size: number;
   type: string;
   path: string;
+  /** Stored gzip-compressed (big files); unpacked on download. */
+  gz?: boolean;
 }
 
 export type ChatData = ChatTask & Partial<ChatPoll> & Partial<ChatFile>;
@@ -366,6 +368,16 @@ export async function markRead(thread: ThreadId): Promise<void> {
   await sb.from("thread_reads").upsert({ user_id: myId, thread, read_at: new Date(readAt).toISOString() });
 }
 
+/** Puts the unread dot back on a chat (this phone only; others still see it as read). */
+export async function markUnread(thread: ThreadId): Promise<void> {
+  const mine = myId;
+  const theirs = await db.messages.where("thread").equals(thread).filter((m) => m.author !== mine && !m.hidden).sortBy("createdAt");
+  const last = theirs[theirs.length - 1];
+  if (!last) return;
+  const prev = await db.chatReads.get(thread);
+  await db.chatReads.put({ ...prev, thread, readAt: last.createdAt - 1 });
+}
+
 /** Mute (no notifications) or pin (top of the list) a chat — yours only. */
 export async function setThreadPref(thread: ThreadId, pref: { muted?: boolean; pinned?: boolean }): Promise<void> {
   const prev = await db.chatReads.get(thread);
@@ -425,32 +437,80 @@ export function usePollVotes(messageId: string): PollVote[] {
 
 export const CHAT_FILE_TYPES =
   ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,application/pdf,text/plain";
-const CHAT_MAX = 10 * 1024 * 1024;
+const CHAT_MAX = 50 * 1024 * 1024;
+/** Above this, files are gzipped before upload (the server takes up to 50 MB). */
+const SQUEEZE_AT = 8 * 1024 * 1024;
 
-/** Uploads a document for a chat (PDF/Word/PowerPoint/Excel/text, up to 10 MB). */
+async function squeeze(file: Blob): Promise<Blob | null> {
+  if (typeof CompressionStream === "undefined") return null;
+  try {
+    const out = await new Response(file.stream().pipeThrough(new CompressionStream("gzip"))).blob();
+    // Already-compressed files (most PDFs, .docx/.pptx) barely shrink: not worth it.
+    return out.size < file.size * 0.95 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+async function unsqueeze(data: Blob, type: string): Promise<Blob> {
+  const raw = await new Response(data.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+  return new Blob([raw], { type });
+}
+
+/** Uploads a document for a chat (PDF/Word/PowerPoint/Excel/text). Big ones are compressed first. */
 export async function uploadChatFile(thread: ThreadId, file: File): Promise<ChatFile> {
   const sb = getSupabase();
   if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to send files.");
-  if (file.size > CHAT_MAX) throw new Error("That file is over 10 MB.");
   if (!/\.(pdf|docx?|pptx?|xlsx?|txt)$/i.test(file.name)) throw new Error("Only documents: PDF, Word, PowerPoint, Excel or text.");
+  const small = file.size > SQUEEZE_AT ? await squeeze(file) : null;
+  const body: Blob = small ?? file;
+  if (body.size > CHAT_MAX) throw new Error("That file is over 50 MB, even compressed.");
   const clean = file.name.normalize("NFKD").replace(/[^\w.\- ]+/g, "").replace(/\s+/g, " ").trim().slice(-80) || "document";
   const path = `${thread.replace(/:/g, "_")}/${crypto.randomUUID()}/${clean}`;
   const contentType = mimeOf(file.name, file.type);
-  const { error } = await sb.storage.from("chat-files").upload(path, file, { contentType, upsert: false });
+  const { error } = await sb.storage.from("chat-files").upload(path, body, { contentType, upsert: false });
   if (error) {
     if (/Bucket not found/i.test(error.message)) throw new Error("Documents are not set up on the server yet.");
     if (/mime type/i.test(error.message)) throw new Error("Only documents: PDF, Word, PowerPoint, Excel or text.");
+    if (/maximum allowed size|too large|413/i.test(error.message)) throw new Error("That file is too big for the server right now (limit 10 MB until the update is applied).");
     throw new Error(error.message);
   }
-  return { name: clean, size: file.size, type: contentType, path };
+  void db.fileCache.put({ path, blob: file, at: Date.now() }).catch(() => {});
+  return { name: clean, size: file.size, type: contentType, path, ...(small ? { gz: true } : {}) };
 }
 
+/** Keeps the newest ~120 MB of documents on the phone. */
+async function trimFileCache() {
+  const all = await db.fileCache.orderBy("at").reverse().toArray();
+  let used = 0;
+  const drop: string[] = [];
+  for (const f of all) {
+    used += f.blob.size;
+    if (used > 120 * 1024 * 1024) drop.push(f.path);
+  }
+  if (drop.length) await db.fileCache.bulkDelete(drop);
+}
+
+/** True when this document is already on the phone. */
+export function useFileCached(path: string | undefined): boolean {
+  return useLiveQuery(async () => (path ? (await db.fileCache.where("path").equals(path).count()) > 0 : false), [path]) ?? false;
+}
+
+/** Downloads a chat document once; after that it opens from the phone, even offline. */
 export async function downloadChatFile(f: ChatFile): Promise<Blob> {
+  const hit = await db.fileCache.get(f.path).catch(() => undefined);
+  if (hit) {
+    void db.fileCache.update(f.path, { at: Date.now() }).catch(() => {});
+    return hit.blob;
+  }
   const sb = getSupabase();
   if (!sb) throw new Error("Offline.");
   const { data, error } = await sb.storage.from("chat-files").download(f.path);
   if (error || !data) throw new Error("That file is no longer there.");
-  return data;
+  const blob = f.gz ? await unsqueeze(data, f.type) : data;
+  await db.fileCache.put({ path: f.path, blob, at: Date.now() }).catch(() => {});
+  void trimFileCache().catch(() => {});
+  return blob;
 }
 
 // ---------------------------------------------------------------------------

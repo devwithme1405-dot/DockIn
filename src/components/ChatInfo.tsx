@@ -231,9 +231,9 @@ export function ChatInfo({
             </ul>
             <div className="border-t border-card-edge/50 px-4 py-4">
               <p className="mb-2 text-[13px] font-bold text-muted">Invite with the code or QR</p>
-              <div className="flex items-center gap-4">
-                <div className="rounded-2xl bg-white p-2">
-                  <QrCode value={`https://dock-in.vercel.app/circle?join=${group.code}`} size={96} />
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="rounded-3xl bg-white p-3">
+                  <QrCode value={`https://dock-in.vercel.app/circle?join=${group.code}`} size={200} />
                 </div>
                 <div>
                   <p className="font-mono text-[22px] font-bold tracking-[0.2em]">{group.code}</p>
@@ -242,7 +242,7 @@ export function ChatInfo({
                       void navigator.clipboard?.writeText(group.code).catch(() => {});
                       toast.show("Code copied");
                     }}
-                    className="mt-1 flex items-center gap-1.5 text-[13.5px] font-bold text-mess"
+                    className="mx-auto mt-1 flex items-center gap-1.5 text-[13.5px] font-bold text-mess"
                   >
                     <Copy size={14} /> Copy code
                   </button>

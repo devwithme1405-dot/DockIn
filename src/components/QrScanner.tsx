@@ -104,7 +104,10 @@ export function QrScanner({
 
       const Native = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
       const detector: Detector | null = Native ? new Native({ formats: ["qr_code"] }) : null;
-      const jsQR = detector ? null : (await import("jsqr")).default;
+      // The native detector misses screens on some phones (or silently fails
+      // without Play services), so jsQR always runs as the second opinion.
+      const jsQR = (await import("jsqr")).default;
+      let flip = false;
 
       const tick = async () => {
         if (!alive || done.current || !video.current) return;
@@ -114,14 +117,17 @@ export function QrScanner({
           if (detector) {
             const found = await detector.detect(v).catch(() => []);
             text = found[0]?.rawValue ?? null;
-          } else if (jsQR && ctx) {
-            const w = Math.min(640, v.videoWidth);
+          }
+          if (!text && ctx && v.videoWidth) {
+            const w = Math.min(720, v.videoWidth);
             const h = Math.round((v.videoHeight / v.videoWidth) * w) || w;
             canvas.width = w;
             canvas.height = h;
             ctx.drawImage(v, 0, 0, w, h);
             const img = ctx.getImageData(0, 0, w, h);
-            text = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" })?.data ?? null;
+            // Alternate so a dark-mode screen (light on dark) also reads.
+            flip = !flip;
+            text = jsQR(img.data, w, h, { inversionAttempts: flip ? "dontInvert" : "attemptBoth" })?.data ?? null;
           }
         }
         const found = text ? parseScan(text) : null;

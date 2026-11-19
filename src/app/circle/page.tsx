@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Check,
   BellOff,
@@ -10,9 +10,13 @@ import {
   Ban,
   MessageCircle,
   Pin,
+  PinOff,
+  Trash2,
+  Mail,
+  MailOpen,
+  ListChecks,
   ScanLine,
   Copy,
-  ExternalLink,
   Inbox,
   Plus,
   QrCode as QrIcon,
@@ -71,11 +75,10 @@ import { SignIn } from "@/components/SignIn";
 import { ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
-import { LMS_URL } from "@/components/AssignmentFile";
 import { ChatView } from "@/components/ChatView";
 import { Notebook } from "@/components/Paper";
 import { QrScanner, type Scanned } from "@/components/QrScanner";
-import { directThread, groupThread, otherIn, usePeople, useThreads, type ThreadId } from "@/lib/chat";
+import { clearThreadForMe, directThread, groupThread, markRead, markUnread, otherIn, setThreadPref, usePeople, useThreads, type ThreadId } from "@/lib/chat";
 
 const ATTENDANCE_WORD = {
   safe: "Safe",
@@ -110,7 +113,6 @@ export default function CirclePage() {
 
 function Circle() {
   const params = useSearchParams();
-  const router = useRouter();
   const toast = useToast();
   const { session, loading: authLoading } = useAuth();
   const friends = useFriends();
@@ -447,7 +449,7 @@ function Circle() {
       await pullSocial();
       setSheet(null);
       setGroupName("");
-      router.push(`/groups/${g.id}`);
+      openChat(groupThread(g.id));
     } catch (e) {
       setProblem(e instanceof SocialError ? e.message : "Could not create that group.");
     }
@@ -461,7 +463,7 @@ function Circle() {
       await pullSocial();
       setSheet(null);
       setTyped("");
-      router.push(`/groups/${g.id}`);
+      openChat(groupThread(g.id));
     } catch (e) {
       setProblem(e instanceof SocialError ? e.message : "Could not join that group.");
     }
@@ -1038,6 +1040,21 @@ function Circle() {
         <Button className="w-full" onClick={lookUp} disabled={typed.length < 8 || busy}>
           Look up
         </Button>
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setSheet(null);
+              setScanning(true);
+            }}
+          >
+            <ScanLine size={16} /> Scan their QR
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setSheet("me")} disabled={!code}>
+            <QrIcon size={16} /> Show my QR
+          </Button>
+        </div>
       </Sheet>
 
       <Sheet open={sheet === "share"} onClose={() => setSheet(null)} title="Share an assignment">
@@ -1387,16 +1404,6 @@ function SubmissionCard({
                 )
               : "No deadline"}
         </span>
-        {!submitted && (
-          <a
-            href={LMS_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-medium"
-          >
-            Open LMS <ExternalLink size={13} />
-          </a>
-        )}
         <button
           onClick={toggle}
           className={cx(
@@ -1449,6 +1456,10 @@ function ChatList({
 }) {
   const [onlyUnread, setOnlyUnread] = useState(false);
   const [pinOpen, setPinOpen] = useState(true);
+  const [picked, setPicked] = useState<Set<ThreadId>>(() => new Set());
+  const [confirmDel, setConfirmDel] = useState(false);
+  const press = useRef<{ timer: number; fired: boolean; x: number; y: number } | null>(null);
+  const toast = useToast();
   if (!me) return null;
   const seen = new Set(threads.map((t) => t.thread));
   const groupBy = new Map(groups.map((g) => [g.id, g]));
@@ -1516,12 +1527,69 @@ function ChatList({
   const pinned = shown.filter((r) => r.pinned);
   const rest = shown.filter((r) => !r.pinned);
   const unreadTotal = rows.reduce((n, r) => n + (r.muted ? 0 : r.unread), 0);
+  const selecting = picked.size > 0;
+  const toggle = (t: ThreadId) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  const pressStart = (t: ThreadId, e: React.PointerEvent) => {
+    const timer = window.setTimeout(() => {
+      if (!press.current) return;
+      press.current.fired = true;
+      navigator.vibrate?.(25);
+      toggle(t);
+    }, 450);
+    press.current = { timer, fired: false, x: e.clientX, y: e.clientY };
+  };
+  const pressMove = (e: React.PointerEvent) => {
+    const p = press.current;
+    if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) {
+      window.clearTimeout(p.timer);
+      press.current = null;
+    }
+  };
+  const pressEnd = () => {
+    if (press.current && !press.current.fired) window.clearTimeout(press.current.timer);
+  };
+  const tap = (t: ThreadId) => {
+    const fired = press.current?.fired;
+    press.current = null;
+    if (fired) return;
+    if (selecting) toggle(t);
+    else onOpen(t);
+  };
+  const chosen = rows.filter((r) => picked.has(r.thread));
+  const allPinned = chosen.length > 0 && chosen.every((r) => r.pinned);
+  const allMuted = chosen.length > 0 && chosen.every((r) => r.muted);
+  const anyUnread = chosen.some((r) => r.unread > 0);
+  const done = () => setPicked(new Set());
+  async function bulk(fn: (t: ThreadId) => Promise<unknown>, said: string) {
+    const list = [...picked];
+    done();
+    await Promise.all(list.map((t) => fn(t).catch(() => {})));
+    toast.show(said);
+  }
+
   const row = (r: (typeof rows)[number]) => (
     <li key={r.thread} className="px-4">
-          <button onClick={() => onOpen(r.thread)} className="lift flex w-full items-center gap-3 rounded-3xl bg-surface p-3 text-left transition active:scale-[0.99]">
+          <button
+            onClick={() => tap(r.thread)}
+            onPointerDown={(e) => pressStart(r.thread, e)}
+            onPointerMove={pressMove}
+            onPointerUp={pressEnd}
+            onPointerCancel={pressEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cx(
+              "lift flex w-full items-center gap-3 rounded-3xl p-3 text-left transition select-none active:scale-[0.99] [-webkit-touch-callout:none]",
+              picked.has(r.thread) ? "bg-mess-soft ring-2 ring-orange" : "bg-surface",
+            )}
+          >
             <span
               className={cx(
-                "grid size-[58px] shrink-0 place-items-center rounded-full p-[2.5px]",
+                "relative grid size-[58px] shrink-0 place-items-center rounded-full p-[2.5px]",
                 r.unread && !r.muted ? "bg-gradient-to-tr from-orange via-[#e0662b] to-ink" : "bg-transparent",
               )}
             >
@@ -1532,6 +1600,11 @@ function ChatList({
                   <Avatar name={r.name} avatar={r.avatar} size={48} />
                 )}
               </span>
+              {picked.has(r.thread) && (
+                <span className="absolute -right-0.5 -bottom-0.5 grid size-6 place-items-center rounded-full border-2 border-surface bg-orange text-white">
+                  <Check size={13} strokeWidth={3} />
+                </span>
+              )}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
@@ -1560,6 +1633,66 @@ function ChatList({
 
   return (
     <div className="pb-24">
+      {selecting && (
+        <div className="fixed inset-x-0 top-0 z-50 flex items-center gap-1 border-b border-card-edge bg-bg px-2 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 shadow-[0_8px_20px_-14px_rgb(var(--shadow-ink)/0.6)] [animation:fade-in_150ms_ease-out]">
+          <button onClick={done} aria-label="Cancel selection" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
+            <X size={22} />
+          </button>
+          <span className="flex-1 text-[18px] font-extrabold tabular-nums">{picked.size}</span>
+          <button
+            onClick={() => void bulk((t) => setThreadPref(t, { pinned: !allPinned }), allPinned ? "Unpinned" : "Pinned")}
+            aria-label={allPinned ? "Unpin" : "Pin"}
+            className="grid size-11 place-items-center rounded-full active:bg-surface-2"
+          >
+            {allPinned ? <PinOff size={21} /> : <Pin size={21} />}
+          </button>
+          <button
+            onClick={() => void bulk((t) => setThreadPref(t, { muted: !allMuted }), allMuted ? "Unmuted" : "Muted")}
+            aria-label={allMuted ? "Unmute" : "Mute"}
+            className="grid size-11 place-items-center rounded-full active:bg-surface-2"
+          >
+            {allMuted ? <Bell size={21} /> : <BellOff size={21} />}
+          </button>
+          <button
+            onClick={() => void bulk((t) => (anyUnread ? markRead(t) : markUnread(t)), anyUnread ? "Marked as read" : "Marked as unread")}
+            aria-label={anyUnread ? "Mark as read" : "Mark as unread"}
+            className="grid size-11 place-items-center rounded-full active:bg-surface-2"
+          >
+            {anyUnread ? <MailOpen size={21} /> : <Mail size={21} />}
+          </button>
+          <button
+            onClick={() => setPicked(new Set(shown.map((r) => r.thread)))}
+            aria-label="Select all"
+            className="grid size-11 place-items-center rounded-full active:bg-surface-2"
+          >
+            <ListChecks size={21} />
+          </button>
+          <button onClick={() => setConfirmDel(true)} aria-label="Delete chats" className="grid size-11 place-items-center rounded-full text-danger active:bg-surface-2">
+            <Trash2 size={21} />
+          </button>
+        </div>
+      )}
+      <Sheet open={confirmDel} onClose={() => setConfirmDel(false)} title={picked.size === 1 ? "Delete this chat?" : `Delete ${picked.size} chats?`}>
+        <p className="mb-4 text-[14px] text-muted">Messages are cleared from this phone only. The others keep their copy.</p>
+        <div className="flex gap-2.5">
+          <Button variant="secondary" className="flex-1" onClick={() => setConfirmDel(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={() => {
+              setConfirmDel(false);
+              void bulk(async (t) => {
+                await clearThreadForMe(t);
+                await setThreadPref(t, { pinned: false });
+              }, "Deleted");
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      </Sheet>
       {pinned.length > 0 && (
         <section className="mx-4 mt-3 overflow-hidden rounded-2xl border border-card-edge bg-card/80">
           <button onClick={() => setPinOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">

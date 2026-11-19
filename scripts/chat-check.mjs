@@ -202,6 +202,45 @@ await step("the + menu offers task, poll and document; a document shows as a car
   await dlg.getByLabel("Back").click();
 });
 
+await step("Task in chat can make a brand-new task", async () => {
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_)/ }).first().click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByLabel("Add a task, poll or document").click();
+  await page.getByRole("button", { name: "Task", exact: true }).click();
+  await page.getByRole("button", { name: "New task" }).click();
+  await page.getByPlaceholder("What's due? e.g. DBMS lab file").fill("OS viva prep");
+  await page.getByRole("button", { name: /Add to my Tasks & send/ }).click();
+  await dlg.getByText("OS viva prep").waitFor({ timeout: 4000 });
+  await dlg.getByText("In your Tasks").first().waitFor({ timeout: 3000 });
+  await page.screenshot({ path: `${SHOTS}/chat-newtask.png` });
+  await page.waitForTimeout(600);
+  await page.getByLabel("Back", { exact: true }).click();
+  await page.getByLabel("Scan a QR").waitFor({ timeout: 3000 });
+  await page.waitForTimeout(300);
+});
+
+await step("long-press a chat to select, then mute it", async () => {
+  const rowBtn = page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva)/ }).first();
+  const box = await rowBtn.boundingBox();
+  await page.mouse.move(box.x + 40, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await page.getByLabel("Select all").waitFor({ timeout: 2000 });
+  await page.screenshot({ path: `${SHOTS}/chat-select.png` });
+  await page.getByLabel("Mute", { exact: true }).click();
+  await page.getByLabel("Muted").first().waitFor({ timeout: 3000 });
+});
+
+await step("Add a friend offers scan and my QR", async () => {
+  await page.getByRole("button", { name: "Add Friend", exact: true }).first().click();
+  await page.getByRole("button", { name: /Scan their QR/ }).waitFor({ timeout: 3000 });
+  await page.getByRole("button", { name: /Show my QR/ }).waitFor({ timeout: 2000 });
+  await page.screenshot({ path: `${SHOTS}/chat-add.png` });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+});
+
 await step("the scanner opens smoothly and can flip to My QR", async () => {
   await page.getByLabel("Scan a QR").click();
   await page.getByText("Point at a friend").waitFor({ timeout: 6000 });

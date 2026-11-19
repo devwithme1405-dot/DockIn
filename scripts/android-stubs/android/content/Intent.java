@@ -25,6 +25,8 @@ public class Intent {
   public static final String ACTION_BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED";
   public static final String ACTION_MY_PACKAGE_REPLACED = "android.intent.action.MY_PACKAGE_REPLACED";
   public String getAction() { return null; }
+  public android.net.Uri getData() { return null; }
+  public Intent setData(android.net.Uri u) { return this; }
   public Intent setClassName(String p, String c) { return this; }
   public Intent setComponent(android.content.ComponentName c) { return this; }
   public static final String ACTION_VIEW = "android.intent.action.VIEW";

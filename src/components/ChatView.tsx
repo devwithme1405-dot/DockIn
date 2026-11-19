@@ -25,6 +25,7 @@ import {
   Search,
   Trash2,
   X,
+  FileCheck,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
@@ -37,6 +38,7 @@ import {
   chatMe,
   directThread,
   downloadChatFile,
+  useFileCached,
   editMessage,
   forwardMessage,
   groupThread,
@@ -294,7 +296,7 @@ export function ChatView({
           task: { title: t.title, kind: t.kind, dueDate: t.dueDate, dueTime: t.dueTime, subject: draft.subjectName },
         });
       }
-      toast.show("Shared — it's on their task list now");
+      toast.show("Sent — they can add it to their Tasks");
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not share that.");
     }
@@ -437,7 +439,7 @@ export function ChatView({
         )}
         {rows.map((r, i) =>
           "day" in r ? (
-            <p key={`d-${r.day}-${i}`} className="sticky top-14 z-[1] my-3 text-center">
+            <p key={`d-${r.day}-${i}`} className="my-3 text-center">
               <span className="glass-pill rounded-full px-3 py-1 text-[11.5px] font-bold text-muted">{r.day}</span>
             </p>
           ) : "unread" in r ? (
@@ -740,8 +742,11 @@ function ForwardList({ me, current, onPick }: { me: string | null; current: Thre
   const items = [
     ...(groups ?? []).map((g) => ({ thread: groupThread(g.id), name: g.name, avatar: g.photo ?? undefined, emoji: g.emoji ?? "👥" })),
     ...(friends ?? []).map((f) => ({ thread: me ? directThread(me, f.id) : "", name: f.name, avatar: f.avatar, emoji: null as string | null })),
-  ].filter((x) => x.thread && x.thread !== current);
-  if (!items.length) return <p className="py-6 text-center text-[14px] text-muted">No other chats yet.</p>;
+  ]
+    .filter((x) => x.thread)
+    // The chat you are in comes first, so re-sharing here is one tap.
+    .sort((a, b) => Number(b.thread === current) - Number(a.thread === current));
+  if (!items.length) return <p className="py-6 text-center text-[14px] text-muted">No chats yet.</p>;
   return (
     <ul className="max-h-[60vh] space-y-1 overflow-y-auto pb-2">
       {items.map((x) => (
@@ -752,7 +757,10 @@ function ForwardList({ me, current, onPick }: { me: string | null; current: Thre
             ) : (
               <span className="grid size-11 place-items-center rounded-full bg-mess-soft text-[20px]">{x.emoji ?? x.name.charAt(0)}</span>
             )}
-            <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{x.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[15px] font-bold">
+              {x.name}
+              {x.thread === current && <span className="ml-1.5 text-[12px] font-semibold text-muted">· this chat</span>}
+            </span>
             <Forward size={17} className="text-mess" />
           </button>
         </li>
@@ -906,7 +914,7 @@ function Bubble({
           ) : m.kind === "file" && m.data?.path ? (
             <FileCard f={m.data as ChatFile} />
           ) : m.kind === "task" && m.data ? (
-            <TaskCard t={m.data} />
+            <TaskCard t={m.data} mine={mine} />
           ) : (
             <span className="whitespace-pre-wrap">{m.body}</span>
           )}
@@ -945,9 +953,14 @@ function Bubble({
   );
 }
 
-function TaskCard({ t }: { t: NonNullable<ChatMessage["data"]> }) {
+function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: boolean }) {
   const toast = useToast();
-  const [added, setAdded] = useState(false);
+  // Already in my Tasks (same title and due day), whether I sent it or added it before.
+  const have = useLiveQuery(
+    () => db.tasks.filter((x) => !x.deletedAt && x.title.trim() === (t.title ?? "").trim() && (x.dueDate ?? null) === (t.dueDate ?? null)).count(),
+    [t.title, t.dueDate],
+  );
+  const added = (have ?? 0) > 0;
   return (
     <div className="flex items-start gap-3 py-0.5">
       <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl border-[1.5px] border-mess text-mess">
@@ -968,7 +981,6 @@ function TaskCard({ t }: { t: NonNullable<ChatMessage["data"]> }) {
             e.stopPropagation();
             if (added) return;
             await addTask({ title: t.title, kind: (t.kind as Task["kind"]) ?? "assignment", dueDate: t.dueDate, dueTime: t.dueTime, notes: t.subject ?? "" });
-            setAdded(true);
             toast.show("Added to your Tasks");
           }}
           className={cx(
@@ -976,23 +988,89 @@ function TaskCard({ t }: { t: NonNullable<ChatMessage["data"]> }) {
             added ? "border-safe text-safe" : "border-orange/50 text-mess",
           )}
         >
-          {added ? <Check size={13} /> : <Plus size={13} />} {added ? "Added to Tasks" : "Add to my Tasks"}
+          {added ? <Check size={13} /> : <Plus size={13} />} {added ? "In your Tasks" : mine ? "Add to my Tasks" : "Add this to your Tasks?"}
         </button>
       </div>
     </div>
   );
 }
 
+const NEW_KINDS: { id: Task["kind"]; label: string }[] = [
+  { id: "assignment", label: "Assignment" },
+  { id: "exam", label: "Exam" },
+  { id: "quiz", label: "Quiz" },
+  { id: "project", label: "Project" },
+  { id: "personal", label: "Other" },
+];
+
+/** A new task, made right here: saved to my Tasks and sent to the chat. */
+function NewTaskForm({ onMade }: { onMade: (t: Task) => void }) {
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<Task["kind"]>("assignment");
+  const [day, setDay] = useState("");
+  const [time, setTime] = useState("");
+  const [busy, setBusy] = useState(false);
+  const input = "h-11 w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-3.5 text-[15px] outline-none focus:border-orange";
+  return (
+    <div className="space-y-2.5 rounded-3xl bg-surface-2 p-3">
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's due? e.g. DBMS lab file" className={input} autoFocus />
+      <div className="flex flex-wrap gap-1.5">
+        {NEW_KINDS.map((k) => (
+          <button
+            key={k.id}
+            type="button"
+            onClick={() => setKind(k.id)}
+            className={cx(
+              "h-8 rounded-full border px-3 text-[13px] font-bold",
+              kind === k.id ? "border-mess bg-mess text-white" : "border-card-edge bg-card text-muted",
+            )}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Due day" className={input} />
+        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Due time" className={cx(input, "w-[8.5rem] shrink-0")} />
+      </div>
+      <button
+        disabled={!title.trim() || busy}
+        onClick={async () => {
+          setBusy(true);
+          const t = await addTask({ title, kind, dueDate: day || null, dueTime: day && time ? time : null });
+          setBusy(false);
+          onMade(t);
+        }}
+        className="btn-leather h-11 w-full rounded-2xl text-[15px] font-bold disabled:opacity-50"
+      >
+        Add to my Tasks &amp; send
+      </button>
+    </div>
+  );
+}
+
 function TaskPicker({ onPick }: { onPick: (t: Task) => void }) {
+  const [making, setMaking] = useState(false);
   const tasks = useLiveQuery(
     () => db.tasks.filter((t) => !t.deletedAt && !t.done).toArray(),
     [],
   );
   const list = (tasks ?? []).sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
-  if (tasks && list.length === 0)
-    return <p className="py-6 text-center text-[14px] text-muted">No open tasks to share. Add one on the Tasks tab.</p>;
   return (
-    <ul className="max-h-[60vh] space-y-2 overflow-y-auto pb-2">
+    <div className="max-h-[66vh] space-y-3 overflow-y-auto pb-2">
+      {making ? (
+        <NewTaskForm onMade={onPick} />
+      ) : (
+        <button
+          onClick={() => setMaking(true)}
+          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-orange/60 px-3.5 py-3 text-left text-[15px] font-bold text-mess"
+        >
+          <Plus size={18} /> New task
+        </button>
+      )}
+      {tasks && list.length === 0 && !making && <p className="py-3 text-center text-[13.5px] text-muted">No open tasks yet — make one above.</p>}
+      {list.length > 0 && <p className="px-1 text-[12.5px] font-bold text-muted">Or share one you already have</p>}
+    <ul className="space-y-2">
       {list.map((t) => (
         <li key={t.id}>
           <button
@@ -1012,6 +1090,7 @@ function TaskPicker({ onPick }: { onPick: (t: Task) => void }) {
         </li>
       ))}
     </ul>
+    </div>
   );
 }
 
@@ -1126,6 +1205,7 @@ const FILE_TINT: Record<string, string> = {
 function FileCard({ f }: { f: ChatFile }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const saved = useFileCached(f.path);
   const ext = (f.name.split(".").pop() ?? "").toLowerCase();
   const kb = f.size < 1048576 ? `${Math.max(1, Math.round(f.size / 1024))} KB` : `${(f.size / 1048576).toFixed(1)} MB`;
   return (
@@ -1149,9 +1229,16 @@ function FileCard({ f }: { f: ChatFile }) {
         <span className="block truncate text-[14px] font-bold">{f.name}</span>
         <span className="block text-[12px] text-muted">
           {kb} · {ext.toUpperCase()}
+          {saved && " · On phone"}
         </span>
       </span>
-      {busy ? <Clock size={19} className="shrink-0 animate-pulse text-muted" /> : <Download size={19} className="shrink-0 text-mess" />}
+      {busy ? (
+        <Clock size={19} className="shrink-0 animate-pulse text-muted" />
+      ) : saved ? (
+        <FileCheck size={19} className="shrink-0 text-safe" />
+      ) : (
+        <Download size={19} className="shrink-0 text-mess" />
+      )}
     </button>
   );
 }

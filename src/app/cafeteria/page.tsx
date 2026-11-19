@@ -166,7 +166,7 @@ export default function CafeteriaPage() {
             <p className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
               Cafeteria
             </p>
-            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">Good Food, Good Mood</p>
+            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">{mealLine(nowHm)}</p>
           </div>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function CafeteriaPage() {
           <span className="grid size-10 place-items-center rounded-2xl bg-mess-soft text-mess">
             <CalendarDays size={19} />
           </span>
-          <h2 className="text-[18px] font-extrabold tracking-tight">Today&rsquo;s Menu</h2>
+          <h2 className="text-[18px] font-extrabold tracking-tight">On the plate today</h2>
           <span className="ml-auto text-[13px] font-semibold text-muted">{fmtDayLong(today)}</span>
         </div>
         {caf?.facility && <p className="mt-1.5 pl-[3.1rem] text-[12.5px] font-semibold text-muted">{caf.facility}</p>}
@@ -211,7 +211,7 @@ export default function CafeteriaPage() {
             onClick={() => setMenuSheet(true)}
             className="btn-paper mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-[14px] font-bold"
           >
-            <Sparkles size={17} className="text-mess" /> Set up this week&rsquo;s menu
+            <Sparkles size={17} className="text-mess" /> Add the week&rsquo;s menu once
           </button>
         )}
       </section>
@@ -223,8 +223,8 @@ export default function CafeteriaPage() {
             <ScanLine size={21} />
           </span>
           <div>
-            <p className="text-[18px] font-extrabold tracking-tight">Mess Pass</p>
-            <p className="text-[13px] text-muted">Scan this QR at the counter</p>
+            <p className="text-[18px] font-extrabold tracking-tight">Mess pass</p>
+            <p className="text-[13px] text-muted">Hold it up at the counter, that&rsquo;s it</p>
           </div>
         </div>
 
@@ -266,15 +266,15 @@ export default function CafeteriaPage() {
               <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-mess-soft text-mess">
                 <ScanLine size={26} />
               </span>
-              <p className="mt-4 font-bold">Your pass will appear here</p>
+              <p className="mt-4 font-bold">No pass yet</p>
               <p className="mt-1 text-[13px] text-muted">
-                Connect Camu in Settings and your cafeteria pass comes in by itself — same as your attendance.
+                Link Camu in Settings and your pass shows up here on its own, next to your attendance.
               </p>
               <button
                 onClick={() => setQrSheet(true)}
                 className="btn-paper mt-5 inline-flex h-11 items-center rounded-2xl px-5 text-[13.5px] font-bold text-muted"
               >
-                Or paste it manually
+                Paste it yourself
               </button>
             </div>
           )}
@@ -342,8 +342,8 @@ function QrSheet({ open, onClose, value }: { open: boolean; onClose: () => void;
   return (
     <Sheet open={open} onClose={onClose} title="Your mess pass">
       <p className="mb-3 text-[13.5px] text-muted">
-        If Camu is connected this fills in by itself. To set it by hand, scan the cafeteria QR in MyCamu and paste
-        exactly what it reads.
+        With Camu linked, this fills itself. Otherwise open the mess QR in MyCamu, scan it with any QR app and paste
+        the text it shows.
       </p>
       <textarea
         value={text}
@@ -397,7 +397,7 @@ function MenuSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Weekly mess menu">
-      <p className="mb-3 text-[13px] text-muted">Fill it once. Each day shows on its own — no daily typing.</p>
+      <p className="mb-3 text-[13px] text-muted">Type the week once. Every morning the right day shows up by itself.</p>
 
       <div className="-mx-5 flex gap-1.5 overflow-x-auto px-5 pb-2 [scrollbar-width:none]">
         {DAYS.map((label, i) => (
@@ -460,4 +460,17 @@ function fillWeekFrom(menu: Record<number, MessDay>, day: number): Record<number
   const out: Record<number, MessDay> = {};
   for (let i = 0; i < 7; i++) out[i] = { ...src };
   return out;
+}
+
+/** The hero's one line: what the mess is doing right now. */
+function mealLine(hm: string): string {
+  if (hm < "07:30") return "Up early? Breakfast is next";
+  if (hm < "11:00") return "Breakfast time";
+  if (hm < "12:30") return "Lunch is next";
+  if (hm < "15:30") return "Lunch time";
+  if (hm < "17:00") return "Snacks are next";
+  if (hm < "18:30") return "Snack break";
+  if (hm < "19:30") return "Dinner is next";
+  if (hm < "22:30") return "Dinner time";
+  return "Mess is shut for the night";
 }
