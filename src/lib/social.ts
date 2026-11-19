@@ -271,6 +271,13 @@ export async function joinGroup(code: string): Promise<Group> {
   return group;
 }
 
+/** Owner only (RLS): rename, describe, or set the group photo ('p:<key>' or null). */
+export async function updateGroup(groupId: string, patch: { name?: string; about?: string; photo?: string | null; emoji?: string | null }): Promise<void> {
+  const { error } = await client().from("groups").update({ ...patch, updated_at: now() }).eq("id", groupId);
+  if (error) throw new SocialError(readable(error.message));
+  await db.groups.update(groupId, patch);
+}
+
 export async function leaveGroup(groupId: string): Promise<void> {
   const sb = client();
   const { data: auth } = await sb.auth.getUser();
@@ -681,7 +688,7 @@ async function doPull(): Promise<void> {
 
   const [people, groupRows, memberRows, profileRows, shareRows, reactionRows] = await Promise.all([
     sb.rpc("my_people"),
-    sb.from("groups").select("id,name,emoji,code,owner,updated_at").is("deleted_at", null),
+    sb.from("groups").select("*").is("deleted_at", null),
     sb.from("group_members").select("group_id,user_id"),
     sb.from("profiles").select("user_id,name,avatar"),
     sb
@@ -769,11 +776,15 @@ async function doPull(): Promise<void> {
       code: string;
       owner: string;
       updated_at: number;
+      photo?: string | null;
+      about?: string | null;
     }[]
   ).map((g) => ({
     id: g.id,
     name: g.name,
     emoji: g.emoji,
+    photo: g.photo ?? null,
+    about: g.about ?? "",
     code: g.code,
     owner: g.owner,
     members: counts.get(g.id) ?? 1,

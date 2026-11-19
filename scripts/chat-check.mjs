@@ -165,11 +165,12 @@ await step("the group chat shows who said what and the task card", async () => {
 });
 
 await step("friend requests show on the Chats tab with accept, reject and block", async () => {
-  await page.getByRole("button", { name: /Friend requests/ }).click().catch(() => page.getByRole("button", { name: /People/ }).first().click());
+  await page.getByLabel("Friend requests").first().click();
   await page.getByRole("button", { name: "Reject", exact: true }).waitFor({ timeout: 3000 });
   await page.getByLabel("Block Aman Verma").waitFor({ timeout: 2000 });
   await page.screenshot({ path: `${SHOTS}/chat-requests.png` });
-  await page.getByRole("button", { name: /Chats/ }).first().click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 });
 
 await step("a group poll takes a vote, and the chat can be pinned", async () => {
@@ -179,8 +180,11 @@ await step("a group poll takes a vote, and the chat can be pinned", async () => 
   await dlg.getByRole("button", { name: /Nahi/ }).click();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/chat-poll.png` });
-  await dlg.getByLabel("Chat options").click();
-  await page.getByRole("button", { name: "Pin chat" }).click();
+  await dlg.getByLabel("CSE E1 info").click();
+  await page.getByRole("dialog", { name: "CSE E1 info" }).getByRole("button", { name: /Pin chat/ }).click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/chat-info.png` });
+  await page.getByRole("dialog", { name: "CSE E1 info" }).getByLabel("Back").click();
   await page.waitForTimeout(300);
   await dlg.getByLabel("Back").click();
   await page.getByLabel("Pinned").first().waitFor({ timeout: 3000 });

@@ -30,6 +30,10 @@ export interface ChatMessage {
   /** Epoch ms. */
   createdAt: number;
   deleted?: boolean;
+  /** Epoch ms of the last edit. */
+  editedAt?: number | null;
+  /** Deleted for me only (this phone). */
+  hidden?: boolean;
   /** Written here, not yet confirmed by the server. */
   pending?: boolean;
   failed?: boolean;
@@ -126,6 +130,7 @@ interface Row {
   reply_to: string | null;
   created_at: string;
   deleted_at: string | null;
+  edited_at?: string | null;
 }
 
 const toMsg = (r: Row): ChatMessage => ({
@@ -138,7 +143,14 @@ const toMsg = (r: Row): ChatMessage => ({
   replyTo: r.reply_to,
   createdAt: Date.parse(r.created_at),
   deleted: !!r.deleted_at,
+  editedAt: r.edited_at ? Date.parse(r.edited_at) : null,
 });
+
+/** Keeps this phone's own flags (deleted for me) when a server copy arrives. */
+async function putMsgs(list: ChatMessage[]): Promise<void> {
+  const prev = await db.messages.bulkGet(list.map((m) => m.id));
+  await db.messages.bulkPut(list.map((m, i) => (prev[i]?.hidden ? { ...m, hidden: true } : m)));
+}
 
 const SINCE_KEY = "dockin-chat-since";
 
@@ -161,7 +173,7 @@ export async function pullChat(): Promise<void> {
   const [msgs, reads, people] = await Promise.all([
     sb
       .from("messages")
-      .select("id,thread,author,body,kind,data,reply_to,created_at,deleted_at")
+      .select("*")
       .gt("created_at", from)
       .order("created_at", { ascending: true })
       .limit(1000),
@@ -171,12 +183,17 @@ export async function pullChat(): Promise<void> {
   if (msgs.error) return; // tables not set up yet, or offline — try again later
   const rows = (msgs.data ?? []) as Row[];
   if (rows.length) {
-    await db.messages.bulkPut(rows.map(toMsg));
+    await putMsgs(rows.map(toMsg));
     try {
       localStorage.setItem(SINCE_KEY, rows[rows.length - 1].created_at);
     } catch {
       /* a full re-pull next time is fine */
     }
+  }
+  const others = await sb.from("thread_reads").select("user_id,thread,read_at").neq("user_id", myId);
+  if (!others.error) {
+    const list = (others.data ?? []) as { user_id: string; thread: string; read_at: string }[];
+    await db.seenBy.bulkPut(list.map((r) => ({ id: `${r.thread}:${r.user_id}`, thread: r.thread, userId: r.user_id, readAt: Date.parse(r.read_at) })));
   }
   if (!reads.error) {
     const marks = (reads.data ?? []) as { thread: string; read_at: string; muted?: boolean; pinned?: boolean }[];
@@ -218,7 +235,12 @@ export function listenChat(): () => void {
     .channel("dockin-chat")
     .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
       const row = payload.new as Row | undefined;
-      if (row?.id) void db.messages.put(toMsg(row));
+      if (row?.id) void putMsgs([toMsg(row)]);
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "thread_reads" }, (payload) => {
+      const r = payload.new as { user_id?: string; thread?: string; read_at?: string } | undefined;
+      if (!r?.user_id || !r.thread || r.user_id === myId) return;
+      void db.seenBy.put({ id: `${r.thread}:${r.user_id}`, thread: r.thread, userId: r.user_id, readAt: Date.parse(r.read_at ?? "") || 0 });
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
       const r = (payload.new ?? payload.old) as { message_id?: string; user_id?: string; emoji?: string } | undefined;
@@ -267,7 +289,7 @@ export async function sendMessage(
   const { data, error } = await sb
     .from("messages")
     .insert({ id, thread, body: local.body, kind: local.kind, data: local.data, reply_to: local.replyTo })
-    .select("id,thread,author,body,kind,data,reply_to,created_at,deleted_at")
+    .select("*")
     .single();
   if (error || !data) {
     await db.messages.update(id, { pending: false, failed: true });
@@ -287,6 +309,43 @@ export async function retryMessage(m: ChatMessage): Promise<void> {
     file: m.kind === "file" ? (d as ChatFile) : undefined,
     replyTo: m.replyTo,
   });
+}
+
+/** Edit your own text message (WhatsApp allows it for a while; so do we). */
+export async function editMessage(id: string, body: string): Promise<void> {
+  const text = body.trim().slice(0, 4000);
+  if (!text) return;
+  const sb = getSupabase();
+  const at = new Date().toISOString();
+  await db.messages.update(id, { body: text, editedAt: Date.parse(at) });
+  if (sb) await sb.from("messages").update({ body: text, edited_at: at }).eq("id", id);
+}
+
+/** Delete for me: gone from this phone only. */
+export async function hideMessage(id: string): Promise<void> {
+  await db.messages.update(id, { hidden: true });
+}
+
+/** Clear a whole chat from this phone (others keep it). */
+export async function clearThreadForMe(thread: ThreadId): Promise<void> {
+  const ids = (await db.messages.where("thread").equals(thread).primaryKeys()) as string[];
+  await db.messages.bulkUpdate(ids.map((key) => ({ key, changes: { hidden: true } })));
+}
+
+/** Forward: the same text, task, poll or document into another chat. */
+export async function forwardMessage(m: ChatMessage, to: ThreadId): Promise<void> {
+  const d = m.data ?? undefined;
+  await sendMessage(to, m.body, {
+    task: m.kind === "task" ? d : undefined,
+    poll: m.kind === "poll" ? (d as ChatPoll) : undefined,
+    file: m.kind === "file" ? (d as ChatFile) : undefined,
+  });
+}
+
+/** When each other person last read this chat — for ✓✓ Seen. */
+export function useSeenBy(thread: ThreadId): Map<string, number> {
+  const list = useLiveQuery(() => db.seenBy.where("thread").equals(thread).toArray(), [thread]);
+  return new Map((list ?? []).map((r) => [r.userId, r.readAt]));
 }
 
 /** "Delete for everyone": your own message only. */
@@ -401,7 +460,13 @@ export async function downloadChatFile(f: ChatFile): Promise<Blob> {
 export function useThread(thread: ThreadId | null): ChatMessage[] | undefined {
   return useLiveQuery(
     (): Promise<ChatMessage[]> =>
-      thread ? db.messages.where("thread").equals(thread).sortBy("createdAt") : Promise.resolve([]),
+      thread
+        ? db.messages
+            .where("thread")
+            .equals(thread)
+            .filter((m) => !m.hidden)
+            .sortBy("createdAt")
+        : Promise.resolve([]),
     [thread],
   );
 }
@@ -417,7 +482,8 @@ export interface ThreadSummary {
 /** Every thread you have messages in, newest first, with unread counts. */
 export function useThreads(): ThreadSummary[] | undefined {
   return useLiveQuery(async () => {
-    const [all, reads] = await Promise.all([db.messages.toArray(), db.chatReads.toArray()]);
+    const [allRaw, reads] = await Promise.all([db.messages.toArray(), db.chatReads.toArray()]);
+    const all = allRaw.filter((m) => !m.hidden);
     const readAt = new Map(reads.map((r) => [r.thread, r.readAt]));
     const pref = new Map(reads.map((r) => [r.thread, r]));
     const by = new Map<ThreadId, ThreadSummary>();
@@ -467,7 +533,7 @@ export function usePeople(): Map<string, ChatPerson> {
 }
 
 export async function clearChat(): Promise<void> {
-  await Promise.all([db.messages.clear(), db.chatReads.clear(), db.chatPeople.clear(), db.pollVotes.clear(), db.msgReactions.clear()]);
+  await Promise.all([db.messages.clear(), db.chatReads.clear(), db.chatPeople.clear(), db.pollVotes.clear(), db.msgReactions.clear(), db.seenBy.clear()]);
   try {
     localStorage.removeItem(SINCE_KEY);
   } catch {

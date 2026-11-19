@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
   BellOff,
+  Bell,
+  ArrowLeft,
   Ban,
   MessageCircle,
   Pin,
@@ -17,7 +19,6 @@ import {
   Search,
   Share2,
   UserRound,
-  Layers,
   PenSquare,
   ChevronDown,
   UserPlus,
@@ -89,8 +90,6 @@ type Tab = "chats" | "friends" | "groups" | "work";
 const TABS = [
   ["chats", "Chats"],
   ["groups", "Groups"],
-  ["friends", "People"],
-  ["work", "Shared"],
 ] as const;
 type SheetName = "add" | "confirm" | "newGroup" | "joinGroup" | "me" | "share" | null;
 
@@ -124,7 +123,7 @@ function Circle() {
 
   const [tab, setTab] = useState<Tab>(() => {
     const t = params.get("tab");
-    return t === "groups" || t === "work" || t === "friends" ? t : "chats";
+    return t === "groups" ? t : "chats";
   });
   // An open conversation lives in the address (?chat=…), so a notification can
   // open it and the phone's back button closes it.
@@ -134,6 +133,8 @@ function Circle() {
   const [scanning, setScanning] = useState(false);
   const [searching, setSearching] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [bell, setBell] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -490,6 +491,14 @@ function Circle() {
             <path d="M2 7 C 30 2, 70 2, 118 5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
           </svg>
         </div>
+        <button onClick={() => setBell(true)} aria-label="Friend requests" className="btn-paper relative grid size-11 place-items-center rounded-2xl">
+          <Bell size={20} />
+          {requests.length > 0 && (
+            <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-orange px-1 text-[11px] font-bold text-white ring-2 ring-bg">
+              {requests.length}
+            </span>
+          )}
+        </button>
         <button
           onClick={() => setSearching((v) => !v)}
           aria-label="Search chats and people"
@@ -547,7 +556,7 @@ function Circle() {
                 ["Add Friend", UserPlus, () => setSheet("add")],
                 ["New Group", Users, () => { setGroupName(""); setProblem(null); setSheet("newGroup"); }],
                 ["My QR", QrIcon, () => setSheet("me")],
-                ["Invite", Share2, () => void shareLink()],
+                ["Friends", UserRound, () => setFriendsOpen(true)],
               ] as const
             ).map(([label, Icon, go]) => (
               <button key={label} onClick={go} className="btn-paper flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 active:scale-95">
@@ -593,11 +602,11 @@ function Circle() {
         })}
       </div>
 
-      <nav className="sticky top-0 z-10 mt-2 bg-bg/95 px-4 py-2 backdrop-blur" aria-label="Friends sections">
-        <div className="flex gap-1 rounded-2xl border border-card-edge/70 bg-card/70 p-1">
+      <nav className="glass-bar sticky top-0 z-10 mt-2 border-b-0 px-4 py-2" aria-label="Friends sections">
+        <div className="glass-pill flex gap-1 rounded-2xl p-1">
           {TABS.map(([id, label]) => {
-            const Icon = id === "chats" ? MessageCircle : id === "groups" ? Users : id === "friends" ? UserRound : Layers;
-            const count = id === "friends" ? requests.length : id === "work" ? toHandIn : 0;
+            const Icon = id === "chats" ? MessageCircle : Users;
+            const count = 0;
             const on = tab === id;
             return (
               <button
@@ -624,7 +633,7 @@ function Circle() {
 
       {requests.length > 0 && tab === "chats" && (
         <button
-          onClick={() => setTab("friends")}
+          onClick={() => setBell(true)}
           className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-2xl bg-orange/10 px-3.5 py-3 text-left active:scale-[0.99]"
         >
           <span className="grid size-10 place-items-center rounded-full bg-orange text-white">
@@ -706,8 +715,18 @@ function Circle() {
         </ul>
       </Sheet>
 
-      {tab === "friends" && (
-        <div className="space-y-5 px-4 pt-4">
+      {friendsOpen && (
+        <div className="paper-page fixed inset-0 z-[45] flex flex-col" role="dialog" aria-label="Friends">
+          <header className="glass-bar flex items-center gap-1.5 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
+            <button onClick={() => setFriendsOpen(false)} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
+              <ArrowLeft size={23} />
+            </button>
+            <p className="flex-1 text-[18px] font-extrabold">Friends</p>
+            <button onClick={() => setSheet("add")} aria-label="Add a friend" className="grid size-11 place-items-center rounded-full text-mess active:bg-surface-2">
+              <UserPlus size={21} />
+            </button>
+          </header>
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 pt-4 pb-10">
           {requests.length > 0 && (
             <section aria-label="Friend requests">
               <SectionTitle>Requests</SectionTitle>
@@ -808,7 +827,7 @@ function Circle() {
 
           {sent.length > 0 && (
             <section>
-              <SectionTitle>Waiting</SectionTitle>
+              <SectionTitle>Requests sent</SectionTitle>
               <ul className="overflow-hidden lift rounded-3xl bg-surface">
                 {sent.map((f, i) => (
                   <li
@@ -867,6 +886,7 @@ function Circle() {
             />
           </label>
         </div>
+        </div>
       )}
 
       {tab === "groups" && (
@@ -919,9 +939,13 @@ function Circle() {
                       onClick={() => openChat(groupThread(g.id))}
                       className="flex w-full items-center gap-3.5 lift rounded-3xl bg-surface p-4 text-left transition active:scale-[0.99]"
                     >
-                      <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[22px]">
-                        {g.emoji ?? "👥"}
-                      </span>
+                      {g.photo ? (
+                        <Avatar name={g.name} avatar={g.photo} size={48} />
+                      ) : (
+                        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2 text-[22px]">
+                          {g.emoji ?? "👥"}
+                        </span>
+                      )}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[16px] font-medium">{g.name}</span>
                         <span className="mt-1 flex items-center gap-2">
@@ -946,56 +970,7 @@ function Circle() {
         </div>
       )}
 
-      {tab === "work" && (
-        <div className="space-y-4 px-4 pt-4">
-          {work.length > 3 && (
-            <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none]">
-              {(
-                [
-                  ["all", "Everything"],
-                  ["groups", "From groups"],
-                  ["direct", "Sent to me"],
-                  ["mine", "Mine"],
-                ] as const
-              ).map(([id, label]) => (
-                <Chip key={id} active={workFilter === id} onClick={() => setWorkFilter(id)}>
-                  {label}
-                </Chip>
-              ))}
-            </div>
-          )}
-          {shownWork.length === 0 ? (
-            <EmptyState
-              flush
-              icon={Inbox}
-              title="Nothing shared yet"
-              body="Assignments you or your friends post land here, with the file and a place to tick off the LMS."
-              action={
-                <Button size="sm" onClick={() => setSheet("share")}>
-                  <Plus size={16} /> Share one
-                </Button>
-              }
-            />
-          ) : (
-            <ul className="space-y-3">
-              {shownWork.map((s) => (
-                <SubmissionCard
-                  key={s.id}
-                  share={s}
-                  state={states?.get(s.id)}
-                  mine={s.author === me}
-                  me={me}
-                  reactions={reactions?.get(s.id) ?? []}
-                  today={today}
-                  onChanged={refresh}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {(tab === "work" || tab === "groups") && (
+      {tab === "groups" && (
         <button
           onClick={() => setSheet("share")}
           aria-label="Share an assignment"
@@ -1237,6 +1212,58 @@ function Circle() {
         You can unblock them later from Friends.
       </ConfirmSheet>
 
+      <Sheet open={bell} onClose={() => setBell(false)} title="Friend requests">
+        {requests.length === 0 && sent.length === 0 ? (
+          <p className="py-8 text-center text-[14px] text-muted">No requests right now.</p>
+        ) : (
+          <div className="space-y-5 pb-2">
+            {requests.length > 0 && (
+              <section>
+                <p className="mb-2 text-[13px] font-bold text-muted">Received · {requests.length}</p>
+                <ul className="space-y-2">
+                  {requests.map((f) => (
+                    <li key={f.id} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm">
+                      <Avatar name={f.name} avatar={f.avatar} size={46} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[15px] font-bold">{f.name}</p>
+                        <p className="truncate text-[12.5px] text-muted">{describe(f) || "Wants to be friends"}</p>
+                        <div className="mt-2 flex gap-2">
+                          <button onClick={() => void accept(f)} className="btn-leather h-9 flex-1 rounded-xl text-[13.5px]">
+                            Accept
+                          </button>
+                          <button onClick={() => void reject(f)} className="btn-paper h-9 flex-1 rounded-xl text-[13.5px] font-bold">
+                            Reject
+                          </button>
+                          <button onClick={() => setBlocking(f)} aria-label={`Block ${f.name}`} className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted">
+                            <Ban size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+            {sent.length > 0 && (
+              <section>
+                <p className="mb-2 text-[13px] font-bold text-muted">Sent · {sent.length}</p>
+                <ul className="space-y-2">
+                  {sent.map((f) => (
+                    <li key={f.id} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-sm">
+                      <Avatar name={f.name} avatar={f.avatar} size={40} />
+                      <p className="min-w-0 flex-1 truncate text-[15px] font-semibold">{f.name}</p>
+                      <button onClick={() => void cancelRequest(f)} className="btn-paper h-9 rounded-full px-3.5 text-[13px] font-bold">
+                        Cancel
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+      </Sheet>
+
       {chat && me && (() => {
         const gid = chat.startsWith("g:") ? chat.slice(2) : null;
         const g = gid ? (groups ?? []).find((x) => x.id === gid) : null;
@@ -1247,13 +1274,17 @@ function Circle() {
             key={chat}
             thread={chat}
             title={g ? g.name : (f?.name ?? "Chat")}
-            subtitle={g ? `${g.members} ${g.members === 1 ? "person" : "people"} · code ${g.code}` : "Friend"}
+            subtitle={g ? `${g.members} ${g.members === 1 ? "member" : "members"}` : "Friend"}
             emoji={g ? (g.emoji ?? "👥") : null}
+            avatar={g ? (g.photo ?? null) : (f?.avatar ?? null)}
             people={people}
-            groupId={gid}
+            group={g ?? null}
             friendId={fid}
             onClose={closeChat}
-            onInfo={gid ? () => router.push(`/groups/${gid}`) : undefined}
+            onLeft={() => {
+              closeChat();
+              void pullSocial().catch(() => {});
+            }}
           />
         );
       })()}
@@ -1429,7 +1460,7 @@ function ChatList({
         if (gid && !g) return null; // left that group
         const fid = otherIn(t.thread, me);
         const name = g ? g.name : (people.get(fid ?? "")?.name ?? "Friend");
-        const avatar = g ? undefined : people.get(fid ?? "")?.avatar;
+        const avatar = g ? (g.photo ?? undefined) : people.get(fid ?? "")?.avatar;
         const who = t.last.author === me ? "You: " : g ? `${people.get(t.last.author)?.name?.split(" ")[0] ?? "Someone"}: ` : "";
         const d = t.last.data;
         const text = t.last.deleted
@@ -1457,7 +1488,7 @@ function ChatList({
       .filter((r): r is NonNullable<typeof r> => !!r),
     ...groups
       .filter((g) => !seen.has(groupThread(g.id)))
-      .map((g) => ({ thread: groupThread(g.id), name: g.name, avatar: undefined as string | undefined, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0, pinned: false, muted: false })),
+      .map((g) => ({ thread: groupThread(g.id), name: g.name, avatar: (g.photo ?? undefined) as string | undefined, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0, pinned: false, muted: false })),
     ...friends
       .filter((f) => !seen.has(directThread(me, f.id)))
       .map((f) => ({ thread: directThread(me, f.id), name: f.name, avatar: f.avatar, emoji: null, preview: "Say hi 👋", when: "", unread: 0, pinned: false, muted: false })),
@@ -1486,8 +1517,8 @@ function ChatList({
   const rest = shown.filter((r) => !r.pinned);
   const unreadTotal = rows.reduce((n, r) => n + (r.muted ? 0 : r.unread), 0);
   const row = (r: (typeof rows)[number]) => (
-    <li key={r.thread}>
-          <button onClick={() => onOpen(r.thread)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left active:bg-surface-2/70">
+    <li key={r.thread} className="px-4">
+          <button onClick={() => onOpen(r.thread)} className="lift flex w-full items-center gap-3 rounded-3xl bg-surface p-3 text-left transition active:scale-[0.99]">
             <span
               className={cx(
                 "grid size-[58px] shrink-0 place-items-center rounded-full p-[2.5px]",
@@ -1495,7 +1526,7 @@ function ChatList({
               )}
             >
               <span className="grid size-full place-items-center rounded-full bg-bg p-[2px]">
-                {r.emoji ? (
+                {r.emoji && !r.avatar ? (
                   <span className="grid size-full place-items-center rounded-full bg-mess-soft text-[24px]">{r.emoji}</span>
                 ) : (
                   <Avatar name={r.name} avatar={r.avatar} size={48} />
@@ -1537,7 +1568,7 @@ function ChatList({
             <ChevronDown size={18} className={cx("text-muted transition-transform", !pinOpen && "-rotate-90")} />
           </button>
           {pinOpen && (
-            <ul className="border-t border-card-edge/60">
+            <ul className="space-y-2 border-t border-card-edge/60 py-2">
               {pinned.map(row)}
             </ul>
           )}
@@ -1552,7 +1583,7 @@ function ChatList({
           {onlyUnread ? "Show all" : `Unread (${unreadTotal})`}
         </button>
       </div>
-      <ul className="mt-1">
+      <ul className="mt-2 space-y-2.5">
         {rest.map(row)}
         {shown.length === 0 && <li className="px-4 py-8 text-center text-[13.5px] text-muted">Nothing matches.</li>}
       </ul>

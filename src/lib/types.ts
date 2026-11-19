@@ -252,6 +252,9 @@ export interface Group {
   id: string;
   name: string;
   emoji: string | null;
+  /** 'p:<key>' group photo, like a profile photo. */
+  photo?: string | null;
+  about?: string;
   /** Six characters; anyone with it can join. */
   code: string;
   owner: string;

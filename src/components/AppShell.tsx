@@ -349,7 +349,7 @@ function TabBar({ pathname }: { pathname: string }) {
     >
       <ul
         className={cx(
-          "leather stitched grid h-[70px] items-center gap-0.5 rounded-[24px] px-1.5",
+          "glass-nav grid h-[70px] items-center gap-0.5 rounded-[26px] px-1.5",
           TABS.length > 5 ? "grid-cols-6" : "grid-cols-5",
         )}
       >
