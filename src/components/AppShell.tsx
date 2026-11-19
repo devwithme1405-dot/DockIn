@@ -325,7 +325,9 @@ function BrandHold({ show }: { show: boolean }) {
 
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
-  const unread = useUnreadChats();
+  const chats = useUnreadChats();
+  const asks = useLiveQuery(() => db.friends.filter((f) => f.status === "pending" && f.theyAsked).count(), []) ?? 0;
+  const unread = chats + asks;
   return (
     // A strip of stitched leather floating over the page; the current tab is a
     // glowing orange tile, the way a lit key looks on a desk.

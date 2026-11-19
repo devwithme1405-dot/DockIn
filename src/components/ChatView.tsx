@@ -1,7 +1,26 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CalendarClock, Check, CheckCheck, Clock, Info, ListPlus, RotateCw, SendHorizontal, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  BellOff,
+  CalendarClock,
+  Check,
+  CheckCheck,
+  Clock,
+  FileText,
+  Info,
+  ListChecks,
+  MoreVertical,
+  Paperclip,
+  Pin,
+  Plus,
+  RotateCw,
+  SendHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import {
@@ -14,7 +33,15 @@ import {
   sendMessage,
   unsendMessage,
   useThread,
+  CHAT_FILE_TYPES,
+  downloadChatFile,
+  setThreadPref,
+  uploadChatFile,
+  usePollVotes,
+  votePoll,
+  type ChatFile,
 } from "@/lib/chat";
+import { handOver } from "./AssignmentFile";
 import { shareTask, type ShareDraft } from "@/lib/social";
 import { lmsRef } from "@/lib/lmsSubmit";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
@@ -75,6 +102,12 @@ export function ChatView({
   const me = chatMe();
   const [text, setText] = useState("");
   const [picking, setPicking] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const docInput = useRef<HTMLInputElement>(null);
+  const pref = useLiveQuery(() => db.chatReads.get(thread), [thread]);
   const [holding, setHolding] = useState<ChatMessage | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const isGroup = thread.startsWith("g:");
@@ -98,6 +131,25 @@ export function ChatView({
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not send.");
     }
+  }
+
+  function pickAdd(what: "Task" | "Poll" | "Document") {
+    setAdding(false);
+    if (what === "Task") setPicking(true);
+    else if (what === "Poll") setPolling(true);
+    else docInput.current?.click();
+  }
+
+  async function sendDoc(f: File | undefined) {
+    if (!f) return;
+    setUploading(true);
+    try {
+      const file = await uploadChatFile(thread, f);
+      await sendMessage(thread, "", { file });
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Could not send that file.");
+    }
+    setUploading(false);
   }
 
   async function shareMine(t: Task) {
@@ -161,11 +213,10 @@ export function ChatView({
           <span className="block truncate text-[16.5px] font-extrabold">{title}</span>
           {subtitle && <span className="block truncate text-[12px] text-ink-muted">{subtitle}</span>}
         </span>
-        {onInfo && (
-          <button onClick={onInfo} aria-label="Details" className="grid size-11 place-items-center rounded-full active:scale-95">
-            <Info size={20} />
-          </button>
-        )}
+        {pref?.muted && <BellOff size={16} className="shrink-0 text-ink-muted" aria-label="Muted" />}
+        <button onClick={() => setMenu(true)} aria-label="Chat options" className="grid size-11 place-items-center rounded-full active:scale-95">
+          <MoreVertical size={20} />
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
@@ -196,12 +247,23 @@ export function ChatView({
 
       <footer className="flex items-end gap-2 border-t border-card-edge/60 bg-bg/90 px-2.5 pt-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] backdrop-blur">
         <button
-          onClick={() => setPicking(true)}
-          aria-label="Share one of your tasks"
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-2 text-mess active:scale-95"
+          onClick={() => setAdding(true)}
+          aria-label="Add a task, poll or document"
+          disabled={uploading}
+          className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-2 text-mess active:scale-95 disabled:opacity-50"
         >
-          <ListPlus size={20} />
+          {uploading ? <Clock size={19} className="animate-pulse" /> : <Plus size={21} />}
         </button>
+        <input
+          ref={docInput}
+          type="file"
+          accept={CHAT_FILE_TYPES}
+          className="hidden"
+          onChange={(e) => {
+            void sendDoc(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
         <textarea
           rows={1}
           value={text}
@@ -219,6 +281,78 @@ export function ChatView({
           <SendHorizontal size={19} />
         </button>
       </footer>
+
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Send">
+        <div className="grid grid-cols-3 gap-2.5 pb-1">
+          {(
+            [
+              [ListChecks, "Task"],
+              [BarChart3, "Poll"],
+              [Paperclip, "Document"],
+            ] as const
+          ).map(([Icon, label]) => (
+            <button
+              key={label}
+              onClick={() => pickAdd(label)}
+              className="flex flex-col items-center gap-2 rounded-2xl border-[1.5px] border-card-edge bg-card py-4 text-[13.5px] font-bold active:scale-95"
+            >
+              <span className="grid size-11 place-items-center rounded-full bg-mess-soft text-mess">
+                <Icon size={20} />
+              </span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+
+      <Sheet open={polling} onClose={() => setPolling(false)} title="New poll">
+        <PollForm
+          onSend={async (poll) => {
+            setPolling(false);
+            try {
+              await sendMessage(thread, "", { poll });
+            } catch (e) {
+              toast.show(e instanceof Error ? e.message : "Could not send the poll.");
+            }
+          }}
+        />
+      </Sheet>
+
+      <Sheet open={menu} onClose={() => setMenu(false)} title={title}>
+        <div className="space-y-2 pb-1">
+          <button
+            onClick={() => {
+              void setThreadPref(thread, { pinned: !pref?.pinned });
+              setMenu(false);
+              toast.show(pref?.pinned ? "Unpinned" : "Pinned to the top");
+            }}
+            className="flex w-full items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3.5 text-[15px] font-semibold"
+          >
+            <Pin size={18} className="text-mess" /> {pref?.pinned ? "Unpin chat" : "Pin chat"}
+          </button>
+          <button
+            onClick={() => {
+              void setThreadPref(thread, { muted: !pref?.muted });
+              setMenu(false);
+              toast.show(pref?.muted ? "Notifications on" : "Muted — no notifications from this chat");
+            }}
+            className="flex w-full items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3.5 text-[15px] font-semibold"
+          >
+            <BellOff size={18} className="text-mess" /> {pref?.muted ? "Unmute" : "Mute notifications"}
+          </button>
+          {onInfo && (
+            <button
+              onClick={() => {
+                setMenu(false);
+                onInfo();
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3.5 text-[15px] font-semibold"
+            >
+              <Info size={18} className="text-mess" /> Group details
+            </button>
+          )}
+        </div>
+      </Sheet>
 
       <Sheet open={picking} onClose={() => setPicking(false)} title="Share a task">
         <TaskPicker onPick={(t) => void shareMine(t)} />
@@ -281,6 +415,10 @@ function Bubble({
         >
           {m.deleted ? (
             "Message deleted"
+          ) : m.kind === "poll" && m.data?.options ? (
+            <PollCard m={m} mine={mine} />
+          ) : m.kind === "file" && m.data?.path ? (
+            <FileCard f={m.data as ChatFile} mine={mine} />
           ) : m.kind === "task" && m.data ? (
             <TaskCard t={m.data} mine={mine} />
           ) : (
@@ -352,3 +490,123 @@ function TaskPicker({ onPick }: { onPick: (t: Task) => void }) {
   );
 }
 
+
+function PollCard({ m, mine }: { m: ChatMessage; mine: boolean }) {
+  const votes = usePollVotes(m.id);
+  const me = chatMe();
+  const opts = m.data?.options ?? [];
+  const total = votes.length;
+  const myChoice = votes.find((v) => v.userId === me)?.choice;
+  return (
+    <div className="min-w-[14rem]">
+      <p className={cx("text-[11px] font-extrabold tracking-wide uppercase", mine ? "text-ink-muted" : "text-mess")}>📊 Poll</p>
+      <p className="mt-0.5 text-[15px] font-bold">{m.data?.question}</p>
+      <div className="mt-2 space-y-1.5">
+        {opts.map((o, i) => {
+          const n = votes.filter((v) => v.choice === i).length;
+          const pct = total ? Math.round((n / total) * 100) : 0;
+          const picked = myChoice === i;
+          return (
+            <button
+              key={i}
+              onClick={(e) => {
+                e.stopPropagation();
+                void votePoll(m.id, i);
+              }}
+              className={cx(
+                "relative block w-full overflow-hidden rounded-xl border-[1.5px] px-3 py-2 text-left text-[13.5px] font-semibold",
+                mine ? "border-white/25" : "border-card-edge",
+                picked && "border-orange",
+              )}
+            >
+              <span
+                className={cx("absolute inset-y-0 left-0 transition-[width] duration-300", mine ? "bg-white/15" : "bg-orange/15")}
+                style={{ width: `${pct}%` }}
+                aria-hidden
+              />
+              <span className="relative flex items-center gap-2">
+                {picked && <Check size={14} strokeWidth={3} className="shrink-0 text-orange" />}
+                <span className="min-w-0 flex-1 truncate">{o}</span>
+                <span className="tnum text-[12px] opacity-80">{n}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className={cx("mt-1.5 text-[11.5px]", mine ? "text-ink-muted" : "text-muted")}>
+        {total} {total === 1 ? "vote" : "votes"} · tap to vote
+      </p>
+    </div>
+  );
+}
+
+function FileCard({ f, mine }: { f: ChatFile; mine: boolean }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const kb = f.size < 1048576 ? `${Math.max(1, Math.round(f.size / 1024))} KB` : `${(f.size / 1048576).toFixed(1)} MB`;
+  return (
+    <button
+      onClick={async (e) => {
+        e.stopPropagation();
+        setBusy(true);
+        try {
+          await handOver(await downloadChatFile(f), f.name);
+        } catch (err) {
+          toast.show(err instanceof Error ? err.message : "Could not open it.");
+        }
+        setBusy(false);
+      }}
+      className="flex min-w-[13rem] items-center gap-2.5 text-left"
+    >
+      <span className={cx("grid size-10 shrink-0 place-items-center rounded-xl", mine ? "bg-white/15" : "bg-mess-soft text-mess")}>
+        {busy ? <Clock size={18} className="animate-pulse" /> : <FileText size={19} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-bold">{f.name}</span>
+        <span className={cx("block text-[11.5px]", mine ? "text-ink-muted" : "text-muted")}>
+          {kb} · tap to open
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function PollForm({ onSend }: { onSend: (p: { question: string; options: string[] }) => void }) {
+  const [q, setQ] = useState("");
+  const [opts, setOpts] = useState(["", ""]);
+  const ready = q.trim() && opts.filter((o) => o.trim()).length >= 2;
+  const input =
+    "h-12 w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-4 text-[15px] outline-none focus:border-orange";
+  return (
+    <div className="space-y-2.5 pb-1">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask something — e.g. Kal class chal rahe?" className={input} autoFocus />
+      {opts.map((o, i) => (
+        <div key={i} className="flex gap-2">
+          <input
+            value={o}
+            onChange={(e) => setOpts(opts.map((x, j) => (j === i ? e.target.value : x)))}
+            placeholder={`Option ${i + 1}`}
+            className={input}
+          />
+          {opts.length > 2 && (
+            <button onClick={() => setOpts(opts.filter((_, j) => j !== i))} aria-label="Remove option" className="grid size-12 shrink-0 place-items-center rounded-2xl bg-surface-2">
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      ))}
+      {opts.length < 6 && (
+        <button onClick={() => setOpts([...opts, ""])} className="flex items-center gap-1.5 px-1 text-[14px] font-bold text-mess">
+          <Plus size={16} /> Add option
+        </button>
+      )}
+      <button
+        disabled={!ready}
+        onClick={() => onSend({ question: q.trim(), options: opts.map((o) => o.trim()).filter(Boolean) })}
+        className="btn-leather mt-1 h-12 w-full rounded-2xl text-[15.5px] disabled:opacity-50"
+      >
+        Send poll
+      </button>
+    </div>
+  );
+}

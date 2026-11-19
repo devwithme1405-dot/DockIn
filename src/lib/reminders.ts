@@ -39,6 +39,8 @@ export interface ReminderInput {
   target: number;
   today: string;
   now: number;
+  /** Tasks friends or a group shared with you that you have not finished yet. */
+  shared?: { id: string; title: string; dueDate: string | null; dueTime: string | null; from: string }[];
 }
 
 const pctOf = (s: AttendanceSummary) => (s.pct === null ? null : Math.round(s.pct));
@@ -66,7 +68,7 @@ export function adviceFor(s: AttendanceSummary | undefined, target: number): { g
  * Build the reminder list. Ids are 1..N for this batch — the phone cancels the
  * previous batch wholesale, so they only need to be unique here.
  */
-export function buildReminders({ sessions, subjects, tasks, overall, stats, target, today, now }: ReminderInput): ReminderItem[] {
+export function buildReminders({ sessions, subjects, tasks, overall, stats, target, today, now, shared }: ReminderInput): ReminderItem[] {
   const items: ReminderItem[] = [];
   let id = 1;
   const name = new Map(subjects.map((s) => [s.id, s.name]));
@@ -145,6 +147,28 @@ export function buildReminders({ sessions, subjects, tasks, overall, stats, targ
           path: "/tasks",
         });
       }
+    }
+  }
+
+  // Shared work you have not finished: a day before and half an hour before.
+  // Ticking it off (or submitting it) removes it from this list, so only the
+  // people who still have it pending are reminded.
+  for (const sh of shared ?? []) {
+    if (!sh.dueDate) continue;
+    const due = at(sh.dueDate, sh.dueTime ?? "23:59");
+    for (const [lead, title] of [
+      [24 * 3_600_000, `Due tomorrow: ${sh.title}`],
+      [30 * 60_000, `${sh.title} is due in 30 mins`],
+    ] as const) {
+      const when = due - lead;
+      if (when <= now || when > horizon) continue;
+      items.push({
+        id: id++,
+        at: when,
+        title,
+        body: `${sh.from} · you haven't marked it done yet`,
+        path: "/circle?tab=work",
+      });
     }
   }
 

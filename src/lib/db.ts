@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { ChatMessage, ChatPerson, ChatRead } from "./chat";
+import type { ChatMessage, ChatPerson, ChatRead, PollVote } from "./chat";
 import type {
   ClassNote,
   CalEvent,
@@ -53,6 +53,8 @@ export class DockinDB extends Dexie {
   messages!: Table<ChatMessage, string>;
   chatReads!: Table<ChatRead, string>;
   chatPeople!: Table<ChatPerson, string>;
+  pollVotes!: Table<PollVote, string>;
+  blocks!: Table<{ id: string; name: string }, string>;
 
   constructor() {
     super("dockin");
@@ -95,6 +97,10 @@ export class DockinDB extends Dexie {
       messages: "id, thread, createdAt",
       chatReads: "thread",
       chatPeople: "id",
+    });
+    this.version(11).stores({
+      pollVotes: "id, messageId",
+      blocks: "id",
     });
   }
 }

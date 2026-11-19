@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getProfile } from "@/lib/repo";
 import { useTasks } from "@/lib/hooks";
+import { db } from "@/lib/db";
 import { useAttendanceData } from "@/lib/college";
 import { onPhone, scheduleReminders } from "@/lib/native";
 import { buildReminders } from "@/lib/reminders";
@@ -20,9 +21,25 @@ export function RemindersSync() {
   const target = profile?.target ?? 75;
   const { data } = useAttendanceData(target);
   const tasks = useTasks();
+  // Shared tasks still open for you (not done, not hidden), for the 24 h / 30 min nudges.
+  const shared = useLiveQuery(async () => {
+    const states = new Map((await db.shareState.toArray()).map((x) => [x.id, x]));
+    return (await db.shares.toArray())
+      .filter((sh) => {
+        const st = states.get(sh.id);
+        return !st?.done && !st?.submitted && !st?.hidden;
+      })
+      .map((sh) => ({
+        id: sh.id,
+        title: sh.title,
+        dueDate: sh.dueDate,
+        dueTime: sh.dueTime,
+        from: sh.groupName ? `${sh.authorName} in ${sh.groupName}` : sh.authorName,
+      }));
+  }, []);
 
   useEffect(() => {
-    if (!data || !tasks) return;
+    if (!data || !tasks || !shared) return;
     const run = () =>
       void scheduleReminders(
         buildReminders({
@@ -34,11 +51,12 @@ export function RemindersSync() {
           target,
           today: toDateStr(),
           now: Date.now(),
+          shared,
         }),
       );
     run();
     return onPhone("resume", run);
-  }, [data, tasks, target]);
+  }, [data, tasks, target, shared]);
 
   return null;
 }

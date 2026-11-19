@@ -95,7 +95,15 @@ async function plan(sb: SupabaseClient, me: string, e: Event): Promise<{ to: str
     const { data: m } = await sb.from("messages").select("thread,author,body,kind,data").eq("id", e.id).maybeSingle();
     if (!m || m.author !== me) return null;
     const thread = m.thread as string;
-    const text = m.kind === "task" ? `📌 ${(m.data as { title?: string } | null)?.title ?? "Task"}` : (m.body as string);
+    const d = (m.data ?? {}) as { title?: string; question?: string; name?: string };
+    const text =
+      m.kind === "task"
+        ? `📌 ${d.title ?? "Task"}`
+        : m.kind === "poll"
+          ? `📊 Poll: ${d.question ?? ""}`
+          : m.kind === "file"
+            ? `📄 ${d.name ?? "Document"}`
+            : (m.body as string);
     const path = `/circle?chat=${encodeURIComponent(thread)}`;
     if (thread.startsWith("g:")) {
       const gid = thread.slice(2);
@@ -175,6 +183,13 @@ export async function POST(req: Request): Promise<Response> {
   const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
   const p = await plan(sb, me, event);
   if (!p || p.to.length === 0) return Response.json({ ok: true, sent: 0 });
+  // People who muted this chat are not told about its messages.
+  if (event.type === "message" && p.note.tag) {
+    const { data: muted } = await sb.from("thread_reads").select("user_id").eq("thread", p.note.tag).eq("muted", true);
+    const off = new Set((muted ?? []).map((r) => r.user_id as string));
+    p.to = p.to.filter((u) => !off.has(u));
+    if (!p.to.length) return Response.json({ ok: true, sent: 0 });
+  }
 
   const { data: rows } = await sb.from("push_tokens").select("token").in("user_id", p.to.slice(0, 200));
   const tokens = (rows ?? []).map((r) => r.token as string);

@@ -739,3 +739,27 @@ html[data-navved] .stagger > * {
     inset 0 1px 0 rgb(255 255 255 / 70%),
     0 2px 0 var(--pbtn-lip);
 }
+
+/* QR scanner: the sweeping line, the frame settling in, the tick on a hit. */
+@keyframes scan-sweep {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(15.5rem); opacity: 0; }
+}
+@keyframes frame-in {
+  from { transform: scale(1.18); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes frame-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.025); }
+}
+@keyframes hit-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scan-motion { animation: none !important; }
+}

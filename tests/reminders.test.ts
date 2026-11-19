@@ -107,3 +107,23 @@ describe("advice", () => {
     expect(adviceFor(sum(75, "warn", 0, 0), 75).line).toContain("no bunk left");
   });
 });
+
+describe("shared task nudges", () => {
+  it("reminds a day before and half an hour before, only while still open", () => {
+    const now = new Date(2026, 10, 19, 9, 0).getTime();
+    const items = buildReminders({
+      sessions: [],
+      subjects: [],
+      tasks: [],
+      overall: null,
+      target: 75,
+      today: "2026-11-19",
+      now,
+      shared: [{ id: "s1", title: "Lab 7: Joins", dueDate: "2026-11-20", dueTime: "20:00", from: "Riya in CSE E1" }],
+    });
+    const mine = items.filter((i) => i.title.includes("Lab 7"));
+    expect(mine.map((i) => new Date(i.at).getHours() * 60 + new Date(i.at).getMinutes())).toEqual([20 * 60, 19 * 60 + 30]);
+    expect(mine[0].title).toBe("Due tomorrow: Lab 7: Joins");
+    expect(mine[1].title).toBe("Lab 7: Joins is due in 30 mins");
+  });
+});

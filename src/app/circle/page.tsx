@@ -4,7 +4,10 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Check,
+  BellOff,
+  Ban,
   MessageCircle,
+  Pin,
   ScanLine,
   Copy,
   ExternalLink,
@@ -17,6 +20,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/lib/db";
 import { useFriends, useGroups, useReactions, useShareState, useShares, useSubjects } from "@/lib/hooks";
 import { getProfile } from "@/lib/repo";
 import {
@@ -31,6 +36,8 @@ import {
   publishProfile,
   pullSocial,
   removeFriend,
+  blockUser,
+  unblockUser,
   setShareAttendance,
   setShareSubmitted,
   type CodePreview,
@@ -134,6 +141,8 @@ function Circle() {
   const [groupName, setGroupName] = useState("");
   const [groupEmoji, setGroupEmoji] = useState(GROUP_EMOJIS[0]);
   const [removing, setRemoving] = useState<Friend | null>(null);
+  const [blocking, setBlocking] = useState<Friend | null>(null);
+  const blocked = useLiveQuery(() => db.blocks.toArray(), []);
   const [showing, setShowing] = useState<Friend | null>(null);
   const [find, setFind] = useState("");
   const [workFilter, setWorkFilter] = useState<"all" | "groups" | "direct" | "mine">("all");
@@ -323,7 +332,7 @@ function Circle() {
     else window.history.replaceState({ dockinChat: false }, "", "/circle");
   }
 
-  async function onScanned(hit: Scanned) {
+  function onScanned(hit: Scanned) {
     setScanning(false);
     setProblem(null);
     setTyped(hit.code);
@@ -331,16 +340,15 @@ function Circle() {
       setSheet("joinGroup");
       return;
     }
-    try {
-      const found = await peekCode(hit.code);
-      if (!found) setProblem("That QR did not match anyone.");
-      else {
-        setPreview(found);
-        setSheet("confirm");
-      }
-    } catch (e) {
-      setProblem(e instanceof SocialError ? e.message : "Could not check that code.");
-    }
+    void peekCode(hit.code)
+      .then((found) => {
+        if (!found) setProblem("That QR did not match anyone.");
+        else {
+          setPreview(found);
+          setSheet("confirm");
+        }
+      })
+      .catch((e) => setProblem(e instanceof SocialError ? e.message : "Could not check that code."));
   }
 
   async function confirmAdd() {
@@ -365,6 +373,48 @@ function Circle() {
       toast.show(`${f.name} is now a friend`);
     } catch (e) {
       toast.show(e instanceof SocialError ? e.message : "Could not accept.");
+    }
+  }
+
+  async function reject(f: Friend) {
+    try {
+      await removeFriend(f.id);
+      await pullSocial();
+      toast.show("Request rejected");
+    } catch (e) {
+      toast.show(e instanceof SocialError ? e.message : "Could not reject.");
+    }
+  }
+
+  async function cancelRequest(f: Friend) {
+    try {
+      await removeFriend(f.id);
+      await pullSocial();
+      toast.show("Request cancelled");
+    } catch (e) {
+      toast.show(e instanceof SocialError ? e.message : "Could not cancel.");
+    }
+  }
+
+  async function block() {
+    if (!blocking) return;
+    const f = blocking;
+    setBlocking(null);
+    try {
+      await blockUser(f.id, f.name);
+      await pullSocial();
+      toast.show(`${f.name} is blocked`);
+    } catch (e) {
+      toast.show(e instanceof SocialError ? e.message : "Could not block.");
+    }
+  }
+
+  async function unblock(id: string, name: string) {
+    try {
+      await unblockUser(id);
+      toast.show(`${name} is unblocked`);
+    } catch (e) {
+      toast.show(e instanceof SocialError ? e.message : "Could not unblock.");
     }
   }
 
@@ -467,6 +517,42 @@ function Circle() {
 
       <Segmented value={tab} onChange={setTab} options={TABS} label="Friends sections" className="mx-5 mt-4" small />
 
+      {requests.length > 0 && (
+        <section className="mx-5 mt-4" aria-label="Friend requests">
+          <p className="mb-2 text-[13px] font-bold tracking-wide text-mess uppercase">
+            {requests.length} friend {requests.length === 1 ? "request" : "requests"}
+          </p>
+          <ul className="overflow-hidden rounded-3xl border-[1.5px] border-orange/50 bg-card">
+            {requests.map((f, i) => (
+              <li key={f.id} className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}>
+                <Avatar name={f.name} avatar={f.avatar} size={42} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-bold">{f.name}</p>
+                  <p className="truncate text-[12.5px] text-muted">{describe(f)}</p>
+                </div>
+                <button onClick={() => void accept(f)} className="btn-leather h-9 rounded-full px-3.5 text-[13.5px]">
+                  Accept
+                </button>
+                <button
+                  onClick={() => void reject(f)}
+                  aria-label={`Reject ${f.name}`}
+                  className="btn-paper grid size-9 place-items-center rounded-full"
+                >
+                  <X size={16} />
+                </button>
+                <button
+                  onClick={() => setBlocking(f)}
+                  aria-label={`Block ${f.name}`}
+                  className="grid size-9 place-items-center rounded-full text-muted"
+                >
+                  <Ban size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {problem && (
         <p className="mx-5 mt-4 rounded-xl bg-danger-soft px-3.5 py-2.5 text-[13.5px] text-danger">
           {problem}
@@ -487,36 +573,6 @@ function Circle() {
 
       {tab === "friends" && (
         <div className="space-y-5 px-5 pt-4">
-          {requests.length > 0 && (
-            <section>
-              <SectionTitle>Wants to be friends</SectionTitle>
-              <div className="overflow-hidden rounded-3xl bg-accent-soft">
-                {requests.map((f, i) => (
-                  <div
-                    key={f.id}
-                    className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}
-                  >
-                    <Avatar name={f.name} avatar={f.avatar} size={42} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{f.name}</p>
-                      <p className="truncate text-[12.5px] text-muted">{describe(f)}</p>
-                    </div>
-                    <Button size="sm" onClick={() => accept(f)}>
-                      Accept
-                    </Button>
-                    <button
-                      onClick={() => setRemoving(f)}
-                      aria-label={`Ignore ${f.name}`}
-                      className="grid size-9 place-items-center rounded-full bg-surface/70 text-muted"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           <section>
             <SectionTitle>Friends</SectionTitle>
             {accepted.length > 6 && (
@@ -594,7 +650,30 @@ function Circle() {
                   >
                     <Avatar name={f.name} avatar={f.avatar} size={38} />
                     <p className="min-w-0 flex-1 truncate text-[14.5px]">{f.name}</p>
-                    <span className="text-[12.5px] text-muted">Request sent</span>
+                    <span className="text-[12.5px] text-muted">Sent</span>
+                    <button
+                      onClick={() => void cancelRequest(f)}
+                      className="btn-paper h-9 rounded-full px-3 text-[13px] font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {(blocked?.length ?? 0) > 0 && (
+            <section>
+              <SectionTitle>Blocked</SectionTitle>
+              <ul className="overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card">
+                {(blocked ?? []).map((b, i) => (
+                  <li key={b.id} className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}>
+                    <Ban size={18} className="shrink-0 text-muted" />
+                    <p className="min-w-0 flex-1 truncate text-[14.5px]">{b.name}</p>
+                    <button onClick={() => void unblock(b.id, b.name)} className="btn-paper h-9 rounded-full px-3 text-[13px] font-semibold">
+                      Unblock
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -967,9 +1046,29 @@ function Circle() {
             >
               <X size={15} /> Remove friend
             </button>
+            <button
+              onClick={() => {
+                setBlocking(showing);
+                setShowing(null);
+              }}
+              className="mx-auto flex h-10 items-center gap-1.5 text-[14px] font-medium text-muted"
+            >
+              <Ban size={15} /> Block
+            </button>
           </>
         )}
       </Sheet>
+
+      <ConfirmSheet
+        open={!!blocking}
+        title={`Block ${blocking?.name ?? ""}?`}
+        confirmLabel="Block"
+        onConfirm={() => void block()}
+        onClose={() => setBlocking(null)}
+      >
+        They won&apos;t be able to send you requests or message you, and your friendship ends. They are not told.
+        You can unblock them later from Friends.
+      </ConfirmSheet>
 
       {chat && me && (() => {
         const gid = chat.startsWith("g:") ? chat.slice(2) : null;
@@ -992,7 +1091,9 @@ function Circle() {
         );
       })()}
 
-      {scanning && <QrScanner onResult={(h) => void onScanned(h)} onClose={() => setScanning(false)} />}
+      {scanning && (
+        <QrScanner onResult={onScanned} onClose={() => setScanning(false)} myLink={link} myCode={code} />
+      )}
 
       <ConfirmSheet
         open={!!removing}
@@ -1172,16 +1273,35 @@ function ChatList({
         const fid = otherIn(t.thread, me);
         const name = g ? g.name : (people.get(fid ?? "")?.name ?? "Friend");
         const who = t.last.author === me ? "You: " : g ? `${people.get(t.last.author)?.name?.split(" ")[0] ?? "Someone"}: ` : "";
-        const text = t.last.deleted ? "Message deleted" : t.last.kind === "task" ? `📌 ${t.last.data?.title ?? "Task"}` : t.last.body;
-        return { thread: t.thread, name, emoji: g ? (g.emoji ?? "👥") : null, preview: who + text, when: ago(t.last.createdAt), unread: t.unread };
+        const d = t.last.data;
+        const text = t.last.deleted
+          ? "Message deleted"
+          : t.last.kind === "task"
+            ? `📌 ${d?.title ?? "Task"}`
+            : t.last.kind === "poll"
+              ? `📊 ${d?.question ?? "Poll"}`
+              : t.last.kind === "file"
+                ? `📄 ${d?.name ?? "Document"}`
+                : t.last.body;
+        const empty = !t.last.id;
+        return {
+          thread: t.thread,
+          name,
+          emoji: g ? (g.emoji ?? "👥") : null,
+          preview: empty ? (g ? "Start the group chat" : "Say hi 👋") : who + text,
+          when: empty ? "" : ago(t.last.createdAt),
+          unread: t.unread,
+          pinned: t.pinned,
+          muted: t.muted,
+        };
       })
       .filter((r): r is NonNullable<typeof r> => !!r),
     ...groups
       .filter((g) => !seen.has(groupThread(g.id)))
-      .map((g) => ({ thread: groupThread(g.id), name: g.name, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0 })),
+      .map((g) => ({ thread: groupThread(g.id), name: g.name, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0, pinned: false, muted: false })),
     ...friends
       .filter((f) => !seen.has(directThread(me, f.id)))
-      .map((f) => ({ thread: directThread(me, f.id), name: f.name, emoji: null, preview: "Say hi 👋", when: "", unread: 0 })),
+      .map((f) => ({ thread: directThread(me, f.id), name: f.name, emoji: null, preview: "Say hi 👋", when: "", unread: 0, pinned: false, muted: false })),
   ];
 
   if (rows.length === 0)
@@ -1212,6 +1332,8 @@ function ChatList({
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
                 <span className="min-w-0 flex-1 truncate text-[15.5px] font-bold">{r.name}</span>
+                {r.pinned && <Pin size={13} className="shrink-0 text-mess" aria-label="Pinned" />}
+                {r.muted && <BellOff size={13} className="shrink-0 text-muted" aria-label="Muted" />}
                 <span className={cx("shrink-0 text-[11.5px]", r.unread ? "font-bold text-orange" : "text-muted")}>{r.when}</span>
               </span>
               <span className="mt-0.5 flex items-center gap-2">
@@ -1219,7 +1341,12 @@ function ChatList({
                   {r.preview}
                 </span>
                 {r.unread > 0 && (
-                  <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-orange px-1.5 text-[11px] font-bold text-white">
+                  <span
+                    className={cx(
+                      "grid h-5 min-w-5 shrink-0 place-items-center rounded-full px-1.5 text-[11px] font-bold text-white",
+                      r.muted ? "bg-muted" : "bg-orange",
+                    )}
+                  >
                     {r.unread > 99 ? "99+" : r.unread}
                   </span>
                 )}

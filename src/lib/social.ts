@@ -40,6 +40,7 @@ function readable(message: string): string {
   if (/thats_you/.test(message)) return "That is your own code.";
   if (/no_such_group/.test(message)) return "No group has that code.";
   if (/group_full/.test(message)) return "That group is full.";
+  if (/\bblocked\b/.test(message)) return "You can't add this person.";
   if (/too_many_groups/.test(message)) return "You are in too many groups already.";
   if (/cannot use DockIn/.test(message)) return "This account cannot use DockIn.";
   if (/Failed to fetch|NetworkError/i.test(message)) return "No internet right now.";
@@ -196,6 +197,30 @@ export async function acceptFriend(userId: string): Promise<void> {
   if (error) throw new SocialError(readable(error.message));
   await db.friends.update(userId, { status: "accepted", theyAsked: false });
   notifyPush({ type: "friend", to: userId });
+}
+
+/** Blocks someone: no requests either way, no one-to-one chat; any friendship ends. */
+export async function blockUser(userId: string, name: string): Promise<void> {
+  const sb = client();
+  const { data: auth } = await sb.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new SocialError("You are not signed in.");
+  const { error } = await sb.from("blocks").upsert({ blocker: me, blocked: userId });
+  if (error) throw new SocialError(readable(error.message));
+  const [a, b] = me < userId ? [me, userId] : [userId, me];
+  await sb.from("friends").delete().eq("a", a).eq("b", b);
+  await db.friends.delete(userId);
+  await db.blocks.put({ id: userId, name });
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  const sb = client();
+  const { data: auth } = await sb.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new SocialError("You are not signed in.");
+  const { error } = await sb.from("blocks").delete().eq("blocker", me).eq("blocked", userId);
+  if (error) throw new SocialError(readable(error.message));
+  await db.blocks.delete(userId);
 }
 
 export async function removeFriend(userId: string): Promise<void> {
@@ -669,6 +694,7 @@ async function doPull(): Promise<void> {
   ]);
   // Newer table; a project without it yet still shows everything else.
   const progressRows = await sb.from("share_progress").select("share_id,user_id,done,submitted");
+  const blockRows = await sb.from("blocks").select("blocked").eq("blocker", me);
   const progressBy = new Map<string, { userId: string; done: boolean; submitted: boolean }[]>();
   for (const r of (progressRows.error ? [] : (progressRows.data ?? [])) as {
     share_id: string;
@@ -819,13 +845,20 @@ async function doPull(): Promise<void> {
     if (groups.length) await db.groups.bulkPut(groups);
     if (shares.length) await db.shares.bulkPut(shares);
   });
+  if (!blockRows.error) {
+    const blocked = (blockRows.data ?? []) as { blocked: string }[];
+    await db.blocks.clear();
+    if (blocked.length)
+      await db.blocks.bulkPut(blocked.map((b) => ({ id: b.blocked, name: names.get(b.blocked)?.name ?? "Someone" })));
+  }
 }
 
 /** Everything local, for signing out. */
 export async function clearSocial(): Promise<void> {
-  await db.transaction("rw", [db.friends, db.groups, db.shares], async () => {
+  await db.transaction("rw", [db.friends, db.groups, db.shares, db.blocks], async () => {
     await db.friends.clear();
     await db.groups.clear();
     await db.shares.clear();
+    await db.blocks.clear();
   });
 }
