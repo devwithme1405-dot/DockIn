@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import Link, { useLinkStatus } from "next/link";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, UtensilsCrossed } from "lucide-react";
@@ -16,6 +15,8 @@ import { appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
+import { goTab, tabOf } from "@/lib/tabs";
+import { TabHost } from "./TabHost";
 
 /**
  * How many things want attention right now: your own tasks that are overdue or
@@ -153,12 +154,54 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       onPhone("open", ({ path }) => {
-        router.push(path);
-        // A screen already open (Money) still hears which payment to show.
+        const to = new URL(path, window.location.href);
+        if (tabOf(to.pathname)) goTab(to.pathname + to.search);
+        else router.push(path);
         window.dispatchEvent(new CustomEvent("dockin-open", { detail: path }));
       }),
     [router],
   );
+
+  /**
+   * Every internal link to a tab — the tab bar, Today's cards, a back arrow — is
+   * caught here, before Next's router sees it, and becomes an instant switch
+   * (see lib/tabs). Links to other screens still go through Next, with a safety
+   * net: if one has not opened within a few seconds, which only a stalled
+   * network causes, it is loaded directly and the service worker answers from
+   * the cache. Nothing waits on a dead socket any more.
+   */
+  const navTimer = useRef<number | null>(null);
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      if (!(a instanceof HTMLAnchorElement) || a.target === "_blank" || a.hasAttribute("download")) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin || BARE.has(window.location.pathname)) return;
+      if (url.hash && url.pathname === window.location.pathname) return;
+      if (tabOf(url.pathname)) {
+        e.preventDefault();
+        e.stopPropagation();
+        goTab(url.pathname + url.search);
+        return;
+      }
+      if (navTimer.current) window.clearTimeout(navTimer.current);
+      const dest = url.pathname + url.search;
+      navTimer.current = window.setTimeout(() => {
+        navTimer.current = null;
+        if (window.location.pathname !== url.pathname) window.location.assign(dest);
+      }, 4000);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
+  useEffect(() => {
+    // Arrived: the safety net is no longer needed.
+    if (navTimer.current) {
+      window.clearTimeout(navTimer.current);
+      navTimer.current = null;
+    }
+  }, [pathname]);
 
 
   useEffect(() => {
@@ -227,6 +270,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
   if (ready && minShown && !bootedOnce) setBootedOnce(true);
   const showBoot = (!ready || !minShown) && !bootedOnce;
+  const activeTab = tabOf(pathname);
 
   return (
     <ToastProvider>
@@ -235,7 +279,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main
             className={cx(!onboarding && "pb-[calc(6.5rem+env(safe-area-inset-bottom))]")}
           >
-            {children}
+            {/* The tabs stay mounted underneath every other screen, so coming
+                back from Profile or a subject is as instant as switching tabs. */}
+            {!onboarding && <TabHost active={activeTab} />}
+            {(onboarding || !activeTab) && children}
           </main>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
@@ -282,7 +329,8 @@ function TabBar({ pathname }: { pathname: string }) {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <li key={href} className="relative z-[1]">
-              <Link
+              {/* A plain link: the shell turns the tap into an instant tab switch. */}
+              <a
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
@@ -290,14 +338,8 @@ function TabBar({ pathname }: { pathname: string }) {
                   active ? "tab-glow" : "text-[#f6dcbd]/85",
                 )}
               >
-                <Tab
-                  href={href}
-                  label={label}
-                  icon={Icon}
-                  active={active}
-                  badge={href === "/tasks" ? attention : 0}
-                />
-              </Link>
+                <Tab label={label} icon={Icon} active={active} badge={href === "/tasks" ? attention : 0} />
+              </a>
             </li>
           );
         })}
@@ -307,44 +349,23 @@ function TabBar({ pathname }: { pathname: string }) {
 }
 
 /**
- * The inside of a tab, which knows whether its own navigation is still running.
- *
- * There used to be a blind timer here: if the page had not changed within a
- * second and a half, load it the hard way. That was meant for a tab that would
- * not open at all, but it cannot tell "broken" from "slow" — so on a weak
- * signal an ordinary tap turned into a full page reload, and the app appeared
- * to reload itself over and over.
- *
- * `useLinkStatus` says whether this link's navigation is actually still
- * pending. So the tap can show that something is happening, and the hard
- * fallback waits for a length of time that no working navigation reaches.
+ * The inside of a tab. There is no "loading" state any more, and no timer that
+ * reloads the page if a tab is slow — a tab switch has nothing to wait for.
  */
 function Tab({
-  href,
   label,
   icon: Icon,
   active,
   badge,
 }: {
-  href: string;
   label: string;
   icon: typeof House;
   active: boolean;
   badge: number;
 }) {
-  const { pending } = useLinkStatus();
-
-  useEffect(() => {
-    if (!pending) return;
-    const t = setTimeout(() => {
-      if (window.location.pathname !== href) window.location.assign(href);
-    }, 6000);
-    return () => clearTimeout(t);
-  }, [pending, href]);
-
   return (
     <>
-      <span className={cx("relative transition-opacity", pending && "opacity-50")}>
+      <span className="relative">
         <Icon size={21} strokeWidth={active ? 2.4 : 2} />
         {badge > 0 && (
           <span

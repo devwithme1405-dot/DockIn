@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { TAB_SHOWN } from "@/lib/tabs";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -54,6 +55,17 @@ export default function TimetablePage() {
       ? "calendar"
       : "week",
   );
+  // This tab stays alive between visits, so a link that asks for the calendar
+  // ("?view=calendar", from Attendance's holiday card) is honoured every time
+  // the tab is shown, not only on the first mount.
+  useEffect(() => {
+    const onShown = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== "/timetable") return;
+      if (new URLSearchParams(window.location.search).get("view") === "calendar") setView("calendar");
+    };
+    window.addEventListener(TAB_SHOWN, onShown);
+    return () => window.removeEventListener(TAB_SHOWN, onShown);
+  }, []);
 
   const weekStart = mondayOf(date);
   const week = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);

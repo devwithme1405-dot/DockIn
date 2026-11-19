@@ -400,11 +400,11 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
 
 await step("Cafeteria shows Camu's mess menu and draws the pass", async () => {
   await page.goto(`${BASE}/cafeteria`, { waitUntil: "domcontentloaded" });
-  await waitFor("On the menu");
+  await waitFor("Mess Pass");
   const t = await text();
   if (!t.includes("Kadai Paneer")) throw new Error("Camu's menu items are missing");
-  if (!t.includes("Breakfast 07:30")) throw new Error("the meal label with timing is missing");
-  if (!/Straight from MyCamu/.test(t)) throw new Error("the pass is not sourced from Camu");
+  if (!t.includes("Breakfast") || !t.includes("07:30 AM")) throw new Error("the meal and its timing are missing");
+  if (/Change pass|Set up this week/.test(t)) throw new Error("the menu or the pass is not coming from Camu");
   // Scroll to the pass and confirm a QR actually drew.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForFunction(() => !!document.querySelector('[aria-label="Cafeteria QR code"] svg'), null, { timeout: 8000 });

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, Pencil, ScanLine, Sparkles } from "lucide-react";
-import { BackHeader } from "@/components/PageHeader";
+import { StickyBar } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
 import { useCollege, syncCollege } from "@/lib/college";
@@ -12,6 +12,7 @@ import { ConnectCamu } from "@/components/College";
 import type { CamuMeal } from "@/lib/native";
 import type { MessDay } from "@/lib/types";
 import { toDateStr, fmtDayLong } from "@/lib/dates";
+import { TAB_SHOWN } from "@/lib/tabs";
 import { Sheet, cx } from "@/components/ui";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -27,12 +28,16 @@ function foodLines(items: string): string[] {
 /** The lid, drawn rather than shipped as an image so it stays crisp on any screen. */
 function Cloche() {
   return (
-    <svg viewBox="0 0 64 64" className="h-14 w-14 shrink-0 drop-shadow-[0_4px_8px_rgba(40,20,80,0.35)]" aria-hidden>
-      <circle cx="32" cy="11" r="3.4" fill="white" />
-      <path d="M32 14 v4.5" stroke="white" strokeWidth="3" strokeLinecap="round" />
-      <path d="M9 45 a23 21 0 0 1 46 0 z" fill="white" fillOpacity="0.96" />
-      <rect x="5" y="45" width="54" height="5" rx="2.5" fill="white" />
-      <path d="M19 41 a15 13 0 0 1 17 -7" stroke="#7a63e6" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity="0.3" />
+    <svg
+      viewBox="0 0 64 64"
+      className="h-14 w-14 shrink-0 text-on-ink drop-shadow-[0_3px_5px_rgba(40,15,0,0.45)]"
+      aria-hidden
+    >
+      <circle cx="32" cy="11" r="3.4" fill="currentColor" />
+      <path d="M32 14 v4.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M9 45 a23 21 0 0 1 46 0 z" fill="currentColor" />
+      <rect x="5" y="45" width="54" height="5" rx="2.5" fill="currentColor" />
+      <path d="M19 41 a15 13 0 0 1 17 -7" stroke="#8f4a22" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity="0.35" />
     </svg>
   );
 }
@@ -93,7 +98,9 @@ export default function CafeteriaPage() {
     };
   }, [qrValue]);
 
-  // Grows as it is scrolled into view, straight on the node in a rAF.
+  // Grows as it is scrolled into view, straight on the node in a rAF. The tab
+  // stays alive while hidden, so it only reacts while it is actually on screen,
+  // and settles itself again the moment the tab is shown.
   const qrRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = qrRef.current;
@@ -102,6 +109,7 @@ export default function CafeteriaPage() {
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
+        if (el.offsetParent === null) return; // this tab is hidden
         const r = el.getBoundingClientRect();
         const vh = window.innerHeight || 1;
         const p = Math.max(0, Math.min(1, 1 - (r.top - vh * 0.2) / (vh * 0.55)));
@@ -112,40 +120,53 @@ export default function CafeteriaPage() {
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
+    window.addEventListener(TAB_SHOWN, onScroll);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      window.removeEventListener(TAB_SHOWN, onScroll);
       cancelAnimationFrame(raf);
     };
   }, [svg]);
 
   return (
     <div className="page-wash min-h-dvh">
-      <BackHeader
-        href="/"
-        backLabel="Today"
-        title="Cafeteria"
-        hideLargeTitle
-        right={
-          fromCamu ? undefined : (
-            <button
-              onClick={() => setMenuSheet(true)}
-              aria-label="Edit the mess menu"
-              className="grid size-10 place-items-center rounded-full text-mess active:scale-95"
+      {/* A tab, so no back arrow: the leather plate below is the title, and the
+          name slides into this bar only once it has scrolled away. */}
+      <StickyBar className="px-5 pb-1.5">
+        {(scrolled) => (
+          <div className="relative flex h-11 items-center justify-end">
+            <p
+              aria-hidden={!scrolled}
+              className={cx(
+                "pointer-events-none absolute inset-x-12 truncate text-center text-[16px] font-semibold transition-opacity duration-150",
+                scrolled ? "opacity-100" : "opacity-0",
+              )}
             >
-              <Pencil size={18} />
-            </button>
-          )
-        }
-      />
+              Cafeteria
+            </p>
+            {!fromCamu && (
+              <button
+                onClick={() => setMenuSheet(true)}
+                aria-label="Edit the mess menu"
+                className="grid size-10 place-items-center rounded-full text-mess active:scale-95"
+              >
+                <Pencil size={18} />
+              </button>
+            )}
+          </div>
+        )}
+      </StickyBar>
 
-      {/* hero */}
-      <div className="mx-5 mt-1 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#6a3de8] to-[#9168f2] p-5 text-white shadow-[0_12px_30px_-12px_rgba(106,61,232,0.65)]">
-        <div className="flex items-center gap-4">
+      {/* hero: a stitched leather plate, the same hide as the tab bar */}
+      <div className="leather stitched mx-5 mt-1 rounded-[26px] p-5">
+        <div className="relative z-[1] flex items-center gap-4">
           <Cloche />
           <div className="min-w-0">
-            <p className="font-display text-[26px] leading-none font-extrabold tracking-tight">Cafeteria</p>
-            <p className="mt-1.5 text-[13.5px] font-medium text-white/85">Good Food, Good Mood</p>
+            <p className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
+              Cafeteria
+            </p>
+            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">Good Food, Good Mood</p>
           </div>
         </div>
       </div>
@@ -212,7 +233,7 @@ export default function CafeteriaPage() {
             <div className="flex flex-col items-center">
               <div
                 ref={qrRef}
-                className="relative rounded-[30px] bg-white p-6 shadow-[0_20px_44px_-14px_rgba(106,61,232,0.5)] will-change-transform"
+                className="relative rounded-[30px] border-[1.5px] border-card-edge bg-white p-6 shadow-[0_20px_44px_-14px_rgb(var(--shadow-ink)/0.5)] will-change-transform"
                 style={{ transformOrigin: "center" }}
               >
                 {/* little corner brackets, like a scanner frame */}
@@ -270,27 +291,29 @@ function Corner({ className }: { className: string }) {
   return (
     <span
       aria-hidden
-      className={cx("absolute h-5 w-5 rounded-tl-[6px] border-t-[3px] border-l-[3px] border-mess/70", className)}
+      className={cx("absolute h-5 w-5 rounded-tl-[6px] border-t-[3px] border-l-[3px] border-orange", className)}
     />
   );
 }
 
-/** One meal card: a tinted header with the meal and its time, then the food. */
+/**
+ * One meal card: a paper header with the meal and its time, then the food. The
+ * meal being served now is edged in the tab bar's orange and wears the same
+ * glowing tile as the current tab.
+ */
 function MealCard({ title, time, now, lines }: { title: string; time: string; now: boolean; lines: string[] }) {
   return (
-    <li className="overflow-hidden rounded-2xl border-[1.5px] border-mess/15">
-      <div className={cx("flex items-center gap-2 px-3.5 py-2.5", now ? "bg-mess-soft" : "bg-mess-soft/55")}>
+    <li className={cx("overflow-hidden rounded-2xl border-[1.5px]", now ? "border-orange/60" : "border-card-edge/70")}>
+      <div className={cx("flex items-center gap-2 px-3.5 py-2.5", now ? "bg-orange/15" : "bg-mess-soft")}>
         <span className="text-[14px] font-extrabold text-mess">{title}</span>
         {time && <span className="text-[12px] font-semibold text-muted tnum">{time}</span>}
-        {now && (
-          <span className="ml-auto rounded-full bg-mess px-2.5 py-0.5 text-[10.5px] font-bold text-white">Now</span>
-        )}
+        {now && <span className="tab-glow ml-auto rounded-full px-2.5 py-0.5 text-[10.5px] font-bold">Now</span>}
       </div>
       {lines.length > 0 ? (
         <ul className="space-y-1.5 bg-card px-4 py-3">
           {lines.map((l, i) => (
             <li key={i} className="flex gap-2.5 text-[14px] leading-snug text-text">
-              <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-mess" />
+              <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-orange" />
               <span>{l}</span>
             </li>
           ))}
@@ -327,7 +350,7 @@ function QrSheet({ open, onClose, value }: { open: boolean; onClose: () => void;
         onChange={(e) => setText(e.target.value)}
         rows={3}
         placeholder="Paste the scanned text"
-        className="w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-4 py-3 text-[15px] outline-none focus:border-accent"
+        className="w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-4 py-3 text-[15px] outline-none focus:border-orange"
       />
       <div className="mt-4 flex gap-2.5">
         <button onClick={onClose} className="btn-paper h-12 flex-1 rounded-2xl text-[15px] font-bold">
@@ -383,7 +406,7 @@ function MenuSheet({
             onClick={() => setDay(i)}
             className={cx(
               "shrink-0 rounded-full px-3.5 py-2 text-[12.5px] font-bold transition",
-              i === day ? "bg-mess text-white" : "bg-card text-muted",
+              i === day ? "bg-ink text-on-ink" : "bg-card text-muted",
             )}
           >
             {label}
@@ -401,7 +424,7 @@ function MenuSheet({
               value={d[key] ?? ""}
               onChange={(e) => set(key, e.target.value)}
               placeholder="e.g. Poha, Tea"
-              className="w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3.5 py-2.5 text-[15px] outline-none focus:border-accent"
+              className="w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3.5 py-2.5 text-[15px] outline-none focus:border-orange"
             />
           </label>
         ))}

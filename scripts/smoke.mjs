@@ -185,7 +185,7 @@ const SCREENS = [
   { path: "/attendance/timetable", name: "timetable", expect: "" },
   { path: "/tasks", name: "tasks", expect: "To do" },
   { path: "/settings", name: "profile", expect: "Appearance" },
-  { path: "/cafeteria", name: "cafeteria", expect: "mess pass" },
+  { path: "/cafeteria", name: "cafeteria", expect: "Mess Pass" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
   { path: "/privacy", name: "privacy", expect: "" },
@@ -309,7 +309,7 @@ async function step(name, fn) {
 await step("ticking a task keeps it in place", async () => {
   await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
   await page.waitForTimeout(900);
-  const row = page.locator("li", { hasText: "DSA assignment 4" }).first();
+  const row = page.locator("li:visible", { hasText: "DSA assignment 4" }).first();
   await row.getByRole("button", { name: /mark as done/i }).click();
   await page.waitForTimeout(500);
   const text = await row.innerText();
@@ -320,13 +320,13 @@ await step("ticking a task keeps it in place", async () => {
 });
 
 await step("deleting a task asks first", async () => {
-  const row = page.locator("li", { hasText: "Pay hostel mess bill" }).first();
+  const row = page.locator("li:visible", { hasText: "Pay hostel mess bill" }).first();
   await row.getByRole("button", { name: /^Delete /i }).click();
   await page.waitForTimeout(300);
   if (!/Delete this\?/.test(await row.innerText())) throw new Error("no confirmation appeared");
   await row.getByRole("button", { name: "Keep" }).click();
   await page.waitForTimeout(300);
-  const back = await page.locator("li", { hasText: "Pay hostel mess bill" }).first().innerText();
+  const back = await page.locator("li:visible", { hasText: "Pay hostel mess bill" }).first().innerText();
   if (!/Overdue/.test(back)) throw new Error("the task did not come back");
 });
 
@@ -434,6 +434,46 @@ await step("the tab bar moves between screens", async () => {
     if (!text.includes(expect)) {
       throw new Error(`${label} did not open (${page.url()}): ${text.slice(0, 80).replace(/\n/g, " | ")}`);
     }
+  }
+});
+
+await step("tabs switch instantly with no network at all, and keep their place", async () => {
+  // The tabs are kept alive and switched with the History API, so a tap has
+  // nothing to fetch. With the network cut entirely, every tab must still be up
+  // well inside a second and a half — this is the freeze that used to happen.
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500); // let the other tabs mount in idle time
+  await ctx.setOffline(true);
+  const loadsBefore = loads;
+  try {
+    for (const [label, expect] of [
+      ["Attendance", "Overall attendance"],
+      ["Timetable", "Week"],
+      ["Cafeteria", "Mess Pass"],
+      ["Tasks", "To do"],
+      ["Today", "Timetable"],
+    ]) {
+      const began = Date.now();
+      await page.locator("nav[aria-label='Main'] a", { hasText: label }).first().click();
+      await page.waitForFunction((needle) => document.body.innerText.includes(needle), expect, { timeout: 1500 });
+      const took = Date.now() - began;
+      if (took > 1500) throw new Error(`${label} took ${took}ms offline`);
+    }
+    // Scroll Attendance, leave, come back: the place is kept.
+    await page.locator("nav[aria-label='Main'] a", { hasText: "Attendance" }).first().click();
+    await page.waitForTimeout(200);
+    await page.evaluate(() => window.scrollTo(0, 300));
+    await page.waitForTimeout(200);
+    const before = await page.evaluate(() => window.scrollY);
+    await page.locator("nav[aria-label='Main'] a", { hasText: "Tasks" }).first().click();
+    await page.waitForTimeout(200);
+    await page.locator("nav[aria-label='Main'] a", { hasText: "Attendance" }).first().click();
+    await page.waitForTimeout(250);
+    const after = await page.evaluate(() => window.scrollY);
+    if (before > 50 && Math.abs(after - before) > 20) throw new Error(`Attendance lost its place (${before} → ${after})`);
+    if (loads !== loadsBefore) throw new Error(`switching tabs reloaded the page ${loads - loadsBefore}x`);
+  } finally {
+    await ctx.setOffline(false);
   }
 });
 
