@@ -14,7 +14,7 @@ import { RemindersSync } from "./RemindersSync";
 import { SocialSync } from "./SocialSync";
 import { AppUpdate } from "./AppUpdate";
 import { useAuth } from "@/lib/auth";
-import { appReady, isNativeApp, onPhone } from "@/lib/native";
+import { DockIn, appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
@@ -222,6 +222,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       // out of date, so a stamp here would pin the worker to whatever build the
       // cached page came from.
       navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // In the app: once the live site's worker (which only takes over with a
+      // complete copy) is in charge, let it open screens from now on instead
+      // of the copy inside the APK — that is how web updates keep arriving.
+      if (isNativeApp()) {
+        const live = () => {
+          if (navigator.serviceWorker.controller) void DockIn.setLive({ on: true }).catch(() => {});
+        };
+        live();
+        navigator.serviceWorker.addEventListener("controllerchange", live);
+      }
     } else if ("serviceWorker" in navigator) {
       // Dev mode: a worker left over from an earlier production run on this
       // address would keep serving old pages, so remove it and its caches.

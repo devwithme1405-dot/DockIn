@@ -420,6 +420,13 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /** The web says whether the live site (its service worker) or the APK's copy should open screens. */
+    @PluginMethod
+    public void setLive(PluginCall call) {
+        Bundled.setLive(getContext(), Boolean.TRUE.equals(call.getBoolean("on", false)));
+        call.resolve();
+    }
+
     /** Is there a newer APK on GitHub? {current, latest, name} */
     @PluginMethod
     public void checkUpdate(final PluginCall call) {

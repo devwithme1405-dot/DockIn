@@ -34,6 +34,21 @@ jobs:
           npm ci --no-audit --no-fund
           npx cap sync android
 
+      # Every screen and script, built and packed into the APK, so the app opens
+      # from the phone itself (android Bundled.java) and never waits on the
+      # network for its first screen. Public config only (URL + publishable key).
+      - name: Bundle the screens into the APK
+        run: |
+          set -a; . capacitor/bundle.env; set +a
+          npx next build
+          W=android/app/src/main/assets/web
+          rm -rf "$W"; mkdir -p "$W/_next"
+          cp -r .next/static "$W/_next/static"
+          cp .next/server/app/*.html "$W/"
+          cp public/*.png public/*.webp "$W/" 2>/dev/null || true
+          ls "$W" | head -40
+          du -sh "$W"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

@@ -51,6 +51,8 @@ function heal(){
     if(Date.now()-last<600000)return;
     localStorage.setItem('dockin-healed',String(Date.now()));
   }catch(e){ return; }
+  // In the app, put the copy inside the APK back in charge of opening screens.
+  try{var P=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.DockIn;if(P&&P.setLive)P.setLive({on:false});}catch(e){}
   var done=function(){ location.reload(); };
   try{
     if('serviceWorker'in navigator){

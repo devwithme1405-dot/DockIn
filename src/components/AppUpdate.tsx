@@ -38,6 +38,7 @@ export function AppUpdate() {
         }
         if (before && now && before !== now) {
           try {
+            await DockIn.setLive({ on: false }).catch(() => {});
             const regs = await navigator.serviceWorker?.getRegistrations();
             await Promise.all((regs ?? []).map((r) => r.unregister()));
             const keys = await caches.keys();

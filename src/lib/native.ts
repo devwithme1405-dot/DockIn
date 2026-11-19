@@ -143,6 +143,8 @@ interface DockInPlugin {
   renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
   /** Hand a file in to this student's own LMS assignment (base64 data). Rejects "WEB_ONLY" when the LMS login cannot upload. */
+  /** Live site (service worker) or the APK's own copy opens screens. */
+  setLive(options: { on: boolean }): Promise<void>;
   /** Newer APK on GitHub? */
   checkUpdate(): Promise<{ current: number; latest: number; name: string }>;
   /** Download the newest APK and open the installer (rejects "ALLOW_INSTALL" if not permitted yet). */

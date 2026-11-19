@@ -11,6 +11,7 @@ public class Context {
   public android.content.pm.PackageManager getPackageManager() { return null; }
   public String getPackageName() { return null; }
   public java.io.File getCacheDir() { return null; }
+  public android.content.res.AssetManager getAssets() { return null; }
   public ContentResolver getContentResolver() { return null; }
   public static final String POWER_SERVICE = "power";
   public android.content.res.Resources getResources() { return null; }

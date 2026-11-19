@@ -110,3 +110,21 @@ export class DockinDB extends Dexie {
 }
 
 export const db = new DockinDB();
+
+// A screen copy older than this phone's data (the APK's built-in copy, after
+// the live site moved the database on) cannot open it. Hand back to the live
+// site, which knows the newer layout, rather than show a broken app.
+if (typeof window !== "undefined") {
+  db.open().catch((e: unknown) => {
+    if ((e as { name?: string })?.name !== "VersionError") return;
+    try {
+      const w = window as unknown as { Capacitor?: { Plugins?: { DockIn?: { setLive?: (o: { on: boolean }) => Promise<void> } } } };
+      const once = sessionStorage.getItem("dockin-version-handoff");
+      if (once) return;
+      sessionStorage.setItem("dockin-version-handoff", "1");
+      void w.Capacitor?.Plugins?.DockIn?.setLive?.({ on: true })?.finally(() => window.location.reload());
+    } catch {
+      /* nothing else to try */
+    }
+  });
+}

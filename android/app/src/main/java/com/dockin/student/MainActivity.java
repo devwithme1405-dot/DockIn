@@ -3,12 +3,17 @@ package com.dockin.student;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.webkit.ServiceWorkerClient;
+import android.webkit.ServiceWorkerController;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.splashscreen.SplashScreen;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 
 /**
  * The app: DockIn's site in a WebView, with the phone's own powers wired in
@@ -46,6 +51,29 @@ public class MainActivity extends BridgeActivity {
         new Handler(Looper.getMainLooper()).postDelayed(this::markContentReady, 6000);
 
         super.onCreate(savedInstanceState);
+
+        // Answer the app's own screens and scripts from the copy inside the APK
+        // (see Bundled) — the first open never waits on the network again.
+        final android.content.Context app = getApplicationContext();
+        if (bridge != null) {
+            bridge.setWebViewClient(new BridgeWebViewClient(bridge) {
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    WebResourceResponse r = Bundled.intercept(app, request, true);
+                    return r != null ? r : super.shouldInterceptRequest(view, request);
+                }
+            });
+        }
+        try {
+            ServiceWorkerController.getInstance().setServiceWorkerClient(new ServiceWorkerClient() {
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+                    return Bundled.intercept(app, request, false);
+                }
+            });
+        } catch (Exception ignored) {
+            // Very old WebView without service-worker hooks: pages still use the bundle.
+        }
 
         // Back goes back a screen, the way it does in every other app. Without
         // this Android would close DockIn from wherever you were.
