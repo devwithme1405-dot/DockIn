@@ -35,9 +35,21 @@ export const AVATAR_EMOJIS = [
 ];
 
 export interface AvatarLook {
-  kind: "initial" | "emoji";
+  kind: "initial" | "emoji" | "photo";
   emoji: string | null;
   palette: number;
+  /** For a photo: its public address. */
+  url?: string;
+}
+
+const PHOTO_BASE = (() => {
+  const raw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+  return raw ? `${raw}/storage/v1/object/public/avatars/a/` : "";
+})();
+
+/** 'p:<key>' — a profile photo in the public avatars bucket. */
+export function photoUrl(key: string): string {
+  return PHOTO_BASE ? `${PHOTO_BASE}${key}.jpg` : "";
 }
 
 /** Stable palette for someone who has not chosen one, so it still feels personal. */
@@ -51,6 +63,9 @@ export function parseAvatar(avatar: string | undefined, name: string): AvatarLoo
   const fallback: AvatarLook = { kind: "initial", emoji: null, palette: paletteFromName(name) };
   if (!avatar) return fallback;
   const parts = avatar.split(":");
+  if (parts[0] === "p" && /^[a-z0-9]{12}$/.test(parts[1] ?? "") && PHOTO_BASE) {
+    return { kind: "photo", emoji: null, palette: fallback.palette, url: photoUrl(parts[1]) };
+  }
   if (parts[0] === "i") {
     const p = Number(parts[1]);
     return { kind: "initial", emoji: null, palette: Number.isInteger(p) && p >= 0 ? p % PALETTES.length : fallback.palette };
@@ -75,4 +90,46 @@ export function formatAvatar(look: AvatarLook): string {
 export function gradientOf(palette: number): string {
   const p = PALETTES[((palette % PALETTES.length) + PALETTES.length) % PALETTES.length];
   return `linear-gradient(135deg, ${p.from}, ${p.to})`;
+}
+
+/**
+ * Makes a profile photo small on the phone (192×192 centre crop, JPEG ~15 KB),
+ * uploads it under a fresh 12-character key and returns 'p:<key>'. The old
+ * photo (if this phone made it) is removed. Nothing big ever touches the
+ * database: it stores only the key.
+ */
+export async function uploadAvatarPhoto(file: File, previous?: string): Promise<string> {
+  const { getSupabase } = await import("./supabase");
+  const sb = getSupabase();
+  if (!sb) throw new Error("Sign in to add a photo.");
+  if (!file.type.startsWith("image/")) throw new Error("Pick a photo.");
+
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) throw new Error("That photo could not be read.");
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = 192;
+  canvas.height = 192;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("That photo could not be read.");
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 192, 192);
+  bitmap.close?.();
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+  if (!blob) throw new Error("That photo could not be read.");
+
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const key = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+  const { error } = await sb.storage.from("avatars").upload(`a/${key}.jpg`, blob, {
+    contentType: "image/jpeg",
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) {
+    if (/Bucket not found/i.test(error.message)) throw new Error("Photos are not set up on the server yet.");
+    throw new Error("Could not upload the photo.");
+  }
+  const old = previous?.startsWith("p:") ? previous.slice(2) : null;
+  if (old && /^[a-z0-9]{12}$/.test(old)) void sb.storage.from("avatars").remove([`a/${old}.jpg`]);
+  return `p:${key}`;
 }

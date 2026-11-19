@@ -165,11 +165,11 @@ await step("the group chat shows who said what and the task card", async () => {
 });
 
 await step("friend requests show on the Chats tab with accept, reject and block", async () => {
-  await page.getByRole("button", { name: /Friend requests/ }).click();
+  await page.getByRole("button", { name: /Friend requests/ }).click().catch(() => page.getByRole("button", { name: /People/ }).first().click());
   await page.getByRole("button", { name: "Reject", exact: true }).waitFor({ timeout: 3000 });
   await page.getByLabel("Block Aman Verma").waitFor({ timeout: 2000 });
   await page.screenshot({ path: `${SHOTS}/chat-requests.png` });
-  await page.getByRole("button", { name: "Chats", exact: true }).click();
+  await page.getByRole("button", { name: /Chats/ }).first().click();
 });
 
 await step("a group poll takes a vote, and the chat can be pinned", async () => {
@@ -203,14 +203,14 @@ await step("the scanner opens smoothly and can flip to My QR", async () => {
   await page.getByText("Point at a friend").waitFor({ timeout: 6000 });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${SHOTS}/chat-scanner.png` });
-  await page.getByRole("button", { name: "My QR" }).click();
+  await page.getByRole("dialog", { name: "Scan a QR code" }).getByRole("button", { name: "My QR" }).click();
   await page.getByText("Let your friend scan this").waitFor({ timeout: 3000 });
   await page.screenshot({ path: `${SHOTS}/chat-scanner-mine.png` });
   await page.getByLabel("Close the scanner").click();
 });
 
 await step("your QR is there to be scanned", async () => {
-  await page.getByLabel("Your code and adding friends").click();
+  await page.getByRole("button", { name: "My QR", exact: true }).first().click();
   await page.getByText("SACH1234").waitFor({ timeout: 4000 });
   await page.screenshot({ path: `${SHOTS}/chat-myqr.png` });
 });

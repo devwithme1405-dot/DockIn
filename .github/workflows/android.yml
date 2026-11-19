@@ -85,8 +85,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The app reads this to know a newer APK exists (in-app update).
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          LINE=$("$BT/aapt2" dump badging DockIn.apk | head -1)
+          CODE=$(echo "$LINE" | sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p")
+          NAME=$(echo "$LINE" | sed -nE "s/.*versionName='([^']+)'.*/\1/p")
+          printf '{"versionCode":%s,"versionName":"%s","sha":"%s"}\n' "$CODE" "$NAME" "${GITHUB_SHA::7}" > version.json
+          cat version.json
           gh release delete apk-latest --cleanup-tag -y || true
-          gh release create apk-latest DockIn.apk \
+          gh release create apk-latest DockIn.apk version.json \
             --title "DockIn for Android" \
             --notes "Signed Android app (Capacitor). Install DockIn.apk over the old one. It opens dock-in.vercel.app, so screen updates arrive without a new APK; this file changes only when the phone-side part does." \
             --latest

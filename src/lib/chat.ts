@@ -184,6 +184,14 @@ export async function pullChat(): Promise<void> {
       marks.map((m) => ({ thread: m.thread, readAt: Date.parse(m.read_at), muted: !!m.muted, pinned: !!m.pinned })),
     );
   }
+  const reacts = await sb.from("message_reactions").select("message_id,user_id,emoji");
+  if (!reacts.error) {
+    const list = (reacts.data ?? []) as { message_id: string; user_id: string; emoji: string }[];
+    await db.msgReactions.clear();
+    await db.msgReactions.bulkPut(
+      list.map((r) => ({ id: `${r.message_id}:${r.user_id}`, messageId: r.message_id, userId: r.user_id, emoji: r.emoji })),
+    );
+  }
   const votes = await sb.from("poll_votes").select("message_id,user_id,choice");
   if (!votes.error) {
     const list = (votes.data ?? []) as { message_id: string; user_id: string; choice: number }[];
@@ -211,6 +219,13 @@ export function listenChat(): () => void {
     .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) => {
       const row = payload.new as Row | undefined;
       if (row?.id) void db.messages.put(toMsg(row));
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
+      const r = (payload.new ?? payload.old) as { message_id?: string; user_id?: string; emoji?: string } | undefined;
+      if (!r?.message_id || !r.user_id) return;
+      const id = `${r.message_id}:${r.user_id}`;
+      if (payload.eventType === "DELETE") void db.msgReactions.delete(id);
+      else void db.msgReactions.put({ id, messageId: r.message_id, userId: r.user_id, emoji: r.emoji ?? "👍" });
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, (payload) => {
       const v = (payload.new ?? payload.old) as { message_id?: string; user_id?: string; choice?: number } | undefined;
@@ -314,6 +329,35 @@ export async function votePoll(messageId: string, choice: number): Promise<void>
   }
   await db.pollVotes.put({ id, messageId, userId: myId, choice });
   await sb.from("poll_votes").upsert({ message_id: messageId, user_id: myId, choice, updated_at: new Date().toISOString() });
+}
+
+/** React to a message; the same emoji again takes it back. */
+export async function reactMessage(messageId: string, emoji: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb || !(await ensureMe()) || !myId) return;
+  const id = `${messageId}:${myId}`;
+  const prev = await db.msgReactions.get(id);
+  if (prev?.emoji === emoji) {
+    await db.msgReactions.delete(id);
+    await sb.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", myId);
+    return;
+  }
+  await db.msgReactions.put({ id, messageId, userId: myId, emoji });
+  await sb.from("message_reactions").upsert({ message_id: messageId, user_id: myId, emoji, updated_at: new Date().toISOString() });
+}
+
+export function useReactionsFor(thread: ThreadId): Map<string, { emoji: string; userId: string }[]> {
+  const list = useLiveQuery(async () => {
+    const ids = (await db.messages.where("thread").equals(thread).primaryKeys()) as string[];
+    return db.msgReactions.where("messageId").anyOf(ids).toArray();
+  }, [thread]);
+  const map = new Map<string, { emoji: string; userId: string }[]>();
+  for (const r of list ?? []) {
+    const arr = map.get(r.messageId) ?? [];
+    arr.push({ emoji: r.emoji, userId: r.userId });
+    map.set(r.messageId, arr);
+  }
+  return map;
 }
 
 export function usePollVotes(messageId: string): PollVote[] {
@@ -423,7 +467,7 @@ export function usePeople(): Map<string, ChatPerson> {
 }
 
 export async function clearChat(): Promise<void> {
-  await Promise.all([db.messages.clear(), db.chatReads.clear(), db.chatPeople.clear(), db.pollVotes.clear()]);
+  await Promise.all([db.messages.clear(), db.chatReads.clear(), db.chatPeople.clear(), db.pollVotes.clear(), db.msgReactions.clear()]);
   try {
     localStorage.removeItem(SINCE_KEY);
   } catch {

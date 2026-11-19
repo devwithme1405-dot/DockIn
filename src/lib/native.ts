@@ -143,6 +143,10 @@ interface DockInPlugin {
   renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
   /** Hand a file in to this student's own LMS assignment (base64 data). Rejects "WEB_ONLY" when the LMS login cannot upload. */
+  /** Newer APK on GitHub? */
+  checkUpdate(): Promise<{ current: number; latest: number; name: string }>;
+  /** Download the newest APK and open the installer (rejects "ALLOW_INSTALL" if not permitted yet). */
+  installUpdate(): Promise<void>;
   /** Open a document (base64) in the phone's own viewer app. */
   openFile(options: { name: string; mime: string; data: string }): Promise<void>;
   lmsSubmit(options: { instance: number; name: string; mime: string; data: string }): Promise<void>;
@@ -160,6 +164,7 @@ interface DockInPlugin {
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
+  addListener(event: "updateProgress", fn: (p: { percent: number }) => void): Promise<PluginListenerHandle>;
 }
 
 /** A reminder for the phone to fire at `at` (epoch ms): class, task, attendance. */

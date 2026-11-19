@@ -12,6 +12,7 @@ import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
 import { SocialSync } from "./SocialSync";
+import { AppUpdate } from "./AppUpdate";
 import { useAuth } from "@/lib/auth";
 import { appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -295,6 +296,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {ready && !onboarding && <TabBar pathname={pathname} />}
         {ready && !onboarding && isNativeApp() && <RemindersSync />}
         {ready && !onboarding && FRIENDS && <SocialSync />}
+        {isNativeApp() && <AppUpdate />}
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second
           brown web overlay would only bring back the very gap it holds through.

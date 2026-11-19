@@ -16,6 +16,10 @@ import {
   QrCode as QrIcon,
   Search,
   Share2,
+  UserRound,
+  Layers,
+  PenSquare,
+  ChevronDown,
   UserPlus,
   Users,
   X,
@@ -68,6 +72,7 @@ import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
 import { LMS_URL } from "@/components/AssignmentFile";
 import { ChatView } from "@/components/ChatView";
+import { Notebook } from "@/components/Paper";
 import { QrScanner, type Scanned } from "@/components/QrScanner";
 import { directThread, groupThread, otherIn, usePeople, useThreads, type ThreadId } from "@/lib/chat";
 
@@ -85,7 +90,7 @@ const TABS = [
   ["chats", "Chats"],
   ["groups", "Groups"],
   ["friends", "People"],
-  ["work", "Work"],
+  ["work", "Shared"],
 ] as const;
 type SheetName = "add" | "confirm" | "newGroup" | "joinGroup" | "me" | "share" | null;
 
@@ -127,6 +132,8 @@ function Circle() {
   const threads = useThreads();
   const people = usePeople();
   const [scanning, setScanning] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [composing, setComposing] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -476,17 +483,81 @@ function Circle() {
 
   return (
     <div className="page-wash pb-4">
-      {/* Header: the title and two plain icons, Instagram-style. */}
       <header className="flex items-center gap-2 px-4 pt-[max(0.9rem,env(safe-area-inset-top))] pb-1">
-        <h1 className="font-display min-w-0 flex-1 truncate text-[27px] font-extrabold tracking-[-0.03em]">Friends</h1>
-        <button onClick={() => setScanning(true)} aria-label="Scan a QR" className="grid size-11 place-items-center rounded-full text-text active:bg-surface-2">
-          <ScanLine size={23} />
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-[28px] leading-none font-extrabold tracking-[-0.03em]">Friends</h1>
+          <svg viewBox="0 0 120 10" className="mt-1 h-2 w-[104px] text-orange" aria-hidden>
+            <path d="M2 7 C 30 2, 70 2, 118 5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        </div>
+        <button
+          onClick={() => setSearching((v) => !v)}
+          aria-label="Search chats and people"
+          className={cx("btn-paper grid size-11 place-items-center rounded-2xl", searching && "text-mess")}
+        >
+          <Search size={20} />
         </button>
-        <button onClick={() => setSheet("me")} aria-label="Your code and adding friends" className="relative grid size-11 place-items-center rounded-full text-text active:bg-surface-2">
-          <UserPlus size={23} />
-          {requests.length > 0 && <span className="absolute top-2 right-2 size-2.5 rounded-full bg-orange ring-2 ring-bg" />}
+        <button onClick={() => setScanning(true)} aria-label="Scan a QR" className="btn-leather grid size-11 place-items-center rounded-2xl">
+          <ScanLine size={20} />
         </button>
       </header>
+
+      {searching && (
+        <label className="mx-4 mt-2 flex h-11 items-center gap-2.5 rounded-2xl border-[1.5px] border-card-edge bg-card px-3.5 focus-within:border-orange">
+          <Search size={17} className="shrink-0 text-muted" />
+          <input
+            autoFocus
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            placeholder="Search chats, groups, people"
+            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
+            aria-label="Search"
+          />
+          {find && (
+            <button onClick={() => setFind("")} aria-label="Clear" className="text-muted">
+              <X size={16} />
+            </button>
+          )}
+        </label>
+      )}
+
+      {!searching && (
+        <>
+          {/* The circle, on a notebook page. */}
+          <Notebook className="mx-4 mt-3 px-4 pt-4 pb-3.5" label="Your college circle">
+            <div className="flex items-center gap-3">
+              <div className="flex -space-x-3">
+                {(accepted.length ? accepted.slice(0, 3) : [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }]).map((f) => (
+                  <span key={f.id} className="rounded-full ring-2 ring-card">
+                    <Avatar name={f.name} avatar={"avatar" in f ? f.avatar : undefined} size={38} />
+                  </span>
+                ))}
+              </div>
+              <div className="min-w-0">
+                <p className="font-display text-[19px] leading-tight font-extrabold italic text-mess">Your College Circle</p>
+                <p className="text-[12.5px] text-muted">Chat · Groups · Files · Polls</p>
+              </div>
+            </div>
+          </Notebook>
+
+          {/* Quick ways in. */}
+          <div className="mt-3 grid grid-cols-4 gap-2 px-4">
+            {(
+              [
+                ["Add Friend", UserPlus, () => setSheet("add")],
+                ["New Group", Users, () => { setGroupName(""); setProblem(null); setSheet("newGroup"); }],
+                ["My QR", QrIcon, () => setSheet("me")],
+                ["Invite", Share2, () => void shareLink()],
+              ] as const
+            ).map(([label, Icon, go]) => (
+              <button key={label} onClick={go} className="btn-paper flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 active:scale-95">
+                <Icon size={21} className="text-mess" />
+                <span className="w-full truncate text-center text-[12px] font-bold">{label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* People in a row, like stories: you first (your QR), then friends —
           a ring means they have written to you. Tap to chat. */}
@@ -522,28 +593,33 @@ function Circle() {
         })}
       </div>
 
-      {/* Sections as underlined words, not chunky pills: they never wrap. */}
-      <nav className="sticky top-0 z-10 mt-1 flex border-b border-card-edge/70 bg-bg/95 px-2 backdrop-blur" aria-label="Friends sections">
-        {TABS.map(([id, label]) => {
-          const count = id === "friends" ? requests.length : id === "work" ? toHandIn : 0;
-          return (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              aria-current={tab === id ? "page" : undefined}
-              className={cx(
-                "relative flex h-11 min-w-0 flex-1 items-center justify-center gap-1 text-[14px] font-bold transition-colors",
-                tab === id ? "text-text" : "text-muted",
-              )}
-            >
-              <span className="truncate">{label}</span>
-              {count > 0 && (
-                <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-orange px-1 text-[10.5px] text-white">{count}</span>
-              )}
-              {tab === id && <span className="absolute inset-x-4 bottom-0 h-[2.5px] rounded-full bg-ink" />}
-            </button>
-          );
-        })}
+      <nav className="sticky top-0 z-10 mt-2 bg-bg/95 px-4 py-2 backdrop-blur" aria-label="Friends sections">
+        <div className="flex gap-1 rounded-2xl border border-card-edge/70 bg-card/70 p-1">
+          {TABS.map(([id, label]) => {
+            const Icon = id === "chats" ? MessageCircle : id === "groups" ? Users : id === "friends" ? UserRound : Layers;
+            const count = id === "friends" ? requests.length : id === "work" ? toHandIn : 0;
+            const on = tab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                aria-current={on ? "page" : undefined}
+                className={cx(
+                  "relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl text-[13px] font-bold transition",
+                  on ? "btn-leather" : "text-muted",
+                )}
+              >
+                <Icon size={15} className="relative z-[1] shrink-0" />
+                <span className="relative z-[1] truncate">{label}</span>
+                {count > 0 && (
+                  <span className="absolute -top-1 -right-0.5 z-[2] grid h-[17px] min-w-[17px] place-items-center rounded-full bg-orange px-1 text-[10px] text-white">
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {requests.length > 0 && tab === "chats" && (
@@ -570,6 +646,7 @@ function Circle() {
 
       {tab === "chats" && (
         <ChatList
+          find={find}
           threads={threads ?? []}
           friends={accepted}
           groups={groups ?? []}
@@ -579,6 +656,55 @@ function Circle() {
           onAdd={() => setSheet("me")}
         />
       )}
+
+      {tab === "chats" && (
+        <button
+          onClick={() => setComposing(true)}
+          aria-label="New chat"
+          className="fixed right-4 bottom-[calc(6.4rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-gradient-to-br from-orange to-[#c4532a] text-white shadow-[0_10px_24px_-8px_rgba(196,83,42,0.8)] active:scale-95"
+        >
+          <PenSquare size={23} />
+        </button>
+      )}
+
+      <Sheet open={composing} onClose={() => setComposing(false)} title="New chat">
+        <ul className="max-h-[60vh] space-y-1 overflow-y-auto pb-2">
+          {(groups ?? []).map((g) => (
+            <li key={g.id}>
+              <button
+                onClick={() => {
+                  setComposing(false);
+                  openChat(groupThread(g.id));
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left active:bg-surface-2"
+              >
+                <span className="grid size-11 place-items-center rounded-full bg-mess-soft text-[20px]">{g.emoji ?? "👥"}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-bold">{g.name}</span>
+                  <span className="block text-[12.5px] text-muted">{g.members} people</span>
+                </span>
+              </button>
+            </li>
+          ))}
+          {accepted.map((f) => (
+            <li key={f.id}>
+              <button
+                onClick={() => {
+                  setComposing(false);
+                  if (me) openChat(directThread(me, f.id));
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left active:bg-surface-2"
+              >
+                <Avatar name={f.name} avatar={f.avatar} size={44} />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{f.name}</span>
+              </button>
+            </li>
+          ))}
+          {(groups?.length ?? 0) + accepted.length === 0 && (
+            <li className="py-6 text-center text-[14px] text-muted">Add a friend or make a group first.</li>
+          )}
+        </ul>
+      </Sheet>
 
       {tab === "friends" && (
         <div className="space-y-5 px-4 pt-4">
@@ -1272,6 +1398,7 @@ function ago(ms: number): string {
 
 /** Conversations, newest first; friends and groups you have not talked to yet sit below. */
 function ChatList({
+  find,
   threads,
   friends,
   groups,
@@ -1280,6 +1407,7 @@ function ChatList({
   onOpen,
   onAdd,
 }: {
+  find: string;
   threads: import("@/lib/chat").ThreadSummary[];
   friends: Friend[];
   groups: import("@/lib/types").Group[];
@@ -1288,6 +1416,8 @@ function ChatList({
   onOpen: (t: ThreadId) => void;
   onAdd: () => void;
 }) {
+  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [pinOpen, setPinOpen] = useState(true);
   if (!me) return null;
   const seen = new Set(threads.map((t) => t.thread));
   const groupBy = new Map(groups.map((g) => [g.id, g]));
@@ -1299,6 +1429,7 @@ function ChatList({
         if (gid && !g) return null; // left that group
         const fid = otherIn(t.thread, me);
         const name = g ? g.name : (people.get(fid ?? "")?.name ?? "Friend");
+        const avatar = g ? undefined : people.get(fid ?? "")?.avatar;
         const who = t.last.author === me ? "You: " : g ? `${people.get(t.last.author)?.name?.split(" ")[0] ?? "Someone"}: ` : "";
         const d = t.last.data;
         const text = t.last.deleted
@@ -1314,6 +1445,7 @@ function ChatList({
         return {
           thread: t.thread,
           name,
+          avatar,
           emoji: g ? (g.emoji ?? "👥") : null,
           preview: empty ? (g ? "Start the group chat" : "Say hi 👋") : who + text,
           when: empty ? "" : ago(t.last.createdAt),
@@ -1325,10 +1457,10 @@ function ChatList({
       .filter((r): r is NonNullable<typeof r> => !!r),
     ...groups
       .filter((g) => !seen.has(groupThread(g.id)))
-      .map((g) => ({ thread: groupThread(g.id), name: g.name, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0, pinned: false, muted: false })),
+      .map((g) => ({ thread: groupThread(g.id), name: g.name, avatar: undefined as string | undefined, emoji: g.emoji ?? "👥", preview: "Start the group chat", when: "", unread: 0, pinned: false, muted: false })),
     ...friends
       .filter((f) => !seen.has(directThread(me, f.id)))
-      .map((f) => ({ thread: directThread(me, f.id), name: f.name, emoji: null, preview: "Say hi 👋", when: "", unread: 0, pinned: false, muted: false })),
+      .map((f) => ({ thread: directThread(me, f.id), name: f.name, avatar: f.avatar, emoji: null, preview: "Say hi 👋", when: "", unread: 0, pinned: false, muted: false })),
   ];
 
   if (rows.length === 0)
@@ -1348,10 +1480,13 @@ function ChatList({
       </div>
     );
 
-  return (
-    <ul className="mt-2 pb-2">
-      {rows.map((r) => (
-        <li key={r.thread}>
+  const q = find.trim().toLowerCase();
+  const shown = rows.filter((r) => (!q || r.name.toLowerCase().includes(q)) && (!onlyUnread || r.unread > 0));
+  const pinned = shown.filter((r) => r.pinned);
+  const rest = shown.filter((r) => !r.pinned);
+  const unreadTotal = rows.reduce((n, r) => n + (r.muted ? 0 : r.unread), 0);
+  const row = (r: (typeof rows)[number]) => (
+    <li key={r.thread}>
           <button onClick={() => onOpen(r.thread)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left active:bg-surface-2/70">
             <span
               className={cx(
@@ -1363,7 +1498,7 @@ function ChatList({
                 {r.emoji ? (
                   <span className="grid size-full place-items-center rounded-full bg-mess-soft text-[24px]">{r.emoji}</span>
                 ) : (
-                  <Avatar name={r.name} size={48} />
+                  <Avatar name={r.name} avatar={r.avatar} size={48} />
                 )}
               </span>
             </span>
@@ -1390,7 +1525,37 @@ function ChatList({
             )}
           </button>
         </li>
-      ))}
-    </ul>
+  );
+
+  return (
+    <div className="pb-24">
+      {pinned.length > 0 && (
+        <section className="mx-4 mt-3 overflow-hidden rounded-2xl border border-card-edge bg-card/80">
+          <button onClick={() => setPinOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
+            <Pin size={15} className="text-mess" />
+            <span className="flex-1 text-[14.5px] font-extrabold">Pinned chats</span>
+            <ChevronDown size={18} className={cx("text-muted transition-transform", !pinOpen && "-rotate-90")} />
+          </button>
+          {pinOpen && (
+            <ul className="border-t border-card-edge/60">
+              {pinned.map(row)}
+            </ul>
+          )}
+        </section>
+      )}
+      <div className="mt-3 flex items-baseline justify-between px-4">
+        <p className="text-[16px] font-extrabold">All chats</p>
+        <button
+          onClick={() => setOnlyUnread((v) => !v)}
+          className={cx("text-[13px] font-bold", onlyUnread ? "text-orange" : "text-mess")}
+        >
+          {onlyUnread ? "Show all" : `Unread (${unreadTotal})`}
+        </button>
+      </div>
+      <ul className="mt-1">
+        {rest.map(row)}
+        {shown.length === 0 && <li className="px-4 py-8 text-center text-[13.5px] text-muted">Nothing matches.</li>}
+      </ul>
+    </div>
   );
 }

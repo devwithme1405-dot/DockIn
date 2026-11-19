@@ -420,6 +420,73 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /** Is there a newer APK on GitHub? {current, latest, name} */
+    @PluginMethod
+    public void checkUpdate(final PluginCall call) {
+        final Context c = getContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
+                    long current = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : (long) info.versionCode;
+                    org.json.JSONObject v = Updater.latest();
+                    JSObject out = new JSObject();
+                    out.put("current", current);
+                    out.put("latest", v.optLong("versionCode", 0));
+                    out.put("name", v.optString("versionName", ""));
+                    call.resolve(out);
+                } catch (Exception e) {
+                    call.reject("Could not check for updates.");
+                }
+            }
+        }, "dockin-update-check").start();
+    }
+
+    /**
+     * Downloads the newest APK and opens Android's installer. Reports progress
+     * as "updateProgress" events. Rejects "ALLOW_INSTALL" (after opening the
+     * setting) when DockIn may not install apps yet.
+     */
+    @PluginMethod
+    public void installUpdate(final PluginCall call) {
+        final Context c = getContext();
+        if (Build.VERSION.SDK_INT >= 26 && !c.getPackageManager().canRequestPackageInstalls()) {
+            try {
+                Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()));
+                getActivity().startActivity(i);
+            } catch (Exception ignored) {
+                // Some phones hide it; the message tells them where to look.
+            }
+            call.reject("ALLOW_INSTALL");
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    java.io.File apk = Updater.download(c, new Updater.Progress() {
+                        @Override
+                        public void at(int percent) {
+                            JSObject p = new JSObject();
+                            p.put("percent", percent);
+                            notifyListeners("updateProgress", p);
+                        }
+                    });
+                    Uri uri = androidx.core.content.FileProvider.getUriForFile(c, c.getPackageName() + ".fileprovider", apk);
+                    Intent install = new Intent(Intent.ACTION_VIEW);
+                    install.setDataAndType(uri, "application/vnd.android.package-archive");
+                    install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    c.startActivity(install);
+                    call.resolve();
+                } catch (Exception e) {
+                    call.reject("The download did not finish. Try again on a better connection.");
+                }
+            }
+        }, "dockin-update").start();
+    }
+
     /** Submits a file to this student's own LMS assignment, with their saved login. */
     @PluginMethod
     public void lmsSubmit(final PluginCall call) {

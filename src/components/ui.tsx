@@ -326,6 +326,21 @@ export function Avatar({
 }) {
   const look = parseAvatar(avatar, name);
   const initial = (name.trim()[0] ?? "?").toUpperCase();
+  if (look.kind === "photo" && look.url)
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={look.url}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        decoding="async"
+        width={size}
+        height={size}
+        className={cx("shrink-0 rounded-full bg-surface-2 object-cover", className)}
+        style={{ width: size, height: size }}
+      />
+    );
   return (
     <span
       aria-hidden

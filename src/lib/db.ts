@@ -54,6 +54,7 @@ export class DockinDB extends Dexie {
   chatReads!: Table<ChatRead, string>;
   chatPeople!: Table<ChatPerson, string>;
   pollVotes!: Table<PollVote, string>;
+  msgReactions!: Table<{ id: string; messageId: string; userId: string; emoji: string }, string>;
   blocks!: Table<{ id: string; name: string }, string>;
 
   constructor() {
@@ -101,6 +102,9 @@ export class DockinDB extends Dexie {
     this.version(11).stores({
       pollVotes: "id, messageId",
       blocks: "id",
+    });
+    this.version(12).stores({
+      msgReactions: "id, messageId",
     });
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -38,7 +38,7 @@ import {
   resetAll,
   saveProfile,
 } from "@/lib/repo";
-import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar } from "@/lib/avatars";
+import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar, uploadAvatarPhoto } from "@/lib/avatars";
 import { useTasks } from "@/lib/hooks";
 import { fmtPct } from "@/lib/attendance";
 import { toDateStr } from "@/lib/dates";
@@ -199,10 +199,17 @@ export default function ProfilePage() {
     }
   }
 
+  async function setAvatar(avatar: string) {
+    await saveProfile({ avatar });
+    // Friends see it everywhere (chats, requests, groups) from their next pull.
+    if (FRIENDS && session) {
+      const fresh = await getProfile();
+      if (fresh) void publishProfile(fresh, shareAttendance ?? false).catch(() => {});
+    }
+  }
+
   function pickAvatar(next: { emoji: string | null; palette: number }) {
-    void saveProfile({
-      avatar: formatAvatar({ kind: next.emoji ? "emoji" : "initial", emoji: next.emoji, palette: next.palette }),
-    });
+    void setAvatar(formatAvatar({ kind: next.emoji ? "emoji" : "initial", emoji: next.emoji, palette: next.palette }));
   }
 
   function pickTextScale(scale: number) {
@@ -580,7 +587,17 @@ export default function ProfilePage() {
       </Sheet>
 
       <Sheet open={sheet === "avatar"} onClose={close} title="Profile picture">
-        <AvatarPicker name={profile.name} avatar={profile.avatar} onPick={pickAvatar} />
+        <AvatarPicker
+          name={profile.name}
+          avatar={profile.avatar}
+          onPick={pickAvatar}
+          canUpload={!!session}
+          onPhoto={async (file) => {
+            const key = await uploadAvatarPhoto(file, profile.avatar);
+            await setAvatar(key);
+          }}
+          onRemovePhoto={() => pickAvatar({ emoji: null, palette: parseAvatar(undefined, profile.name).palette })}
+        />
       </Sheet>
 
       <Sheet open={sheet === "signin"} onClose={close} title="Sign in">
@@ -752,11 +769,21 @@ function AvatarPicker({
   name,
   avatar,
   onPick,
+  canUpload,
+  onPhoto,
+  onRemovePhoto,
 }: {
   name: string;
   avatar?: string;
   onPick: (next: { emoji: string | null; palette: number }) => void;
+  canUpload: boolean;
+  onPhoto: (file: File) => Promise<void>;
+  onRemovePhoto: () => void;
 }) {
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
+  const hasPhoto = avatar?.startsWith("p:") ?? false;
   const look = parseAvatar(avatar, name);
   const [palette, setPalette] = useState(look.palette);
   const [emoji, setEmoji] = useState<string | null>(look.emoji);
@@ -771,8 +798,46 @@ function AvatarPicker({
 
   return (
     <div>
-      <div className="flex justify-center pb-5">
-        <Avatar name={name} avatar={formatAvatar({ kind: emoji ? "emoji" : "initial", emoji, palette })} size={88} />
+      <div className="flex flex-col items-center pb-5">
+        <Avatar name={name} avatar={hasPhoto ? avatar : formatAvatar({ kind: emoji ? "emoji" : "initial", emoji, palette })} size={96} />
+        {canUpload ? (
+          <div className="mt-3 flex gap-2">
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                setUploading(true);
+                setPhotoErr(null);
+                try {
+                  await onPhoto(f);
+                } catch (err) {
+                  setPhotoErr(err instanceof Error ? err.message : "Could not upload the photo.");
+                }
+                setUploading(false);
+              }}
+            />
+            <button
+              onClick={() => photoInput.current?.click()}
+              disabled={uploading}
+              className="btn-leather h-10 rounded-full px-4 text-[14px] disabled:opacity-60"
+            >
+              {uploading ? "Uploading…" : hasPhoto ? "Change photo" : "Upload photo"}
+            </button>
+            {hasPhoto && (
+              <button onClick={onRemovePhoto} className="btn-paper h-10 rounded-full px-4 text-[14px] font-bold">
+                Remove
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-[12.5px] text-muted">Sign in to add a photo.</p>
+        )}
+        {photoErr && <p className="mt-2 text-[12.5px] text-danger">{photoErr}</p>}
       </div>
 
       <p className="mb-2 text-[13px] font-medium text-muted">Colour</p>
