@@ -4,5 +4,6 @@ public class CookieManager {
   public void setAcceptCookie(boolean b) {}
   public void setAcceptThirdPartyCookies(WebView w, boolean b) {}
   public String getCookie(String url) { return null; }
+  public void removeAllCookies(ValueCallback<Boolean> cb) {}
   public void flush() {}
 }

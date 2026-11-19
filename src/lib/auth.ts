@@ -233,6 +233,27 @@ export async function signOutCloud(): Promise<void> {
   await getSupabase()?.auth.signOut({ scope: "local" });
 }
 
+/**
+ * Erase the account for good: the login and, by the cascade, every row of data
+ * the server holds. The password is re-checked first, so an unlocked phone in
+ * someone else's hands cannot do this. Returns an error string, or null on
+ * success; the caller then wipes this device and returns to the welcome screen.
+ */
+export async function deleteAccount(password: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return "You are not signed in.";
+  const { data } = await sb.auth.getUser();
+  const email = data.user?.email;
+  if (!email) return "You are not signed in.";
+  // Re-enter the password: a wrong one stops here, nothing is deleted.
+  const { error: authErr } = await sb.auth.signInWithPassword({ email, password });
+  if (authErr) return "That password is not right.";
+  const { error } = await sb.rpc("delete_me");
+  if (error) return error.message || "Could not delete the account just now.";
+  await sb.auth.signOut({ scope: "local" });
+  return null;
+}
+
 /** A sign-in error that Supabase put in the address after redirecting back (e.g. wrong email domain). */
 export function readAuthRedirectError(): string | null {
   if (typeof window === "undefined") return null;

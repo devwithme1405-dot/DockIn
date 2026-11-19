@@ -24,7 +24,7 @@ import { TodaySkeleton } from "@/components/Skeleton";
 import { ensureSessionsSince, getProfile, setSessionStatus, setTaskDone } from "@/lib/repo";
 import { useEvents, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { holidayLastDay, holidayOn, useAttendanceData, type ViewSession } from "@/lib/college";
-import { CamuStatus } from "@/components/College";
+import { CamuStatus, ConnectCamu } from "@/components/College";
 import { eventsOn, holidayLength } from "@/lib/calendar";
 import { bucketOf, compareTasks, countdownText, daysBetween, doneToday, dueLabel } from "@/lib/tasks";
 import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
@@ -52,7 +52,7 @@ export default function TodayPage() {
   const [bell, setBell] = useState(false);
   const target = profile?.target ?? 75;
 
-  const { data, camu } = useAttendanceData(target);
+  const { data, camu, native } = useAttendanceData(target);
   const slots = useSlots();
   const tasks = useTasks();
   const events = useEvents();
@@ -186,6 +186,11 @@ export default function TodayPage() {
 
       <AttendanceCard overall={data.overall} trend={trend} target={target} />
       {camu && <CamuStatus camu={camu} className="mt-3.5" />}
+      {!camu && native && (
+        <div className="mt-4 px-5">
+          <ConnectCamu />
+        </div>
+      )}
 
       {/* Two by two: the day's facts, each a tap into its screen. */}
       <div className="mt-6 grid grid-cols-2 gap-3 px-5">

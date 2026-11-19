@@ -25,6 +25,7 @@ import {
   School,
   ShieldCheck,
   Sun,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -60,7 +61,7 @@ import { disconnect, useAttendanceData, useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
-import { accountName, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
+import { accountName, deleteAccount, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 import { clearSyncState, flushNow, getSyncStatus, resetSyncStatus, subscribeSync } from "@/lib/sync";
 import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
@@ -72,6 +73,7 @@ type SheetName =
   | "signin"
   | "password"
   | "logout"
+  | "delete"
   | "appearance"
   | "phone"
   | "college"
@@ -119,6 +121,8 @@ export default function ProfilePage() {
   const [backup, setBackup] = useState<BackupCheck>("idle");
   const [busy, setBusy] = useState(false);
   const [shareAttendance, setShareAttendanceLocal] = useState<boolean | null>(null);
+  const [delPass, setDelPass] = useState("");
+  const [delErr, setDelErr] = useState<string | null>(null);
 
   const signedInNow = !!session;
   useEffect(() => {
@@ -226,12 +230,10 @@ export default function ProfilePage() {
     }
   }
 
-  async function leave() {
-    setBusy(true);
-    if (session) await signOutCloud();
-    // Logging out must wipe Camu and the LMS from the phone too, or the next
-    // person to sign in on this phone inherits your college sign-in and sees
-    // your attendance. Each account connects its own.
+  // Everything that returns this phone to a blank slate: the college sign-ins
+  // (so the next person to use this phone inherits nothing), the local data, and
+  // the theme. Shared by logging out and by deleting the account.
+  async function wipeDevice() {
     if (isNativeApp()) {
       await disconnect("camu").catch(() => {});
       await disconnect("lms").catch(() => {});
@@ -245,6 +247,25 @@ export default function ProfilePage() {
     } catch {}
     applyTheme("system");
     router.replace("/onboarding");
+  }
+
+  async function leave() {
+    setBusy(true);
+    if (session) await signOutCloud();
+    await wipeDevice();
+  }
+
+  async function removeAccount() {
+    setDelErr(null);
+    setBusy(true);
+    const err = await deleteAccount(delPass);
+    if (err) {
+      setDelErr(err);
+      setBusy(false);
+      return;
+    }
+    setDelPass("");
+    await wipeDevice();
   }
 
   // ---------- derived ----------
@@ -374,6 +395,19 @@ export default function ProfilePage() {
         >
           <LogOut size={19} /> Log out
         </button>
+
+        {signedIn && (
+          <button
+            onClick={() => {
+              setDelPass("");
+              setDelErr(null);
+              setSheet("delete");
+            }}
+            className="mt-1 flex h-11 w-full items-center justify-center gap-2 text-[14px] font-semibold text-muted active:text-danger"
+          >
+            <Trash2 size={17} /> Delete account permanently
+          </button>
+        )}
 
         <p className="pb-2 text-center text-[12px] text-muted">DockIn · made for students</p>
       </div>
@@ -595,6 +629,38 @@ export default function ProfilePage() {
         )}
       </ConfirmSheet>
 
+      <Sheet open={sheet === "delete"} onClose={close} title="Delete account permanently">
+        <p className="text-[14px] leading-relaxed text-muted">
+          This erases your account and everything in it from the server — attendance, tasks and settings — and cannot
+          be undone. Camu and the LMS are disconnected on this phone, and your username frees up to be used again.
+        </p>
+        <label className="mt-4 block text-[13px] font-semibold text-muted">Enter your password to confirm</label>
+        <input
+          type="password"
+          value={delPass}
+          onChange={(e) => setDelPass(e.target.value)}
+          placeholder="Your password"
+          autoComplete="current-password"
+          className="mt-1.5 w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-4 py-3 text-[15px] outline-none focus:border-danger"
+        />
+        {delErr && (
+          <p className="mt-2 text-[13px] font-medium text-danger" aria-live="polite">
+            {delErr}
+          </p>
+        )}
+        <div className="mt-4 flex gap-2.5">
+          <button onClick={close} disabled={busy} className="btn-paper h-12 flex-1 rounded-2xl text-[15px] font-bold">
+            Cancel
+          </button>
+          <button
+            onClick={removeAccount}
+            disabled={busy || !delPass}
+            className="h-12 flex-1 rounded-2xl bg-danger text-[15px] font-bold text-white disabled:opacity-50"
+          >
+            {busy ? "Deleting…" : "Delete forever"}
+          </button>
+        </div>
+      </Sheet>
     </>
   );
 }

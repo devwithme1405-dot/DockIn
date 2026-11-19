@@ -172,10 +172,28 @@ public class CamuLoginActivity extends Activity {
             handler.postDelayed(reveal, REVEAL_AFTER_MS);
         }
 
-        CookieManager cookies = CookieManager.getInstance();
+        final CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
-        web.loadUrl(Camu.BASE + "/");
+
+        if (silent) {
+            // Renewal reuses the remembered sign-in on purpose.
+            web.loadUrl(Camu.BASE + "/");
+        } else {
+            // A fresh "Connect Camu" must be a real sign-in, never a silent reuse
+            // of whoever signed in last on this phone — otherwise a second person
+            // on the same phone lands in the first one's Camu. Clearing the
+            // webview's cookies forces Microsoft to ask who you are. Web storage is
+            // deliberately left alone: it is shared with the app's own data
+            // (IndexedDB), and wiping it would erase attendance, tasks and the rest.
+            cookies.removeAllCookies(new ValueCallback<Boolean>() {
+                @Override
+                public void onReceiveValue(Boolean value) {
+                    cookies.flush();
+                    web.loadUrl(Camu.BASE + "/");
+                }
+            });
+        }
         handler.postDelayed(poll, 2000);
     }
 

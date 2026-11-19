@@ -177,7 +177,7 @@ export default function TimetablePage() {
         </div>
       ) : (
       <>
-      {!camu && native && !hasManual ? (
+      {!camu && native ? (
         <div className="mx-5 mt-2">
           <ConnectCamu />
         </div>

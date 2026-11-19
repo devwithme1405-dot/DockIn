@@ -8,6 +8,7 @@ import { BackHeader } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
 import { useCollege, syncCollege } from "@/lib/college";
+import { ConnectCamu } from "@/components/College";
 import type { CamuMeal } from "@/lib/native";
 import type { MessDay } from "@/lib/types";
 import { toDateStr, fmtDayLong } from "@/lib/dates";
@@ -38,7 +39,7 @@ function Cloche() {
 
 export default function CafeteriaPage() {
   const profile = useLiveQuery(() => getProfile(), []);
-  const { state } = useCollege();
+  const { state, native } = useCollege();
   const today = toDateStr();
   const weekday = new Date().getDay();
   const nowHm = (() => {
@@ -148,6 +149,12 @@ export default function CafeteriaPage() {
           </div>
         </div>
       </div>
+
+      {native && !fromCamu && !state.camu?.connected && (
+        <div className="mt-4 px-5">
+          <ConnectCamu />
+        </div>
+      )}
 
       {/* today's menu */}
       <section className="lift mx-5 mt-4 rounded-3xl bg-surface p-4">
