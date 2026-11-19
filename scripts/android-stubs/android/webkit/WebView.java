@@ -7,7 +7,9 @@ public class WebView extends View {
   public void goBack() {}
   public WebSettings getSettings() { return null; }
   public void loadUrl(String url) {}
+  public void loadDataWithBaseURL(String baseUrl, String data, String mimeType, String encoding, String historyUrl) {}
   public void evaluateJavascript(String js, ValueCallback<String> cb) {}
+  public void addJavascriptInterface(Object o, String name) {}
   public void setWebViewClient(WebViewClient c) {}
   public void setWebChromeClient(WebChromeClient c) {}
   public void destroy() {}

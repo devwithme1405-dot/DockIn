@@ -38,6 +38,15 @@ export const KIND_ICON: Record<TaskKind, typeof FileText> = {
 
 // ---------- one row in a list ----------
 
+/** Common deadlines — LMS likes 11:59 PM; a custom time is one tap away. */
+const TIME_CHIPS = ["09:00", "13:00", "17:00", "20:00", "23:59"];
+
+function fmtClock(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const ap = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
+}
+
 export function TaskRow({
   task,
   subject,
@@ -399,22 +408,40 @@ export function TaskForm({
           No date
         </button>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-3">
-        <input
-          type="date"
-          value={dueDate ?? ""}
-          onChange={(e) => setDueDate(e.target.value || null)}
-          aria-label="Date"
-          className={cx(inputBase, "min-w-0")}
-        />
+      <input
+        type="date"
+        value={dueDate ?? ""}
+        onChange={(e) => setDueDate(e.target.value || null)}
+        aria-label="Date"
+        className={cx(inputBase, "mt-2 min-w-0")}
+      />
+
+      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">{isExam ? "Starts at" : "Deadline time"}</p>
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+        {[null, ...TIME_CHIPS].map((t) => (
+          <button
+            key={t ?? "none"}
+            type="button"
+            onClick={() => setDueTime(t ?? "")}
+            className={cx(
+              "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium",
+              (dueTime || null) === t ? "bg-ink text-on-ink" : "bg-surface-2",
+            )}
+          >
+            {t ? fmtClock(t) : "No time"}
+          </button>
+        ))}
+      </div>
+      <label className={cx(inputBase, "mt-2 flex min-w-0 items-center justify-between gap-3")}>
+        <span className="text-[14px] text-muted">{dueTime ? "Exact time" : "Pick any time"}</span>
         <input
           type="time"
           value={dueTime}
           onChange={(e) => setDueTime(e.target.value)}
           aria-label="Time"
-          className={cx(inputBase, "min-w-0")}
+          className="min-w-0 bg-transparent text-right text-[15px] font-semibold outline-none"
         />
-      </div>
+      </label>
       {isExam && (
         <input
           className={cx(inputBase, "mt-3")}

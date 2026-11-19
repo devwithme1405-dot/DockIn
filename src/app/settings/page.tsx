@@ -13,7 +13,6 @@ import {
   EyeOff,
   GraduationCap,
   IdCard,
-  IndianRupee,
   Info,
   KeyRound,
   LogOut,
@@ -337,7 +336,6 @@ export default function ProfilePage() {
             <DetailRow icon={Building2} label="Section" value={profile.section} onAdd={openDetails} />
             <DetailRow icon={GraduationCap} label="Year" value={profile.year ? `${ordinal(profile.year)} year` : undefined} onAdd={openDetails} />
             {signedIn && <DetailRow icon={Mail} label="Email" value={accountName(session.user.email)} />}
-            <DetailRow icon={IndianRupee} label="UPI ID" value={profile.upi} onAdd={openDetails} />
           </ul>
           {profile.bio && <p className="border-t border-line py-3 text-[14px] text-muted">{profile.bio}</p>}
         </section>

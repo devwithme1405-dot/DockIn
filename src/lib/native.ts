@@ -142,6 +142,10 @@ interface DockInPlugin {
   /** Quietly renew an expired Camu session, showing the page only if a tap is needed. */
   renewCamu(): Promise<CollegeState>;
   connectLms(options: { username: string; password: string }): Promise<CollegeState>;
+  /** Open Camu, signed in, at a path, with a note in the top bar. */
+  openCamu(options: { path?: string; note?: string }): Promise<void>;
+  /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */
+  camuCaptured(): Promise<{ items: string }>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;

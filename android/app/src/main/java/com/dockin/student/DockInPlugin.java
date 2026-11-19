@@ -5,6 +5,8 @@ import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.webkit.CookieManager;
+import android.webkit.WebStorage;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -324,6 +326,35 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /** Opens Camu, signed in, at a path (the leave / gate-pass form), with a note on top. */
+    @PluginMethod
+    public void openCamu(PluginCall call) {
+        if (!Camu.connected(getContext())) {
+            call.reject("Connect Camu first.");
+            return;
+        }
+        Intent i = new Intent(getContext(), CamuLoginActivity.class)
+                .putExtra(CamuLoginActivity.EXTRA_BROWSE, true)
+                .putExtra(CamuLoginActivity.EXTRA_PATH, call.getString("path", "/"))
+                .putExtra(CamuLoginActivity.EXTRA_NOTE, call.getString("note", ""));
+        try {
+            getActivity().startActivity(i);
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("Could not open Camu.");
+        }
+    }
+
+    /** What the Camu page sent while open in DockIn (see CamuLoginActivity.CAPTURE). */
+    @PluginMethod
+    public void camuCaptured(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("items", getContext()
+                .getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE)
+                .getString("items", "[]"));
+        call.resolve(out);
+    }
+
     @PluginMethod
     public void connectLms(final PluginCall call) {
         final String user = call.getString("username");
@@ -358,6 +389,11 @@ public class DockInPlugin extends Plugin {
         if ("camu".equals(which)) {
             Camu.forget(c);
             College.clear(c, "camu");
+            // Forget who was signed in, too (Microsoft + Camu cookies and Camu's saved
+            // state), so the next person on this phone is asked to sign in.
+            CookieManager.getInstance().removeAllCookies(null);
+            CookieManager.getInstance().flush();
+            WebStorage.getInstance().deleteOrigin(Camu.BASE);
         } else if ("lms".equals(which)) {
             Lms.forget(c);
             College.clear(c, "lms");

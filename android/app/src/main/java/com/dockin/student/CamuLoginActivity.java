@@ -12,10 +12,13 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.content.SharedPreferences;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
+import android.webkit.WebStorage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -54,6 +57,16 @@ public class CamuLoginActivity extends Activity {
 
     /** Renew quietly: keep the page hidden behind "Reconnecting…", reveal only if a tap is needed. */
     static final String EXTRA_SILENT = "silent";
+    /**
+     * Just open Camu (signed in) at a path, for things DockIn cannot do itself yet —
+     * the leave / gate-pass form. Nothing is wiped and nothing is checked; the bar
+     * shows {@link #EXTRA_NOTE} (what to fill in). Requests the page sends while
+     * open are noted (see {@link #CAPTURE}) so DockIn can learn Camu's forms.
+     */
+    static final String EXTRA_BROWSE = "browse";
+    static final String EXTRA_PATH = "path";
+    static final String EXTRA_NOTE = "note";
+    static final String PREFS_CAPTURE = "dockin_camu_capture";
     /** How long to let the remembered sign-in finish before showing the page. */
     private static final long REVEAL_AFTER_MS = 12_000;
 
@@ -67,16 +80,77 @@ public class CamuLoginActivity extends Activity {
                     + "AcYr:p.AcYr,CmProgID:p._id||p.CmProgID,StuID:p.StuID,isFE:!!p.isFE,name:n,sem:p.SemName||''});"
                     + "}catch(e){return ''}})()";
 
+    /** Empties Camu's localStorage, sessionStorage and IndexedDB for its origin. */
+    private static final String WIPE =
+            "(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}"
+                    + "try{if(indexedDB&&indexedDB.databases){indexedDB.databases().then(function(d){"
+                    + "d.forEach(function(x){if(x&&x.name)indexedDB.deleteDatabase(x.name);});});}}catch(e){}"
+                    + "return 'ok';})()";
+
+    /**
+     * Notes every non-GET request the Camu page sends (url, body, status, a slice of
+     * the answer) so the leave / gate-pass submit can later be replayed from DockIn.
+     * Files are recorded by name and size only, never their contents.
+     */
+    private static final String CAPTURE =
+            "(function(){if(window.__dockinCap)return;window.__dockinCap=1;"
+                    + "function body(b){try{if(!b)return '';if(typeof b==='string')return b.slice(0,6000);"
+                    + "if(b instanceof FormData){var o={};b.forEach(function(v,k){o[k]=(v&&v.name!==undefined&&v.size!==undefined)"
+                    + "?{file:v.name,type:v.type,size:v.size}:String(v).slice(0,2000);});return JSON.stringify({formData:o});}"
+                    + "return String(b).slice(0,2000);}catch(e){return '?'}}"
+                    + "function note(m,u,b,st,r){try{DockInCapture.note(JSON.stringify({at:Date.now(),page:location.pathname+location.hash,"
+                    + "method:m,url:String(u),body:body(b),status:st,answer:String(r||'').slice(0,3000)}));}catch(e){}}"
+                    + "var O=XMLHttpRequest.prototype.open,S=XMLHttpRequest.prototype.send;"
+                    + "XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return O.apply(this,arguments);};"
+                    + "XMLHttpRequest.prototype.send=function(b){var x=this;if(x.__m&&String(x.__m).toUpperCase()!=='GET'){"
+                    + "x.addEventListener('loadend',function(){var r='';try{r=x.responseType===''||x.responseType==='text'?x.responseText:'';}catch(e){}"
+                    + "note(x.__m,x.__u,b,x.status,r);});}return S.apply(this,arguments);};"
+                    + "if(window.fetch){var F=window.fetch;window.fetch=function(i,o){var m=(o&&o.method)||'GET';var p=F.apply(this,arguments);"
+                    + "if(String(m).toUpperCase()!=='GET'){p.then(function(res){res.clone().text().then(function(t){note(m,res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
+                    + "return p;};}})()";
+
+    /** Receives what {@link #CAPTURE} notes; keeps the last 25. */
+    static final class Capture {
+        private final android.content.Context app;
+
+        Capture(android.content.Context app) {
+            this.app = app;
+        }
+
+        @JavascriptInterface
+        public void note(String json) {
+            SharedPreferences p = app.getSharedPreferences(PREFS_CAPTURE, MODE_PRIVATE);
+            JSONArray list;
+            try {
+                list = new JSONArray(p.getString("items", "[]"));
+            } catch (JSONException e) {
+                list = new JSONArray();
+            }
+            try {
+                list.put(new JSONObject(json));
+            } catch (JSONException e) {
+                return;
+            }
+            JSONArray keep = new JSONArray();
+            for (int i = Math.max(0, list.length() - 25); i < list.length(); i++) keep.put(list.opt(i));
+            p.edit().putString("items", keep.toString()).apply();
+        }
+    }
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<WebView> popups = new ArrayList<>();
     private FrameLayout root;
     private WebView web;
     private TextView note;
+    private TextView close;
     private View cover;
     private boolean silent = false;
+    private boolean browse = false;
     private boolean revealed = false;
     private boolean done = false;
     private boolean checking = false;
+    /** True while the last person's Camu state is being wiped; no sign-in checks then. */
+    private boolean wiping = false;
 
     private final Runnable poll = new Runnable() {
         @Override
@@ -104,6 +178,7 @@ public class CamuLoginActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         silent = getIntent() != null && getIntent().getBooleanExtra(EXTRA_SILENT, false);
+        browse = getIntent() != null && getIntent().getBooleanExtra(EXTRA_BROWSE, false);
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
@@ -132,7 +207,7 @@ public class CamuLoginActivity extends Activity {
         words.addView(note);
         bar.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView close = new TextView(this);
+        close = new TextView(this);
         close.setText("Cancel");
         close.setTextColor(Color.WHITE);
         close.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
@@ -176,21 +251,37 @@ public class CamuLoginActivity extends Activity {
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
 
+        if (browse) {
+            title.setText("Camu");
+            String n = getIntent().getStringExtra(EXTRA_NOTE);
+            note.setText(n == null || n.isEmpty() ? "Signed in as you." : n);
+            close.setText("Done");
+            web.addJavascriptInterface(new Capture(getApplicationContext()), "DockInCapture");
+            String path = getIntent().getStringExtra(EXTRA_PATH);
+            web.loadUrl(Camu.BASE + (path == null || path.isEmpty() ? "/" : path));
+            return;
+        }
         if (silent) {
             // Renewal reuses the remembered sign-in on purpose.
             web.loadUrl(Camu.BASE + "/");
         } else {
-            // A fresh "Connect Camu" must be a real sign-in, never a silent reuse
-            // of whoever signed in last on this phone — otherwise a second person
-            // on the same phone lands in the first one's Camu. Clearing the
-            // webview's cookies forces Microsoft to ask who you are. Web storage is
-            // deliberately left alone: it is shared with the app's own data
-            // (IndexedDB), and wiping it would erase attendance, tasks and the rest.
+            // A fresh "Connect Camu" must be a real sign-in, never a reuse of whoever
+            // signed in last on this phone. Two things remember that person: the
+            // cookies (Microsoft + Camu) and Camu's own saved state in its
+            // localStorage ("persist:root", which holds their student ids — the very
+            // thing check() reads). Clearing only the cookies left the ids behind, so
+            // the next person was "signed in" as the last one. Wipe both, for Camu's
+            // origin only: the app's own data lives on a different origin and stays.
+            wiping = true;
+            WebStorage.getInstance().deleteOrigin(Camu.BASE);
             cookies.removeAllCookies(new ValueCallback<Boolean>() {
                 @Override
                 public void onReceiveValue(Boolean value) {
                     cookies.flush();
-                    web.loadUrl(Camu.BASE + "/");
+                    // A blank page that carries Camu's origin, so its storage can be
+                    // cleared without Camu's own scripts running and re-saving it.
+                    web.loadDataWithBaseURL(Camu.BASE + "/", "<html><body></body></html>",
+                            "text/html", "utf-8", null);
                 }
             });
         }
@@ -237,7 +328,16 @@ public class CamuLoginActivity extends Activity {
         w.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                if (view == web) check();
+                if (view != web) return;
+                if (browse) {
+                    view.evaluateJavascript(CAPTURE, null);
+                    return;
+                }
+                if (wiping) {
+                    wipeCamuStorage();
+                    return;
+                }
+                check();
             }
         });
         w.setWebChromeClient(new WebChromeClient() {
@@ -270,9 +370,27 @@ public class CamuLoginActivity extends Activity {
         w.destroy();
     }
 
+    /** Clears Camu's saved state on the blank Camu-origin page, then opens the real sign-in. */
+    private void wipeCamuStorage() {
+        web.evaluateJavascript(WIPE, new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                final CookieManager cookies = CookieManager.getInstance();
+                cookies.removeAllCookies(new ValueCallback<Boolean>() {
+                    @Override
+                    public void onReceiveValue(Boolean v) {
+                        cookies.flush();
+                        wiping = false;
+                        web.loadUrl(Camu.BASE + "/");
+                    }
+                });
+            }
+        });
+    }
+
     /** Signed in yet? Camu writes the student's ids to its saved state once it has let them in. */
     private void check() {
-        if (done || checking || web == null) return;
+        if (done || checking || wiping || web == null) return;
         web.evaluateJavascript(READ_IDS, new ValueCallback<String>() {
             @Override
             public void onReceiveValue(String value) {
@@ -348,7 +466,7 @@ public class CamuLoginActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacks(poll);
         handler.removeCallbacks(reveal);
-        if (!done) DockInPlugin.camuFinished(false, null);
+        if (!done && !browse) DockInPlugin.camuFinished(false, null);
         for (WebView w : new ArrayList<>(popups)) closePopup(w);
         if (web != null) {
             web.destroy();

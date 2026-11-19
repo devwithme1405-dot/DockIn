@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatIf } from "@/components/WhatIf";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { BackHeader } from "@/components/PageHeader";
@@ -178,6 +179,13 @@ export default function SubjectPage() {
               <Stat label="Total" value={summary.total} tone="text-text" />
             </dl>
           </section>
+
+          {summary.total > 0 && (
+            <WhatIf
+              target={target}
+              options={[{ id: subject.id, label: subject.name, attended: summary.attended, total: summary.total }]}
+            />
+          )}
 
           <section className="lift rounded-3xl bg-surface p-4">
             <h2 className="mb-3 text-[15px] font-semibold">Mark today&apos;s class</h2>

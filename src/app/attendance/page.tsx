@@ -10,6 +10,7 @@ import { getProfile, saveProfile } from "@/lib/repo";
 import { useEvents, useSessionsOn } from "@/lib/hooks";
 import { classesOn, holidayLastDay, holidayOn, useAttendanceData } from "@/lib/college";
 import { monthKey } from "@/lib/money";
+import { WhatIf } from "@/components/WhatIf";
 import { CamuStatus, ConnectCamu } from "@/components/College";
 import { CamuHistorySheet } from "@/components/CamuHistory";
 import { AttendanceLog } from "@/components/AttendanceViews";
@@ -243,6 +244,24 @@ export default function AttendancePage() {
               <b className={cx("font-extrabold tnum", bunk.pct >= target ? "text-safe" : "text-warn")}>{fmtPct(bunk.pct)}</b>
               {bunk.pct >= target ? " — still above target." : ` — below your ${target}%.`}
             </p>
+          )}
+
+          {overall.state !== "none" && (
+            <WhatIf
+              className="mx-5 mt-4"
+              target={target}
+              options={[
+                { id: "all", label: "Overall", attended: overall.attended, total: overall.total },
+                ...stats
+                  .filter((s) => s.summary.total > 0)
+                  .map((s) => ({
+                    id: s.subject.id,
+                    label: s.subject.code || s.subject.name,
+                    attended: s.summary.attended,
+                    total: s.summary.total,
+                  })),
+              ]}
+            />
           )}
 
           {(onHoliday || coming) && (

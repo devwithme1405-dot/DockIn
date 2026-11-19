@@ -186,6 +186,7 @@ const SCREENS = [
   { path: "/tasks", name: "tasks", expect: "To do" },
   { path: "/settings", name: "profile", expect: "Appearance" },
   { path: "/cafeteria", name: "cafeteria", expect: "Mess Pass" },
+  { path: "/leave", name: "leave", expect: "Tell DockIn what you need" },
   { path: "/attendance/s1", name: "subject", expect: "Data Structures" },
   { path: "/app", name: "get-the-app", expect: "Put DockIn on your phone" },
   { path: "/privacy", name: "privacy", expect: "" },
@@ -305,6 +306,25 @@ async function step(name, fn) {
   }
   console.log(`${problems.length === before ? "ok  " : "FAIL"} ${name}`);
 }
+
+await step("plain words fill the outpass form", async () => {
+  await page.goto(`${BASE}/leave`, { waitUntil: "networkidle" });
+  await page.locator("button", { hasText: "2:40pm-7pm day outpass" }).first().click();
+  await page.getByText("Check before applying").waitFor({ timeout: 3000 });
+  const from = await page.getByLabel("From time").inputValue();
+  const to = await page.getByLabel("To time").inputValue();
+  if (from !== "14:40" || to !== "19:00") throw new Error(`times came out ${from} to ${to}`);
+  await page.screenshot({ path: `${SHOTS}/leave-filled.png`, fullPage: true });
+});
+
+await step("a task takes a deadline time", async () => {
+  await page.goto(`${BASE}/tasks?new=1`, { waitUntil: "networkidle" });
+  await page.getByText("Deadline time").waitFor({ timeout: 3000 });
+  await page.locator("button", { hasText: "8:00 PM" }).first().click();
+  if ((await page.getByLabel("Time").inputValue()) !== "20:00") throw new Error("8:00 PM chip did not set the time");
+  await page.screenshot({ path: `${SHOTS}/task-time.png` });
+  await page.keyboard.press("Escape");
+});
 
 await step("ticking a task keeps it in place", async () => {
   await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
