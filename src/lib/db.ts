@@ -57,6 +57,8 @@ export class DockinDB extends Dexie {
   seenBy!: Table<{ id: string; thread: string; userId: string; readAt: number }, string>;
   /** Chat documents already downloaded once, so they reopen offline. */
   fileCache!: Table<{ path: string; blob: Blob; at: number }, string>;
+  /** What was handed in to the practice LMS (lib/practiceLms.ts), newest per assignment. */
+  practiceSubs!: Table<{ instance: number; name: string; blob: Blob; size: number; at: number; status: "submitted" | "draft" }, number>;
   /** Shared tasks already taken into my list (one per origin), so a task sent
    *  twice, or to a group and to me directly, lands once. */
   taskOrigins!: Table<{ key: string; taskId: string; at: number }, string>;
@@ -130,6 +132,9 @@ export class DockinDB extends Dexie {
     });
     this.version(17).stores({
       friendStats: "userId",
+    });
+    this.version(18).stores({
+      practiceSubs: "instance",
     });
   }
 }

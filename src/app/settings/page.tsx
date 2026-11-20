@@ -11,6 +11,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FlaskConical,
   GraduationCap,
   IdCard,
   Info,
@@ -59,6 +60,8 @@ import { PhoneSetup, phoneChecklist, usePhoneStatus } from "@/components/PhoneSe
 import { ConnectCamu, ConnectLms } from "@/components/College";
 import { disconnect, useAttendanceData, useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
+import { usePracticeOn } from "@/lib/practiceLms";
+import { PracticeLmsPanel } from "@/components/PracticeLms";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { accountName, deleteAccount, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
@@ -81,6 +84,7 @@ type SheetName =
   | "college"
   | "backup"
   | "about"
+  | "practice"
   | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
 
@@ -99,6 +103,7 @@ export default function ProfilePage() {
   const tasks = useTasks();
 
   const [sheet, setSheet] = useState<SheetName>(null);
+  const practiceOn = usePracticeOn();
   const phone = usePhoneStatus();
   const checks = phone.status ? phoneChecklist(phone.status) : [];
   const phoneOff = checks.filter((c) => !c.on).length;
@@ -383,6 +388,12 @@ export default function ProfilePage() {
           {phone.native && (
             <MenuRow icon={School} title="College accounts" sub="Camu and the LMS" onClick={() => setSheet("college")} />
           )}
+          <MenuRow
+            icon={FlaskConical}
+            title="Practice LMS"
+            sub={practiceOn ? "On — test solutions safely" : "Test assignment solutions without the real LMS"}
+            onClick={() => setSheet("practice")}
+          />
           {configured && (
             <MenuRow
               icon={Cloud}
@@ -467,6 +478,10 @@ export default function ProfilePage() {
 
       <Sheet open={sheet === "phone"} onClose={closePhone} title="Phone permissions">
         <PhoneSetup bare />
+      </Sheet>
+
+      <Sheet open={sheet === "practice"} onClose={close} title="Practice LMS">
+        <PracticeLmsPanel />
       </Sheet>
 
       <Sheet open={sheet === "college"} onClose={close} title="College accounts">

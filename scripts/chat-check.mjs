@@ -35,6 +35,7 @@ const messages = [
   { id: "m4", thread: `g:${G}`, author: YASH, body: "Thanks Riya 🙏", kind: "text", data: null, reply_to: null, created_at: t(20), deleted_at: null },
   { id: "m5", thread: `g:${G}`, author: RIYA, body: "", kind: "poll", data: { question: "Kal DBMS class chal rahe?", options: ["Haan", "Nahi", "Proxy laga do"] }, reply_to: null, created_at: t(15), deleted_at: null },
   { id: "m7", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Assignment4_Vaibhav.pdf", size: 61000, type: "application/pdf", path: "g/sol/Assignment4_Vaibhav.pdf", solution: { instance: 41, title: "DBMS Assignment 4", course: "Database Management Systems", dueDate: new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10), dueTime: "23:59", authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(10), deleted_at: null },
+  { id: "m8", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: 900101, title: "DBMS Assignment 4 (practice)", course: "Database Management Systems", dueDate: null, dueTime: null, authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(5), deleted_at: null },
   { id: "m6", thread: dm, author: YASH, body: "", kind: "file", data: { name: "DBMS_Lab7_question.pdf", size: 182000, type: "application/pdf", path: "x/y/DBMS_Lab7_question.pdf" }, reply_to: null, created_at: t(40), deleted_at: null },
 ];
 const votes = [{ message_id: "m5", user_id: YASH, choice: 0 }];
@@ -474,11 +475,11 @@ await step("Back from a chat returns to the list", async () => {
 await step("a friend's solution: card, my name in, animation, check", async () => {
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
-  await chat.getByText("Assignment solution").waitFor({ timeout: 4000 });
-  await chat.getByText("You haven't submitted yet").waitFor({ timeout: 3000 });
+  await chat.getByText("Assignment solution").first().waitFor({ timeout: 4000 });
+  await chat.getByText("You haven't submitted yet").first().waitFor({ timeout: 3000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/solution-card.png` });
-  await chat.getByRole("button", { name: /Edit & submit/ }).click();
+  await chat.getByRole("button", { name: /Edit & submit/ }).first().click();
   const studio = page.getByRole("dialog", { name: "Make my copy" });
   await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
   await studio.getByText("Vaibhav Sharma", { exact: true }).waitFor({ timeout: 2000 });
@@ -499,7 +500,7 @@ await step("a friend's solution: card, my name in, animation, check", async () =
   await page.waitForTimeout(300);
   if (await page.getByRole("dialog", { name: /Check your copy|Make my copy/ }).count()) throw new Error("studio did not close");
   // Asked once: the enrollment is remembered for next time.
-  await chat.getByRole("button", { name: /Edit & submit/ }).click();
+  await chat.getByRole("button", { name: /Edit & submit/ }).first().click();
   await page.getByRole("dialog", { name: "Make my copy" }).getByText("Names in the file").waitFor({ timeout: 10000 });
   const roll = await page.getByPlaceholder("Your enrollment no.").inputValue();
   if (roll !== "E23CSEU0155") throw new Error(`enrollment not remembered: "${roll}"`);
@@ -526,6 +527,36 @@ await step("sending a PDF asks: just a file, or a solution for which assignment"
   await page.screenshot({ path: `${SHOTS}/solution-sent.png` });
   await page.goBack();
   await page.waitForTimeout(400);
+});
+
+await step("Practice LMS: switch on, submit a friend's solution, see the file", async () => {
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Practice LMS/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Practice LMS" });
+  await sheet.getByRole("button", { name: /Practice LMS\s*Off/ }).click();
+  await sheet.getByText("DBMS Assignment 4 (practice)").waitFor({ timeout: 4000 });
+  await page.screenshot({ path: `${SHOTS}/practice-on.png` });
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /CSE E1/ }).first().click();
+  const chat = page.getByRole("dialog").first();
+  const card = chat.locator("div", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Edit & submit" }).last();
+  await card.getByText("You haven't submitted yet").waitFor({ timeout: 4000 });
+  await card.getByRole("button", { name: /Edit & submit/ }).click();
+  const studio = page.getByRole("dialog", { name: "Make my copy" });
+  await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
+  await studio.getByRole("button", { name: /Make my copy/ }).click();
+  const check = page.getByRole("dialog", { name: "Check your copy" });
+  await check.getByText("Practice LMS — this stays on your phone").waitFor({ timeout: 15000 });
+  await check.getByRole("button", { name: /Submit to Practice LMS/ }).click();
+  const done = page.getByRole("dialog", { name: "Submitted" });
+  await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });
+  await page.screenshot({ path: `${SHOTS}/practice-done.png` });
+  await done.getByRole("button", { name: "Done" }).click();
+  await card.getByText("You've submitted this").waitFor({ timeout: 4000 });
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /Practice LMS/ }).click();
+  await page.getByRole("dialog", { name: "Practice LMS" }).getByText("Solution_Practice.pdf").waitFor({ timeout: 4000 });
+  await page.screenshot({ path: `${SHOTS}/practice-kept.png` });
 });
 
 await browser.close();

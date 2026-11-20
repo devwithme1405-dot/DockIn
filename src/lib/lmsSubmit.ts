@@ -1,5 +1,6 @@
 import { DockIn, isNativeApp } from "./native";
 import { mimeOf, toBase64 } from "./files";
+import { isPractice, practiceSubmit } from "./practiceLms";
 
 export class WebOnlyLms extends Error {
   constructor() {
@@ -28,6 +29,13 @@ export class DraftOnly extends Error {
  * builds, which upload fine but cannot ask the LMS afterwards.
  */
 export async function submitToLms(instance: number, blob: Blob, name: string): Promise<{ checked: boolean }> {
+  // The practice LMS never leaves the phone (and works in a browser too).
+  if (isPractice(instance)) {
+    const status = await practiceSubmit(instance, blob, name);
+    if (status === "webonly") throw new WebOnlyLms();
+    if (status === "draft") throw new DraftOnly();
+    return { checked: true };
+  }
   if (!isNativeApp()) throw new Error("Submitting works in the DockIn app.");
   let res: { status?: string } | void;
   try {

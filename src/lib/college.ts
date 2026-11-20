@@ -10,6 +10,7 @@
  * marked by hand, so a number on screen is always the number the college has.
  */
 
+import { isPracticeTask } from "./practiceLms";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { db } from "./db";
 import { addDays, toDateStr, weekdayOf } from "./dates";
@@ -546,7 +547,8 @@ export async function importLms(state: CollegeState, nowMs = Date.now()): Promis
   // Gone from the to-do list while its deadline is still inside the window the
   // phone asks about: Moodle removes an item once it is submitted.
   const window = nowMs - 13 * 24 * 3600 * 1000;
-  const mine = await db.tasks.filter((x) => x.id.startsWith("lms-") && !x.deletedAt && !x.done).toArray();
+  // The practice LMS's assignments are never on the real to-do list: leave them be.
+  const mine = await db.tasks.filter((x) => x.id.startsWith("lms-") && !isPracticeTask(x.id) && !x.deletedAt && !x.done).toArray();
   for (const task of mine) {
     if (live.has(task.id)) continue;
     const due = task.dueDate ? new Date(`${task.dueDate}T${task.dueTime ?? "23:59"}`).getTime() : 0;

@@ -12,6 +12,7 @@ import {
   Download,
   ExternalLink,
   Eye,
+  FlaskConical,
   FileText,
   GraduationCap,
   Loader2,
@@ -33,6 +34,7 @@ import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { DraftOnly, WebOnlyLms, submitToLms } from "@/lib/lmsSubmit";
 import { useBackClose } from "@/lib/backClose";
+import { isPractice } from "@/lib/practiceLms";
 import {
   SOLUTION_MAX,
   SolutionError,
@@ -591,7 +593,8 @@ export function CopyStudio({
   const theirHits = swapping && solution ? hits(info!.text, solution.authorName) + hits(info!.text, solution.authorRoll) : 0;
   const needName = swapping && !!solution?.authorName && hits(info!.text, solution.authorName) > 0 && me.name.trim().length < 2;
   const needRoll = swapping && !!solution?.authorRoll && hits(info!.text, solution.authorRoll) > 0 && me.roll.trim().length < 2;
-  const canSubmit = isNativeApp() && !!state.lms?.connected && instance !== null;
+  const practice = isPractice(instance);
+  const canSubmit = instance !== null && (practice || (isNativeApp() && !!state.lms?.connected));
 
   async function make() {
     if (!src || needName || needRoll) return;
@@ -821,7 +824,7 @@ export function CopyStudio({
 
         {phase === "sending" && <Sending title={task?.title ?? ""} />}
 
-        {phase === "done" && <Done title={task?.title ?? ""} checked={checked} />}
+        {phase === "done" && <Done title={task?.title ?? ""} checked={checked} practice={practice} />}
 
         {phase === "failed" && fail && (
           <div className="anim-pop pt-8 text-center">
@@ -852,9 +855,16 @@ export function CopyStudio({
           {phase === "preview" && copy && (
             <div className="space-y-2">
               {canSubmit ? (
-                <button onClick={() => void submit()} className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px]">
-                  <Send size={18} /> Submit to LMS
-                </button>
+                <>
+                  {practice && (
+                    <p className="flex items-center justify-center gap-1.5 text-[12px] font-bold text-mess">
+                      <FlaskConical size={13} /> Practice LMS — this stays on your phone
+                    </p>
+                  )}
+                  <button onClick={() => void submit()} className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px]">
+                    <Send size={18} /> {practice ? "Submit to Practice LMS" : "Submit to LMS"}
+                  </button>
+                </>
               ) : (
                 <p className="rounded-2xl bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-snug text-muted">
                   {!isNativeApp()
@@ -1206,7 +1216,7 @@ function Sending({ title }: { title: string }) {
   );
 }
 
-function Done({ title, checked }: { title: string; checked: boolean }) {
+function Done({ title, checked, practice }: { title: string; checked: boolean; practice: boolean }) {
   return (
     <div className="flex flex-col items-center pt-14 text-center">
       <div className="relative">
@@ -1218,11 +1228,12 @@ function Done({ title, checked }: { title: string; checked: boolean }) {
           <span key={k} className="studio-burst absolute top-1/2 left-1/2 size-2 rounded-full" style={{ "--a": `${k * 60}deg`, background: k % 2 ? "#e07a2c" : "#2fa36b" } as CSSProperties} />
         ))}
       </div>
-      <p className="mt-7 text-[24px] font-extrabold [animation:rise-quick_400ms_200ms_ease-out_both]">Submitted to LMS</p>
+      <p className="mt-7 text-[24px] font-extrabold [animation:rise-quick_400ms_200ms_ease-out_both]">{practice ? "Submitted to Practice LMS" : "Submitted to LMS"}</p>
       <p className="mt-1.5 max-w-[19rem] text-[14px] text-muted [animation:rise-quick_400ms_300ms_ease-out_both]">{title}</p>
       <p className="mt-4 rounded-full bg-safe/12 px-3 py-1 text-[12px] font-bold text-safe [animation:rise-quick_400ms_420ms_ease-out_both]">
-        {checked ? "The LMS confirmed it's handed in" : "Uploaded and handed in"}
+        {practice ? "Practice — nothing went to the real LMS" : checked ? "The LMS confirmed it's handed in" : "Uploaded and handed in"}
       </p>
+      {practice && <p className="mt-2 max-w-[18rem] text-[12px] text-muted">Open the handed-in file in Settings → Practice LMS to check the name.</p>}
     </div>
   );
 }
