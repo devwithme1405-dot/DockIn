@@ -188,7 +188,7 @@ export function InkBar({
   return (
     <div className={cx("groove relative h-2.5 w-full overflow-hidden rounded-full", className)}>
       <div
-        className="h-full rounded-full transition-[width] duration-700 ease-out"
+        className="fill-grow h-full rounded-full transition-[width] duration-700 ease-out"
         style={{
           width: `${w}%`,
           backgroundImage: BAR[state],
@@ -263,7 +263,8 @@ export function InkRing({
           strokeDasharray={c}
           strokeDashoffset={c * (1 - value / 100)}
           transform={`rotate(-90 ${mid} ${mid})`}
-          style={{ filter: "drop-shadow(0 1.5px 1.5px rgb(60 20 140 / 35%))" }}
+          className="ring-draw"
+          style={{ filter: "drop-shadow(0 1.5px 1.5px rgb(90 35 8 / 35%))", "--ring-c": c } as React.CSSProperties}
         />
         {tick !== null && (
           <line

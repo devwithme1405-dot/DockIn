@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 };
 
 // Runs before first paint so the page never flashes the wrong theme.
-const themeScript = `(function(){try{if(window.androidBridge||(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()))document.documentElement.classList.add('in-app');}catch(e){}try{var n=navigator,m=n.deviceMemory,c=n.hardwareConcurrency;if(localStorage.getItem('dockin-lite')==='1'||(m&&m<=3)||(c&&c<=4))document.documentElement.classList.add('lite');}catch(e){}try{var p=localStorage.getItem('dockin-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';var z=parseFloat(localStorage.getItem('dockin-text-scale'));if(!(z>=0.7&&z<=0.95))z=0.9;document.documentElement.style.zoom=String(z);}catch(e){}})();`;
+const themeScript = `(function(){try{if(window.androidBridge||(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()))document.documentElement.classList.add('in-app');}catch(e){}try{var n=navigator,m=n.deviceMemory,c=n.hardwareConcurrency;if(m&&m>=6)localStorage.removeItem('dockin-lite');if(localStorage.getItem('dockin-lite')==='1'||(m&&m<=3)||(c&&c<=4))document.documentElement.classList.add('lite');}catch(e){}try{var p=localStorage.getItem('dockin-theme')||'system';var d=p==='dark'||(p==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';var z=parseFloat(localStorage.getItem('dockin-text-scale'));if(!(z>=0.7&&z<=0.95))z=0.9;document.documentElement.style.zoom=String(z);}catch(e){}})();`;
 
 /**
  * If a script fails to load, fix it instead of showing a dead app.

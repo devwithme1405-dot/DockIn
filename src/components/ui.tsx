@@ -257,7 +257,7 @@ export function ProgressBar({
   return (
     <div className="groove relative h-2 w-full overflow-hidden rounded-full">
       <div
-        className={cx("h-full rounded-full transition-[width] duration-500", STATE_BAR[state])}
+        className={cx("fill-grow h-full rounded-full transition-[width] duration-500", STATE_BAR[state])}
         style={{ width: `${Math.min(Math.max(pct ?? 0, 0), 100)}%` }}
       />
       <div
@@ -436,7 +436,8 @@ export function Ring({
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - value / 100)}
-          style={{ transition: "stroke-dashoffset 600ms cubic-bezier(0.2,0.8,0.2,1)" }}
+          className="ring-draw"
+          style={{ transition: "stroke-dashoffset 600ms cubic-bezier(0.2,0.8,0.2,1)", "--ring-c": c } as React.CSSProperties}
         />
       </svg>
       {tick !== null && (

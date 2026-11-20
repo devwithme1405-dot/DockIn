@@ -1015,3 +1015,53 @@ html.lite .tab-show { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .anim-check, .anim-slide, .tab-show { animation: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+   Every tab visit gets a light entrance: the cards rise in quickly (shorter
+   and closer together than the very first launch), bars fill from the left
+   and attendance rings draw round. All of it replays by itself when a tab is
+   shown, because its screen goes from hidden to visible.
+   --------------------------------------------------------------------------- */
+@keyframes rise-quick {
+  from { opacity: 0; transform: translateY(9px); }
+  to { opacity: 1; transform: none; }
+}
+html[data-navved] .stagger > * {
+  animation: rise-quick 0.34s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+html[data-navved] .stagger > *:nth-child(1) { animation-delay: 0ms; }
+html[data-navved] .stagger > *:nth-child(2) { animation-delay: 30ms; }
+html[data-navved] .stagger > *:nth-child(3) { animation-delay: 60ms; }
+html[data-navved] .stagger > *:nth-child(4) { animation-delay: 85ms; }
+html[data-navved] .stagger > *:nth-child(5) { animation-delay: 110ms; }
+html[data-navved] .stagger > *:nth-child(6) { animation-delay: 130ms; }
+html[data-navved] .stagger > *:nth-child(n + 7) { animation-delay: 150ms; }
+html[data-navved] .stagger > .no-rise,
+html[data-navved] .stagger > header {
+  animation: none;
+}
+
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.fill-grow {
+  transform-origin: left center;
+  animation: grow-x 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards;
+}
+@keyframes ring-draw {
+  from { stroke-dashoffset: var(--ring-c); }
+}
+.ring-draw { animation: ring-draw 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards; }
+
+html.lite[data-navved] .stagger > * {
+  animation-duration: 0.2s;
+  animation-delay: 0ms !important;
+}
+html.lite .fill-grow,
+html.lite .ring-draw { animation-duration: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-navved] .stagger > *,
+  .fill-grow,
+  .ring-draw { animation: none !important; }
+}

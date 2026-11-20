@@ -161,6 +161,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     if (root.classList.contains("lite")) return;
+    // A phone with 6 GB+ is never budget; a busy first sync must not mislabel it.
+    const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+    if (mem && mem >= 6) return;
     let raf = 0;
     let last = 0;
     let slow = 0;
@@ -174,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }
         last = t;
         if (frames < 90) raf = requestAnimationFrame(tick);
-        else if (slow / frames > 0.25) {
+        else if (slow / frames > 0.35) {
           root.classList.add("lite");
           try {
             localStorage.setItem("dockin-lite", "1");

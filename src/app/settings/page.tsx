@@ -297,7 +297,7 @@ export default function ProfilePage() {
     <>
       <BackHeader href="/" backLabel="Today" title="Profile" hideLargeTitle />
 
-      <div className="space-y-4 px-5 pt-1">
+      <div className="stagger space-y-4 px-5 pt-1">
         {/* identity: the picture large, on a soft lavender wash */}
         <section className="relative -mx-5 px-5 pt-2 pb-3">
           <svg
@@ -312,7 +312,7 @@ export default function ProfilePage() {
             <button
               onClick={() => setSheet("avatar")}
               aria-label="Change profile picture"
-              className="relative shrink-0 rounded-full p-[5px] shadow-[0_6px_18px_rgba(80,40,140,0.22)] transition active:scale-95"
+              className="pop-in relative shrink-0 rounded-full p-[5px] shadow-[0_6px_18px_rgba(110,50,15,0.28)] transition active:scale-95"
               style={{ background: "linear-gradient(145deg, var(--card), color-mix(in oklab, var(--accent) 22%, var(--card)))" }}
             >
               <Avatar name={profile.name} avatar={profile.avatar} size={96} />
