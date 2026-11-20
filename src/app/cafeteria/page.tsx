@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, Pencil, ScanLine, Sparkles } from "lucide-react";
+import { Bone } from "@/components/Skeleton";
+import { CalendarDays, Coffee, Cookie, Moon, Pencil, ScanLine, Soup, Sparkles, type LucideIcon } from "lucide-react";
 import { StickyBar } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
@@ -67,11 +68,15 @@ export default function CafeteriaPage() {
   // Pull the cafeteria the moment it is opened when Camu is connected but the
   // menu has not arrived yet (a fresh install, or a sync older than the feature).
   const pulled = useRef(false);
+  const [pulling, setPulling] = useState(false);
   useEffect(() => {
     if (pulled.current) return;
     if (state.camu?.connected && !caf?.meals?.length) {
       pulled.current = true;
-      void syncCollege();
+      void Promise.resolve().then(() => setPulling(true));
+      void Promise.resolve(syncCollege())
+        .catch(() => {})
+        .finally(() => setPulling(false));
     }
   }, [state.camu?.connected, caf?.meals?.length]);
 
@@ -188,7 +193,26 @@ export default function CafeteriaPage() {
         </div>
         {caf?.facility && <p className="mt-1.5 pl-[3.1rem] text-[12.5px] font-semibold text-muted">{caf.facility}</p>}
 
-        {fromCamu ? (
+        {!fromCamu && pulling ? (
+          <ul className="mt-3.5 space-y-3" role="status" aria-label="Loading the menu">
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="rounded-2xl border border-card-edge/60 p-3.5">
+                <div className="flex items-center gap-2.5">
+                  <Bone className="size-9 rounded-xl" />
+                  <span className="flex-1 space-y-1.5">
+                    <Bone className="h-4 w-1/3" />
+                    <Bone className="h-3 w-1/4" />
+                  </span>
+                </div>
+                <div className="mt-3 flex gap-1.5">
+                  <Bone className="h-8 w-24 rounded-full" />
+                  <Bone className="h-8 w-20 rounded-full" />
+                  <Bone className="h-8 w-16 rounded-full" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : fromCamu ? (
           <ul className="mt-3.5 space-y-3">
             {camuMeals.map((m, i) => (
               <CamuMealRow key={i} meal={m} active={active} index={i} />
@@ -320,38 +344,6 @@ function Corner({ className }: { className: string }) {
   );
 }
 
-/** A small picture for a dish, so the menu reads at a glance. First match wins. */
-const FOOD_ICONS: [RegExp, string][] = [
-  [/coffee/i, "☕"],
-  [/\btea\b|chai/i, "🫖"],
-  [/milk|lassi|shake/i, "🥛"],
-  [/juice|nimbu|lemonade|shikanji/i, "🧃"],
-  [/egg|omelet|omelette|bhurji/i, "🍳"],
-  [/chicken|mutton|fish|keema|biryani/i, "🍗"],
-  [/paneer|cheese/i, "🧀"],
-  [/rice|pulao|khichdi|jeera/i, "🍚"],
-  [/roti|chapati|chapatti|naan|paratha|parantha|kulcha|puri|poori|bhatura|phulka/i, "🫓"],
-  [/dal|daal|rajma|chana|chole|sambar|kadhi/i, "🥣"],
-  [/salad|sprout/i, "🥗"],
-  [/curd|dahi|raita|yogurt/i, "🥛"],
-  [/bread|toast|sandwich|bun|pav/i, "🥪"],
-  [/pasta|macaroni|noodle|chowmein|maggi/i, "🍝"],
-  [/pizza/i, "🍕"],
-  [/burger/i, "🍔"],
-  [/samosa|pakora|pakoda|kachori|vada|cutlet|tikki/i, "🥟"],
-  [/poha|upma|idli|dosa|uttapam|muri|bhel|chaat/i, "🍛"],
-  [/soup/i, "🍜"],
-  [/banana/i, "🍌"],
-  [/fruit|apple|papaya|watermelon|melon/i, "🍎"],
-  [/ice ?cream|kulfi/i, "🍨"],
-  [/halwa|kheer|gulab|jalebi|sweet|rasgulla|ladoo|laddu|custard|dessert|cake|brownie/i, "🍮"],
-  [/pickle|achar|papad|chutney/i, "🫙"],
-  [/aloo|gobhi|gobi|bhindi|sabzi|sabji|veg|matar|baingan|kofta|curry|kadai|kadhai|palak/i, "🥘"],
-];
-function foodIcon(name: string): string {
-  for (const [re, icon] of FOOD_ICONS) if (re.test(name)) return icon;
-  return "🍽️";
-}
 /** "KADAI PANEER" / "kadai paneer" → "Kadai Paneer"; already-mixed case is left alone. */
 function dishName(raw: string): string {
   const t = raw.replace(/\s+/g, " ").trim();
@@ -369,11 +361,11 @@ function tidyTime(t: string): string {
   return ap1 && ap1 !== ap2 ? `${a} ${ap1} – ${b} ${ap2}` : `${a} – ${b}${ap2 ? ` ${ap2}` : ""}`;
 }
 /** Each meal has its own colour and mark. */
-const MEAL_LOOK: Record<string, { icon: string; tint: string; tint2: string }> = {
-  breakfast: { icon: "☕", tint: "#f0a23a", tint2: "#d9741f" },
-  lunch: { icon: "🍛", tint: "#e0662b", tint2: "#b8441a" },
-  snack: { icon: "🍪", tint: "#2f9c8c", tint2: "#1e7266" },
-  dinner: { icon: "🍲", tint: "#4b7fc4", tint2: "#2f5c9a" },
+const MEAL_LOOK: Record<string, { icon: LucideIcon; tint: string; tint2: string }> = {
+  breakfast: { icon: Coffee, tint: "#f0a23a", tint2: "#d9741f" },
+  lunch: { icon: Soup, tint: "#e0662b", tint2: "#b8441a" },
+  snack: { icon: Cookie, tint: "#2f9c8c", tint2: "#1e7266" },
+  dinner: { icon: Moon, tint: "#4b7fc4", tint2: "#2f5c9a" },
 };
 function lookOf(title: string) {
   const k = title.toLowerCase();
@@ -396,7 +388,9 @@ function MealCard({ title, time, now, lines, index = 0 }: { title: string; time:
       style={{ "--tint": look.tint, "--tint-2": look.tint2, "--d": `${index * 70}ms` } as React.CSSProperties}
     >
       <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
-        <span className="tile-icon grid size-9 shrink-0 place-items-center rounded-xl text-[18px]">{look.icon}</span>
+        <span className="tile-icon grid size-9 shrink-0 place-items-center rounded-xl">
+          <look.icon size={18} />
+        </span>
         <span className="min-w-0">
           <span className="block text-[15.5px] leading-tight font-extrabold">{title}</span>
           {time && <span className="block text-[12px] font-semibold text-muted tnum">{tidyTime(time)}</span>}
@@ -412,9 +406,8 @@ function MealCard({ title, time, now, lines, index = 0 }: { title: string; time:
           {dishes.map((d, i) => (
             <li
               key={i}
-              className="flex items-center gap-1.5 rounded-full border border-card-edge/70 bg-surface/85 py-1 pr-3 pl-1.5 text-[13.5px] font-semibold text-text shadow-[0_2px_6px_-4px_rgb(var(--shadow-ink)/0.5)]"
+              className="rounded-full border border-card-edge/70 bg-surface/85 px-3 py-1.5 text-[13.5px] font-semibold text-text shadow-[0_2px_6px_-4px_rgb(var(--shadow-ink)/0.5)]"
             >
-              <span className="grid size-6 place-items-center rounded-full bg-bg text-[14px] leading-none">{foodIcon(d)}</span>
               {d}
             </li>
           ))}

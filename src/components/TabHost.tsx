@@ -96,7 +96,7 @@ export function TabHost({ active }: { active: TabPath | null }) {
         if (!mounted.has(path)) return null;
         const Screen = SCREENS[path];
         return (
-          <div key={path} hidden={path !== active}>
+          <div key={path} hidden={path !== active} className="tab-show">
             <ScreenBoundary>
               <Screen />
             </ScreenBoundary>

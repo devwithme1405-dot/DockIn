@@ -313,6 +313,7 @@ await step("a task takes a deadline time", async () => {
   if ((await page.getByLabel("Time").inputValue()) !== "20:00") throw new Error("8:00 PM chip did not set the time");
   await page.screenshot({ path: `${SHOTS}/task-time.png` });
   await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 });
 
 await step("ticking a task keeps it in place", async () => {

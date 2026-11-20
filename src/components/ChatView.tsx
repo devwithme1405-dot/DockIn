@@ -65,6 +65,7 @@ import { Avatar, Sheet, cx, useToast } from "./ui";
 import { getSupabase } from "@/lib/supabase";
 import { addTask } from "@/lib/repo";
 import { ChatInfo, PhotoViewer } from "./ChatInfo";
+import { Bone } from "./Skeleton";
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const EDIT_WINDOW = 15 * 60_000;
@@ -432,6 +433,15 @@ export function ChatView({
       </div>
 
       <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overscroll-contain px-3 pt-16 pb-3">
+        {msgs === undefined && (
+          <div className="space-y-3 pt-3" role="status" aria-label="Loading messages">
+            {[["w-1/2", false], ["w-2/3", true], ["w-2/5", false], ["w-1/2", true], ["w-3/5", false]].map(([w, mine], i) => (
+              <div key={i} className={cx("flex", mine ? "justify-end" : "justify-start")}>
+                <Bone className={cx("h-11 rounded-[20px]", w as string)} />
+              </div>
+            ))}
+          </div>
+        )}
         {msgs && rows.length === 0 && (
           <p className="mx-auto mt-10 max-w-[16rem] text-center text-[13.5px] text-muted">
             {find ? "No messages match." : view !== "chat" ? `No ${view} here yet. Send one with the + button.` : isGroup ? "Say hi to the group 👋" : `Say hi to ${title} 👋`}

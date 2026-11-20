@@ -59,8 +59,8 @@ const tables = {
 };
 const rpcs = {
   my_people: [
-    { user_id: YASH, name: "Yash", avatar: null, branch: "CSE", year: 2, section: "E1", bio: null, attendance_state: "safe", friend_status: "accepted", requested_by: ME },
-    { user_id: "00000000-0000-4000-8000-000000000004", name: "Aman Verma", avatar: null, branch: "CSE", year: 2, section: "E2", bio: null, attendance_state: null, friend_status: "pending", requested_by: "00000000-0000-4000-8000-000000000004" },
+    { user_id: YASH, name: "Yash", avatar: null, branch: "CSE", year: 2, section: "E1", bio: null, attendance_state: "safe", friend_status: "accepted", requested_by: ME, requested_at: Date.now() - 3 * 86400_000, since: Date.now() - 2 * 86400_000 },
+    { user_id: "00000000-0000-4000-8000-000000000004", name: "Aman Verma", avatar: null, branch: "CSE", year: 2, section: "E2", bio: null, attendance_state: null, friend_status: "pending", requested_by: "00000000-0000-4000-8000-000000000004", requested_at: Date.now() - 3600_000 },
   ],
   ensure_profile: [{ user_id: ME, code: "SACH1234", name: "Sachin", avatar: null, branch: null, year: 2, section: "E1", bio: null, attendance_state: null, share_attendance: false }],
 };
@@ -80,6 +80,18 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
   const m = url.pathname.match(/^\/rest\/v1\/(rpc\/)?([a-z_]+)/);
   if (!m) return json([]);
   const [, isRpc, name] = m;
+  if (isRpc && name === "create_group") {
+    const b = JSON.parse(req.postData() || "{}");
+    const g = { id: "00000000-0000-4000-8000-0000000000a1", name: b.group_name, emoji: b.group_emoji, code: "NEW234", owner: ME, updated_at: Date.now() };
+    tables.groups.push(g);
+    tables.group_members.push({ group_id: g.id, user_id: ME });
+    return json(g);
+  }
+  if (isRpc && name === "add_group_members") {
+    const b = JSON.parse(req.postData() || "{}");
+    for (const p of b.people) tables.group_members.push({ group_id: b.gid, user_id: p });
+    return json(b.people.length);
+  }
   if (isRpc) return json(rpcs[name] ?? []);
   if (req.method() === "POST" && name === "messages") {
     const body = JSON.parse(req.postData() || "{}");
@@ -239,6 +251,49 @@ await step("Add a friend offers scan and my QR", async () => {
   await page.screenshot({ path: `${SHOTS}/chat-add.png` });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
+});
+
+await step("Friends panel: friends, requests and the activity history", async () => {
+  await page.getByRole("button", { name: "Friends", exact: true }).first().click();
+  const panel = page.getByRole("dialog", { name: "Friends" });
+  await panel.getByRole("button", { name: /Requests/ }).waitFor({ timeout: 3000 });
+  await panel.getByText("Aman Verma").first().waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/chat-friends-requests.png` });
+  await panel.getByRole("button", { name: "Friends", exact: true }).click();
+  await panel.getByText(/Friends since/).waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/chat-friends-panel.png` });
+  await panel.getByRole("button", { name: "Activity", exact: true }).click();
+  await panel.getByText("accepted your friend request").waitFor({ timeout: 3000 });
+  await panel.getByText("wants to be your friend").waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/chat-friends-activity.png` });
+  await page.goBack();
+  await page.waitForTimeout(400);
+  if (await page.getByRole("dialog", { name: "Friends" }).count()) throw new Error("Back did not close the Friends panel");
+});
+
+await step("New group: name, photo/emoji, description, then pick people", async () => {
+  await page.getByRole("button", { name: "New Group", exact: true }).first().click();
+  const flow = page.getByRole("dialog", { name: "New group" });
+  await flow.getByPlaceholder(/CSE E2/).fill("Study Squad");
+  await flow.getByLabel("Use 🚀").click();
+  await flow.getByPlaceholder(/What's this group for/).fill("DBMS prep");
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/chat-newgroup-1.png` });
+  await flow.getByRole("button", { name: /Next: add people/ }).click();
+  await flow.getByRole("button", { name: /Yash/ }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/chat-newgroup-2.png` });
+  await page.goBack(); // back to step 1, not out
+  await flow.getByPlaceholder(/CSE E2/).waitFor({ timeout: 2000 });
+  await flow.getByRole("button", { name: /Next: add people/ }).click();
+  await flow.getByRole("button", { name: /Create with 1/ }).click();
+  await page.getByRole("dialog", { name: "Chat with Study Squad" }).waitFor({ timeout: 5000 });
+  await page.getByLabel("Back", { exact: true }).click();
+  await page.waitForTimeout(400);
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends: " + page.url());
 });
 
 await step("the scanner opens smoothly and can flip to My QR", async () => {

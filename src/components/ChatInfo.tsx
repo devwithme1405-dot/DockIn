@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Ban, BellOff, Camera, Check, Copy, FileText, LogOut, Pencil, Pin, Trash2, UserMinus } from "lucide-react";
+import { ArrowLeft, Ban, BellOff, Camera, Check, Copy, FileText, LogOut, Pencil, Pin, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { clearThreadForMe, setThreadPref, type ThreadId } from "@/lib/chat";
-import { SocialError, blockUser, groupPeople, leaveGroup, removeFriend, updateGroup, type GroupPerson } from "@/lib/social";
+import { SocialError, addGroupMembers, blockUser, groupPeople, leaveGroup, removeFriend, updateGroup, type GroupPerson } from "@/lib/social";
 import { uploadAvatarPhoto } from "@/lib/avatars";
-import type { Group } from "@/lib/types";
-import { Avatar, ConfirmSheet, cx, useToast } from "./ui";
+import type { Friend, Group } from "@/lib/types";
+import { Avatar, ConfirmSheet, Sheet, cx, useToast } from "./ui";
+import { Bone } from "./Skeleton";
 import { QrCode } from "./QrCode";
 import { useBackClose } from "@/lib/backClose";
 
@@ -74,6 +75,9 @@ export function ChatInfo({
   const [confirm, setConfirm] = useState<null | "leave" | "clear" | "block" | "remove">(null);
   const photo = useRef<HTMLInputElement>(null);
   const isOwner = !!group && group.owner === me;
+  const [adding, setAdding] = useState(false);
+  const [reload, setReload] = useState(0);
+  const allFriends = useLiveQuery(() => db.friends.filter((f) => f.status === "accepted").toArray(), []);
 
   useEffect(() => {
     if (!group) return;
@@ -84,7 +88,7 @@ export function ChatInfo({
     return () => {
       alive = false;
     };
-  }, [group]);
+  }, [group, reload]);
 
   async function savePhoto(f: File | undefined) {
     if (!f || !group) return;
@@ -218,7 +222,15 @@ export function ChatInfo({
 
         {group && (
           <section className="glass-card mx-4 mt-4 overflow-hidden rounded-3xl">
-            <p className="px-4 pt-3.5 pb-1 text-[13px] font-bold text-muted">{group.members} members</p>
+            <p className="px-4 pt-3.5 pb-1 text-[13px] font-bold text-muted">{members?.length ?? group.members} members</p>
+            {isOwner && (
+              <button onClick={() => setAdding(true)} className={cx(row, "text-mess")}>
+                <span className="grid size-[42px] place-items-center rounded-full bg-gradient-to-br from-orange to-[#d24f1e] text-white">
+                  <UserPlus size={19} />
+                </span>
+                <span className="flex-1 font-bold">Add people</span>
+              </button>
+            )}
             <ul>
               {(members ?? []).map((p) => (
                 <li key={p.userId} className="flex items-center gap-3 px-4 py-2.5">
@@ -230,7 +242,16 @@ export function ChatInfo({
                   {p.role === "owner" && <span className="rounded-full bg-orange/15 px-2 py-0.5 text-[11.5px] font-bold text-mess">Admin</span>}
                 </li>
               ))}
-              {members === null && <li className="px-4 py-3 text-[13.5px] text-muted">Loading members…</li>}
+              {members === null &&
+                [0, 1, 2].map((i) => (
+                  <li key={i} className="flex items-center gap-3 px-4 py-2.5" aria-hidden>
+                    <Bone className="size-[42px] shrink-0 rounded-full" />
+                    <span className="flex-1 space-y-1.5">
+                      <Bone className="h-3.5 w-1/2" />
+                      <Bone className="h-3 w-1/3" />
+                    </span>
+                  </li>
+                ))}
             </ul>
             <div className="border-t border-card-edge/50 px-4 py-4">
               <p className="mb-2 text-[13px] font-bold text-muted">Invite with the code or QR</p>
@@ -278,6 +299,16 @@ export function ChatInfo({
 
       {viewing && <PhotoViewer name={title} avatar={avatar} emoji={group?.emoji} onClose={() => setViewing(false)} />}
 
+      {group && (
+        <AddPeople
+          open={adding}
+          groupId={group.id}
+          friends={(allFriends ?? []).filter((f) => !(members ?? []).some((m) => m.userId === f.id))}
+          onClose={() => setAdding(false)}
+          onAdded={() => setReload((n) => n + 1)}
+        />
+      )}
+
       <ConfirmSheet
         open={!!confirm}
         title={
@@ -296,6 +327,79 @@ export function ChatInfo({
               : "You stop seeing each other's shared work. You can add each other again later."}
       </ConfirmSheet>
     </div>
+  );
+}
+
+/** Owner adds friends who aren't in the group yet. */
+function AddPeople({
+  open,
+  groupId,
+  friends,
+  onClose,
+  onAdded,
+}: {
+  open: boolean;
+  groupId: string;
+  friends: Friend[];
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const toast = useToast();
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet open={open} onClose={onClose} title="Add people">
+      {friends.length === 0 ? (
+        <p className="py-6 text-center text-[14px] text-muted">All your friends are already in. Share the code for anyone else.</p>
+      ) : (
+        <ul className="max-h-[52vh] space-y-1 overflow-y-auto pb-2">
+          {friends.map((f) => {
+            const on = picked.has(f.id);
+            return (
+              <li key={f.id}>
+                <button
+                  onClick={() =>
+                    setPicked((p) => {
+                      const n = new Set(p);
+                      if (n.has(f.id)) n.delete(f.id);
+                      else n.add(f.id);
+                      return n;
+                    })
+                  }
+                  aria-pressed={on}
+                  className={cx("flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left", on ? "bg-mess-soft" : "active:bg-surface-2")}
+                >
+                  <Avatar name={f.name} avatar={f.avatar} size={44} />
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{f.name}</span>
+                  <span className={cx("grid size-6 place-items-center rounded-full border-2", on ? "border-transparent bg-orange text-white" : "border-card-edge")}>
+                    {on && <Check size={14} strokeWidth={3} />}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <button
+        disabled={!picked.size || busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const n = await addGroupMembers(groupId, [...picked]);
+            toast.show(n === 1 ? "1 person added" : `${n} people added`);
+            setPicked(new Set());
+            onAdded();
+            onClose();
+          } catch (e) {
+            toast.show(e instanceof SocialError ? e.message : "Could not add them.");
+          }
+          setBusy(false);
+        }}
+        className="btn-leather mt-2 h-12 w-full rounded-2xl text-[15px] disabled:opacity-50"
+      >
+        {busy ? "Adding…" : picked.size ? `Add ${picked.size}` : "Pick people"}
+      </button>
+    </Sheet>
   );
 }
 

@@ -139,6 +139,56 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, []);
 
+  // A long press is for our own actions (select, delete, react) — never the
+  // phone's copy / share menu. Text fields keep theirs, for paste.
+  useEffect(() => {
+    const block = (e: Event) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, [contenteditable='true']")) return;
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", block);
+    document.addEventListener("selectstart", block);
+    return () => {
+      document.removeEventListener("contextmenu", block);
+      document.removeEventListener("selectstart", block);
+    };
+  }, []);
+
+  // Budget phones: watch ~1.5 s of frames once the first screen has settled.
+  // If the phone can't keep up, switch on lite mode (no looping or blurred
+  // effects) now and on every later launch.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (root.classList.contains("lite")) return;
+    let raf = 0;
+    let last = 0;
+    let slow = 0;
+    let frames = 0;
+    const start = window.setTimeout(() => {
+      const tick = (t: number) => {
+        if (document.visibilityState !== "visible") return;
+        if (last) {
+          frames++;
+          if (t - last > 34) slow++; // a dropped frame or worse
+        }
+        last = t;
+        if (frames < 90) raf = requestAnimationFrame(tick);
+        else if (slow / frames > 0.25) {
+          root.classList.add("lite");
+          try {
+            localStorage.setItem("dockin-lite", "1");
+          } catch {}
+        }
+      };
+      raf = requestAnimationFrame(tick);
+    }, 2500);
+    return () => {
+      window.clearTimeout(start);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
   // The moment there is a real screen to show, tell the phone to drop the launch
   // splash it has been holding — so the cap animation hands straight over to the
   // app with no blank brown gap in between. This mirrors the `ready` gate below

@@ -122,7 +122,7 @@ export function TaskRow({
         aria-pressed={task.done}
         className={cx(
           "grid size-7 shrink-0 place-items-center rounded-full border-2 transition active:scale-90",
-          task.done ? "border-safe bg-safe text-white" : "border-line bg-bg text-transparent",
+          task.done ? "anim-check border-safe bg-safe text-white" : "border-line bg-bg text-transparent",
         )}
       >
         <Check size={15} strokeWidth={3} />

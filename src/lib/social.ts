@@ -41,6 +41,10 @@ function readable(message: string): string {
   if (/no_such_group/.test(message)) return "No group has that code.";
   if (/group_full/.test(message)) return "That group is full.";
   if (/\bblocked\b/.test(message)) return "You can't add this person.";
+  if (/only_owner_adds/.test(message)) return "Only the group admin can add people.";
+  if (/add_group_members/.test(message) && /does not exist|schema cache/i.test(message)) {
+    return "Adding people needs a server update (migration 0019).";
+  }
   if (/too_many_groups/.test(message)) return "You are in too many groups already.";
   if (/cannot use DockIn/.test(message)) return "This account cannot use DockIn.";
   if (/Failed to fetch|NetworkError/i.test(message)) return "No internet right now.";
@@ -253,6 +257,16 @@ export async function createGroup(name: string, emoji: string | null): Promise<G
   const group: Group = { ...r, members: 1, updatedAt: now() };
   await db.groups.put(group);
   return group;
+}
+
+/** Owner adds friends to a group (new group flow, or later from group info). Returns how many joined. */
+export async function addGroupMembers(groupId: string, people: string[]): Promise<number> {
+  if (!people.length) return 0;
+  const n = await rpc<number>("add_group_members", { gid: groupId, people });
+  const added = Number(n) || 0;
+  const g = await db.groups.get(groupId);
+  if (g) await db.groups.update(groupId, { members: (g.members ?? 1) + added });
+  return added;
 }
 
 export async function joinGroup(code: string): Promise<Group> {
@@ -734,6 +748,8 @@ async function doPull(): Promise<void> {
       attendance_state: AttendanceState | null;
       friend_status: "pending" | "accepted";
       requested_by: string;
+      requested_at?: number | null;
+      since?: number | null;
     }[]
   ).map((r) => ({
     id: r.user_id,
@@ -746,6 +762,8 @@ async function doPull(): Promise<void> {
     attendanceState: r.attendance_state ?? null,
     status: r.friend_status,
     theyAsked: r.requested_by !== me,
+    requestedAt: r.requested_at ? Number(r.requested_at) : undefined,
+    since: r.since ? Number(r.since) : undefined,
     updatedAt: now(),
   }));
 

@@ -245,6 +245,9 @@ export interface Friend {
   status: "pending" | "accepted";
   /** True when they asked you, so the button says Accept rather than Pending. */
   theyAsked: boolean;
+  /** When the request was sent (ms), and when you became friends — for the history. */
+  requestedAt?: number;
+  since?: number;
   updatedAt: number;
 }
 

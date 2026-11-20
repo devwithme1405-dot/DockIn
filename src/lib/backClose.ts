@@ -63,20 +63,23 @@ export function useBackClose(open: boolean, onClose: () => void) {
     }
     const layer: Layer = { close: () => close.current(), popped: false };
     layers.push(layer);
-    window.clearTimeout(pending);
+    pending++;
     if (!isMarker(window.history.state) && !selfBack) pushMarker();
     return () => {
       const i = layers.indexOf(layer);
       if (i >= 0) layers.splice(i, 1);
       if (layer.popped) return;
-      // Wait a tick: another layer may be opening in its place (sheet → sheet).
-      window.clearTimeout(pending);
-      pending = window.setTimeout(() => {
+      // Wait for this commit's other effects: another layer may be opening in
+      // its place (sheet → sheet). A microtask runs right after them, long
+      // before anything else (like a navigation) could start.
+      const ticket = ++pending;
+      queueMicrotask(() => {
+        if (ticket !== pending) return;
         if (layers.length === 0 && isMarker(window.history.state) && !selfBack) {
           selfBack = true;
           window.history.back();
         }
-      }, 0);
+      });
     };
   }, [open]);
 }
@@ -86,7 +89,7 @@ export function useBackClose(open: boolean, onClose: () => void) {
  * after joining a group): replaces the marker instead of stacking on it.
  */
 export function pushPastLayer(state: Record<string, unknown>, url: string) {
-  window.clearTimeout(pending);
+  pending++;
   if (isMarker(window.history.state)) {
     const prev = window.history.state as Marked;
     window.history.replaceState({ dockinFromToday: !!prev?.dockinFromToday, ...state }, "", url);

@@ -2,12 +2,13 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { pushPastLayer, useBackClose } from "@/lib/backClose";
+import { pushPastLayer } from "@/lib/backClose";
+import { FriendsPanel } from "@/components/FriendsPanel";
+import { NewGroup } from "@/components/NewGroup";
 import {
   Check,
   BellOff,
   Bell,
-  ArrowLeft,
   Ban,
   MessageCircle,
   Pin,
@@ -39,7 +40,6 @@ import {
   acceptFriend,
   addFriend,
   cleanCode,
-  createGroup,
   ensureProfile,
   joinGroup,
   peekCode,
@@ -73,7 +73,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { QrCode } from "@/components/QrCode";
 import { SignIn } from "@/components/SignIn";
-import { ListSkeleton } from "@/components/Skeleton";
+import { Bone, ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
 import { ChatView } from "@/components/ChatView";
@@ -87,14 +87,13 @@ const ATTENDANCE_WORD = {
   none: "Not tracking yet",
 } as const;
 
-const GROUP_EMOJIS = ["📚", "🧪", "💻", "🏠", "⚽", "🎓", "🎬", "🍜", "🎵", "🧠"];
 
 type Tab = "chats" | "friends" | "groups" | "work";
 const TABS = [
   ["chats", "Chats"],
   ["groups", "Groups"],
 ] as const;
-type SheetName = "add" | "confirm" | "newGroup" | "joinGroup" | "me" | "share" | null;
+type SheetName = "add" | "confirm" | "joinGroup" | "me" | "share" | null;
 
 export default function CirclePage() {
   return (
@@ -136,7 +135,7 @@ function Circle() {
   const [searching, setSearching] = useState(false);
   const [composing, setComposing] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
-  useBackClose(friendsOpen, () => setFriendsOpen(false));
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [bell, setBell] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -148,8 +147,6 @@ function Circle() {
   const [sheet, setSheet] = useState<SheetName>(incoming ? "add" : joining ? "joinGroup" : null);
   const [typed, setTyped] = useState(incoming || joining);
   const [preview, setPreview] = useState<CodePreview | null>(null);
-  const [groupName, setGroupName] = useState("");
-  const [groupEmoji, setGroupEmoji] = useState(GROUP_EMOJIS[0]);
   const [removing, setRemoving] = useState<Friend | null>(null);
   const [blocking, setBlocking] = useState<Friend | null>(null);
   const blocked = useLiveQuery(() => db.blocks.toArray(), []);
@@ -215,9 +212,6 @@ function Circle() {
   }, [shares, states]);
 
   const toHandIn = work.filter((s) => !states?.get(s.id)?.submitted).length;
-  const shownFriends = find.trim()
-    ? accepted.filter((f) => f.name.toLowerCase().includes(find.trim().toLowerCase()))
-    : accepted;
   const shownWork = work.filter((s) =>
     workFilter === "groups"
       ? !!s.groupId
@@ -443,20 +437,7 @@ function Circle() {
     setBusy(false);
   }
 
-  async function makeGroup() {
-    if (!groupName.trim()) return;
-    setBusy(true);
-    try {
-      const g = await createGroup(groupName, groupEmoji);
-      await pullSocial();
-      setSheet(null);
-      setGroupName("");
-      openChat(groupThread(g.id));
-    } catch (e) {
-      setProblem(e instanceof SocialError ? e.message : "Could not create that group.");
-    }
-    setBusy(false);
-  }
+
 
   async function enterGroup() {
     setBusy(true);
@@ -574,7 +555,7 @@ function Circle() {
             {(
               [
                 ["Add Friend", UserPlus, () => setSheet("add"), "#f2871f", "#d24f1e"],
-                ["New Group", Users, () => { setGroupName(""); setProblem(null); setSheet("newGroup"); }, "#2f9c8c", "#1e7266"],
+                ["New Group", Users, () => { setProblem(null); setNewGroupOpen(true); }, "#2f9c8c", "#1e7266"],
                 ["My QR", QrIcon, () => setSheet("me"), "#e0566c", "#b23650"],
                 ["Friends", UserRound, () => setFriendsOpen(true), "#4b7fc4", "#2f5c9a"],
               ] as const
@@ -682,6 +663,7 @@ function Circle() {
 
       {tab === "chats" && (
         <ChatList
+          loading={threads === undefined || friends === undefined}
           find={find}
           threads={threads ?? []}
           friends={accepted}
@@ -742,178 +724,36 @@ function Circle() {
         </ul>
       </Sheet>
 
+      {newGroupOpen && (
+        <NewGroup
+          friends={accepted}
+          onClose={() => setNewGroupOpen(false)}
+          onDone={(gid) => {
+            setNewGroupOpen(false);
+            openChat(groupThread(gid));
+          }}
+        />
+      )}
+
       {friendsOpen && (
-        <div className="paper-page fixed inset-0 z-[45] flex flex-col" role="dialog" aria-label="Friends">
-          <header className="glass-bar flex items-center gap-1.5 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
-            <button onClick={() => setFriendsOpen(false)} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
-              <ArrowLeft size={23} />
-            </button>
-            <p className="flex-1 text-[18px] font-extrabold">Friends</p>
-            <button onClick={() => setSheet("add")} aria-label="Add a friend" className="grid size-11 place-items-center rounded-full text-mess active:bg-surface-2">
-              <UserPlus size={21} />
-            </button>
-          </header>
-        <div className="flex-1 space-y-5 overflow-y-auto px-4 pt-4 pb-10">
-          {requests.length > 0 && (
-            <section aria-label="Friend requests">
-              <SectionTitle>Requests</SectionTitle>
-              <ul className="space-y-2">
-                {requests.map((f) => (
-                  <li key={f.id} className="flex items-center gap-3 rounded-2xl border-[1.5px] border-orange/40 bg-card p-3">
-                    <Avatar name={f.name} avatar={f.avatar} size={46} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-bold">{f.name}</p>
-                      <p className="truncate text-[12.5px] text-muted">{describe(f) || "Wants to be friends"}</p>
-                      <div className="mt-2 flex gap-2">
-                        <button onClick={() => void accept(f)} className="btn-leather h-9 flex-1 rounded-xl text-[13.5px]">
-                          Accept
-                        </button>
-                        <button onClick={() => void reject(f)} className="btn-paper h-9 flex-1 rounded-xl text-[13.5px] font-bold">
-                          Reject
-                        </button>
-                        <button
-                          onClick={() => setBlocking(f)}
-                          aria-label={`Block ${f.name}`}
-                          className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface-2 text-muted"
-                        >
-                          <Ban size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          <section>
-            <SectionTitle>Friends</SectionTitle>
-            {accepted.length > 6 && (
-              <label className="mb-2 flex h-11 items-center gap-2.5 rounded-2xl bg-surface px-3.5 shadow-[0_0_0_1px_var(--line)] focus-within:shadow-[0_0_0_2px_var(--accent)]">
-                <Search size={17} className="shrink-0 text-muted" />
-                <input
-                  className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
-                  placeholder="Find a friend"
-                  value={find}
-                  onChange={(e) => setFind(e.target.value)}
-                  aria-label="Find a friend"
-                />
-              </label>
-            )}
-            {accepted.length === 0 ? (
-              <EmptyState
-                flush
-                icon={Users}
-                title="Nobody yet"
-                body="Tap the button at the top to show your code, or scan a friend's."
-                action={
-                  <Button size="sm" onClick={() => setSheet("me")}>
-                    <QrIcon size={16} /> Show my code
-                  </Button>
-                }
-              />
-            ) : (
-              <ul className="overflow-hidden lift rounded-3xl bg-surface">
-                {shownFriends.map((f, i) => (
-                  <li
-                    key={f.id}
-                    className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}
-                  >
-                    <button
-                      onClick={() => setShowing(f)}
-                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                    >
-                      <Avatar name={f.name} avatar={f.avatar} size={44} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">{f.name}</span>
-                        <span className="block truncate text-[12.5px] text-muted">{describe(f)}</span>
-                      </span>
-                    </button>
-                    {f.attendanceState && f.attendanceState !== "none" && (
-                      <span
-                        className={cx(
-                          "shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-[11.5px] font-medium",
-                          STATE_TEXT[f.attendanceState],
-                        )}
-                      >
-                        {ATTENDANCE_WORD[f.attendanceState]}
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setRemoving(f)}
-                      aria-label={`Remove ${f.name}`}
-                      className="grid size-9 shrink-0 place-items-center rounded-full text-muted"
-                    >
-                      <X size={16} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          {sent.length > 0 && (
-            <section>
-              <SectionTitle>Requests sent</SectionTitle>
-              <ul className="overflow-hidden lift rounded-3xl bg-surface">
-                {sent.map((f, i) => (
-                  <li
-                    key={f.id}
-                    className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}
-                  >
-                    <Avatar name={f.name} avatar={f.avatar} size={38} />
-                    <p className="min-w-0 flex-1 truncate text-[14.5px]">{f.name}</p>
-                    <span className="text-[12.5px] text-muted">Sent</span>
-                    <button
-                      onClick={() => void cancelRequest(f)}
-                      className="btn-paper h-9 rounded-full px-3 text-[13px] font-semibold"
-                    >
-                      Cancel
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {(blocked?.length ?? 0) > 0 && (
-            <section>
-              <SectionTitle>Blocked</SectionTitle>
-              <ul className="overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card">
-                {(blocked ?? []).map((b, i) => (
-                  <li key={b.id} className={cx("flex items-center gap-3 p-3.5", i > 0 && "border-t border-line")}>
-                    <Ban size={18} className="shrink-0 text-muted" />
-                    <p className="min-w-0 flex-1 truncate text-[14.5px]">{b.name}</p>
-                    <button onClick={() => void unblock(b.id, b.name)} className="btn-paper h-9 rounded-full px-3 text-[13px] font-semibold">
-                      Unblock
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {/* This belongs with the people who would see it, not in a settings
-              screen three taps away. */}
-          <label className="flex items-center gap-3 lift rounded-3xl bg-surface p-4">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2">
-              <Share2 size={18} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-medium">Show friends my attendance</span>
-              <span className="block text-[12.5px] text-muted">
-                Only the word Safe, Cutting it close or Below target. Never the number.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              className="size-6 shrink-0 accent-[#7c3d1b]"
-              checked={sharesAttendance}
-              onChange={(e) => void toggleAttendance(e.target.checked)}
-            />
-          </label>
-        </div>
-        </div>
+        <FriendsPanel
+          accepted={accepted}
+          requests={requests}
+          sent={sent}
+          blocked={(blocked ?? []).map((b) => ({ id: b.id, name: b.name }))}
+          sharesAttendance={sharesAttendance}
+          onToggleAttendance={(on) => void toggleAttendance(on)}
+          onAccept={(f) => void accept(f)}
+          onReject={(f) => void reject(f)}
+          onBlock={setBlocking}
+          onShow={setShowing}
+          onRemove={setRemoving}
+          onCancel={(f) => void cancelRequest(f)}
+          onUnblock={(id, name) => void unblock(id, name)}
+          onAdd={() => setSheet("add")}
+          onMyQr={() => setSheet("me")}
+          onClose={() => setFriendsOpen(false)}
+        />
       )}
 
       {tab === "groups" && (
@@ -923,9 +763,8 @@ function Circle() {
               className="flex-1"
               size="sm"
               onClick={() => {
-                setGroupName("");
                 setProblem(null);
-                setSheet("newGroup");
+                setNewGroupOpen(true);
               }}
             >
               <Plus size={16} /> New group
@@ -1141,37 +980,6 @@ function Circle() {
         <p>They see your name, your picture and anything you choose to share.</p>
       </ConfirmSheet>
 
-      <Sheet open={sheet === "newGroup"} onClose={() => setSheet(null)} title="New group">
-        <Field label="Name">
-          <input
-            className={inputCls}
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value.slice(0, 50))}
-            placeholder="CSE E2"
-            autoFocus
-          />
-        </Field>
-        <p className="mb-1.5 text-[13px] font-medium text-muted">Icon</p>
-        <div className="mb-5 grid grid-cols-5 gap-2">
-          {GROUP_EMOJIS.map((e) => (
-            <button
-              key={e}
-              onClick={() => setGroupEmoji(e)}
-              aria-label={`Use ${e}`}
-              aria-pressed={groupEmoji === e}
-              className={cx(
-                "grid h-11 place-items-center rounded-xl text-[20px] transition",
-                groupEmoji === e ? "bg-text" : "bg-surface-2",
-              )}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-        <Button className="w-full" onClick={makeGroup} disabled={!groupName.trim() || busy}>
-          Create
-        </Button>
-      </Sheet>
 
       <Sheet open={sheet === "joinGroup"} onClose={() => setSheet(null)} title="Join a group">
         <Field label="Group code">
@@ -1383,11 +1191,6 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-2 text-[13px] font-semibold tracking-wide text-muted uppercase">{children}</h2>
-  );
-}
 
 
 /**
@@ -1482,6 +1285,7 @@ function ago(ms: number): string {
 
 /** Conversations, newest first; friends and groups you have not talked to yet sit below. */
 function ChatList({
+  loading,
   find,
   threads,
   friends,
@@ -1491,6 +1295,7 @@ function ChatList({
   onOpen,
   onAdd,
 }: {
+  loading: boolean;
   find: string;
   threads: import("@/lib/chat").ThreadSummary[];
   friends: Friend[];
@@ -1507,6 +1312,20 @@ function ChatList({
   const press = useRef<{ timer: number; fired: boolean; x: number; y: number } | null>(null);
   const toast = useToast();
   if (!me) return null;
+  if (loading)
+    return (
+      <ul className="mt-3 space-y-2.5 px-4" role="status" aria-label="Loading chats">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <li key={i} className="lift flex items-center gap-3 rounded-3xl bg-surface p-3" style={{ opacity: 1 - i * 0.14 }}>
+            <Bone className="size-[52px] shrink-0 rounded-full" />
+            <span className="flex-1 space-y-2">
+              <Bone className="h-4 w-2/5" />
+              <Bone className="h-3 w-4/5" />
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
   const seen = new Set(threads.map((t) => t.thread));
   const groupBy = new Map(groups.map((g) => [g.id, g]));
   const rows = [
