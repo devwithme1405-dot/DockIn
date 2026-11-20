@@ -253,3 +253,21 @@ describe("labStarts: which classes are the lab", () => {
     expect(labs.size).toBe(0);
   });
 });
+
+describe("timetable days are kept across syncs", () => {
+  const p = (date: string, from: string, name = "DBMS") => ({ date, from, to: "", name, code: "", subId: "s1", room: "", teacher: "", kind: "", status: "" });
+  it("a day Camu no longer returns stays; a returned day is replaced", async () => {
+    const { mergePeriods } = await import("@/lib/college");
+    const first = mergePeriods({}, [p("2026-11-19", "09:00"), p("2026-11-20", "10:00")], "2026-11-20");
+    // Next day Camu sends only today and later — and changes today's room.
+    const next = mergePeriods(first, [p("2026-11-20", "11:00", "OS"), p("2026-11-21", "09:00")], "2026-11-21");
+    expect(Object.keys(next).sort()).toEqual(["2026-11-19", "2026-11-20", "2026-11-21"]);
+    expect(next["2026-11-19"][0].from).toBe("09:00");
+    expect(next["2026-11-20"].map((x) => x.name)).toEqual(["OS"]);
+  });
+  it("forgets days older than about a semester", async () => {
+    const { mergePeriods } = await import("@/lib/college");
+    const out = mergePeriods({ "2026-01-01": [p("2026-01-01", "09:00")] }, [], "2026-11-20");
+    expect(out["2026-01-01"]).toBeUndefined();
+  });
+});

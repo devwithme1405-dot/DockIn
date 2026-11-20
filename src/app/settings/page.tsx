@@ -257,6 +257,7 @@ export default function ProfilePage() {
     resetSyncStatus();
     try {
       localStorage.removeItem("dockin-theme");
+      localStorage.removeItem("dockin-camu-periods");
     } catch {}
     applyTheme("light", false);
     router.replace("/onboarding");

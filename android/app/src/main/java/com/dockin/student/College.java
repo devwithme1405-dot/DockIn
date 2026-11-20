@@ -105,7 +105,7 @@ final class College {
             // the last copy stays and the attendance above still counts as fresh.
             try {
                 JSONObject tt = Camu.timetable(c, day(-7), day(14));
-                camu.put("periods", periods(tt.optJSONArray("periods")));
+                camu.put("periods", keepPast(camu.optJSONArray("periods"), periods(tt.optJSONArray("periods"))));
                 camu.put("holidays", holidays(tt.optJSONArray("holidays")));
             } catch (IOException | JSONException e) {
                 if (!camu.has("periods")) camu.put("periods", new JSONArray());
@@ -178,6 +178,36 @@ final class College {
                     .put("leave", s.optInt("leaveCnt", 0) + s.optInt("medLeaveCnt", 0))
                     .put("duty", s.optInt("onDutyCnt", 0))
                     .put("pct", s.optDouble("p", s.optDouble("prsPercnt", 0))));
+        }
+        return out;
+    }
+
+    /**
+     * Camu answers only a window around today (often nothing for days gone by),
+     * so replacing the stored timetable each sync lost yesterday's classes. The
+     * fresh days replace those same days; every other day Camu showed before
+     * stays, for about a semester.
+     */
+    static JSONArray keepPast(JSONArray before, JSONArray fresh) throws JSONException {
+        java.util.Set<String> freshDays = new java.util.HashSet<>();
+        for (int i = 0; i < fresh.length(); i++) {
+            JSONObject p = fresh.optJSONObject(i);
+            if (p != null) freshDays.add(p.optString("date", ""));
+        }
+        String floor = day(-200);
+        JSONArray out = new JSONArray();
+        if (before != null) {
+            for (int i = 0; i < before.length(); i++) {
+                JSONObject p = before.optJSONObject(i);
+                if (p == null) continue;
+                String d = p.optString("date", "");
+                if (d.isEmpty() || freshDays.contains(d) || d.compareTo(floor) < 0) continue;
+                out.put(p);
+            }
+        }
+        for (int i = 0; i < fresh.length(); i++) {
+            JSONObject p = fresh.optJSONObject(i);
+            if (p != null) out.put(p);
         }
         return out;
     }

@@ -242,9 +242,11 @@ export function camuView(state: CamuState | undefined, target: number, today: st
       sessions.push(session(id, subjectId(s.id), c.date, c.from, c.to, c.present ? "present" : "absent"));
     }
   }
-  // Timetable days around today, so Today and the week strip have classes to show.
-  for (let i = -7; i <= 7; i++) {
-    const date = addDays(today, i);
+  // Every timetable day Camu has shown (kept across syncs), and a week ahead.
+  const byId = new Map(sessions.map((x) => [x.id, x]));
+  const earliest = (state.periods ?? []).reduce((m, p) => (p.date && p.date < m ? p.date : m), addDays(today, -7));
+  const from = earliest < addDays(today, -200) ? addDays(today, -200) : earliest;
+  for (let date = from; date <= addDays(today, 7); date = addDays(date, 1)) {
     const dayPeriods = classesOn(state, date);
     const labs = labStarts(dayPeriods);
     for (const p of dayPeriods) {
@@ -252,7 +254,7 @@ export function camuView(state: CamuState | undefined, target: number, today: st
       if (!sub) continue;
       const id = `camu:${sub.id}:${date}:${p.from}`;
       const kind = labs.has(p.from) ? "practical" : "lecture";
-      const known = sessions.find((x) => x.id === id);
+      const known = byId.get(id);
       if (known) {
         known.room = p.room;
         known.teacher = p.teacher;
@@ -267,6 +269,7 @@ export function camuView(state: CamuState | undefined, target: number, today: st
       s.kind = kind;
       s.usual = p.usual;
       sessions.push(s);
+      byId.set(id, s);
     }
   }
   sessions.sort((a, b) => (a.date === b.date ? a.start.localeCompare(b.start) : a.date.localeCompare(b.date)));
@@ -347,8 +350,54 @@ function syncBackoffMs(): number {
 let renewing = false;
 let renewTried = false;
 
+const ARCHIVE = "dockin-camu-periods";
+
+/**
+ * Every day of timetable Camu has ever shown this phone, kept for the whole
+ * semester. Camu only answers a window around today (and often nothing for
+ * days already past), and each sync used to replace the stored copy — so
+ * yesterday's classes vanished from the timetable. Now each sync's days
+ * replace only those same days; every other day stays as Camu last showed it.
+ */
+export function mergePeriods(archive: Record<string, CamuPeriod[]>, fresh: CamuPeriod[], today: string): Record<string, CamuPeriod[]> {
+  const out: Record<string, CamuPeriod[]> = { ...archive };
+  const byDay = new Map<string, CamuPeriod[]>();
+  for (const p of fresh) {
+    if (!p?.date) continue;
+    const list = byDay.get(p.date) ?? [];
+    list.push(p);
+    byDay.set(p.date, list);
+  }
+  for (const [day, list] of byDay) out[day] = list;
+  // A semester and a bit is plenty; older days are dropped.
+  const floor = addDays(today, -200);
+  for (const day of Object.keys(out)) if (day < floor) delete out[day];
+  return out;
+}
+
+function withArchive(next: CollegeState): CollegeState {
+  const fresh = next?.camu?.periods;
+  if (!next?.camu || !Array.isArray(fresh) || typeof window === "undefined") return next;
+  let archive: Record<string, CamuPeriod[]> = {};
+  try {
+    archive = JSON.parse(localStorage.getItem(ARCHIVE) ?? "{}") ?? {};
+  } catch {
+    archive = {};
+  }
+  const merged = mergePeriods(archive, fresh, toDateStr());
+  try {
+    localStorage.setItem(ARCHIVE, JSON.stringify(merged));
+  } catch {
+    // Storage full or private: still show what we have this time.
+  }
+  const periods = Object.keys(merged)
+    .sort()
+    .flatMap((d) => merged[d]);
+  return { ...next, camu: { ...next.camu, periods } };
+}
+
 function set(next: CollegeState) {
-  current = next ?? EMPTY;
+  current = withArchive(next ?? EMPTY);
   loaded = true;
   listeners.forEach((l) => l());
   void importLms(current);
@@ -478,6 +527,13 @@ export async function connectLms(username: string, password: string): Promise<vo
 }
 
 export async function disconnect(which: "camu" | "lms"): Promise<void> {
+  if (which === "camu") {
+    try {
+      localStorage.removeItem(ARCHIVE);
+    } catch {
+      // nothing kept
+    }
+  }
   set(await DockIn.disconnectCollege({ which }));
 }
 
