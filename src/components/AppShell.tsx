@@ -71,8 +71,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // undefined = still loading, null = no profile yet
   const profile = useLiveQuery(() => getProfile(), []);
 
+  // The welcome, sign-in and setup screens are designed in light: they never
+  // follow a dark phone (and nothing flashes dark while logging out).
+  const firstRun = pathname === "/onboarding" || pathname === "/setup" || profile === null;
   useEffect(() => {
-    if (!profile) return;
+    if (!firstRun) return;
+    applyTheme("light", false);
+  }, [firstRun]);
+
+  useEffect(() => {
+    if (!profile || firstRun) return;
     applyTheme(profile.theme);
     applyTextScale(profile.textScale);
     if (profile.theme !== "system") return;
@@ -81,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     const onChange = () => applyTheme("system");
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [profile]);
+  }, [profile, firstRun]);
 
   // Cloud sync runs in the background for signed-in students.
   const { session, loading: authLoading } = useAuth();
@@ -335,7 +343,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (bare) {
     return (
       <ToastProvider>
-        <div className="paper-page mx-auto min-h-dvh w-full max-w-md">{children}</div>
+        {/* With no profile (just logged out, or a fresh install) the next screen is
+          the welcome: paint its cream at once, never an empty dark page. */}
+      <div className={cx(profile === null && pathname !== "/onboarding" ? "intro-paper" : "paper-page", "mx-auto min-h-dvh w-full max-w-md")}>{children}</div>
       </ToastProvider>
     );
   }
@@ -350,7 +360,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="paper-page mx-auto min-h-dvh w-full max-w-md">
+      {/* With no profile (just logged out, or a fresh install) the next screen is
+          the welcome: paint its cream at once, never an empty dark page. */}
+      <div className={cx(profile === null && pathname !== "/onboarding" ? "intro-paper" : "paper-page", "mx-auto min-h-dvh w-full max-w-md")}>
         {ready && (
           <main
             className={cx(!onboarding && "pb-[calc(6.5rem+var(--sab))]")}

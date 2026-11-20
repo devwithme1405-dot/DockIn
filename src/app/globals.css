@@ -1349,3 +1349,34 @@ html.lite .intro-sketch :is(path, rect, circle, ellipse) { animation: none; stro
     linear-gradient(150deg, #d9772b, #a14a1c);
   box-shadow: inset 0 1px 0 rgb(255 230 200 / 0.35), 0 4px 0 #7a3714, 0 14px 24px -14px rgb(120 50 15 / 0.8);
 }
+
+/* First-run header: a leather band with stitching along its curved edge. */
+.hero-band {
+  background:
+    var(--grain),
+    radial-gradient(120% 80% at 50% 0%, rgb(255 200 140 / 0.28), transparent 60%),
+    linear-gradient(170deg, #b8642c, #8a4520 55%, #6e3415);
+  box-shadow: inset 0 -2px 0 rgb(255 220 180 / 0.15), 0 14px 30px -18px rgb(90 40 10 / 0.9);
+}
+.hero-band::after {
+  content: "";
+  position: absolute;
+  inset: auto 10px 7px 10px;
+  height: 40px;
+  border: 1.5px dashed rgb(255 220 180 / 0.45);
+  border-top: 0;
+  border-radius: 0 0 30px 30px;
+  pointer-events: none;
+}
+.hero-drift { animation: hero-drift 7s ease-in-out infinite; }
+@keyframes hero-drift { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-10px) rotate(6deg); } }
+html.lite .hero-drift { animation: none; }
+/* The card that sits over the band's lower edge. */
+.lift-card {
+  background: #fffdf8;
+  border: 1.5px solid #ead6b6;
+  border-radius: 26px;
+  box-shadow: 0 22px 40px -26px rgb(110 60 20 / 0.7), inset 0 1px 0 #fff;
+}
+.hero-wave { display: inline-block; transform-origin: 70% 70%; animation: hero-wave 1.6s 400ms ease-in-out 2; }
+@keyframes hero-wave { 0%, 100% { transform: rotate(0); } 20%, 60% { transform: rotate(16deg); } 40%, 80% { transform: rotate(-8deg); } }

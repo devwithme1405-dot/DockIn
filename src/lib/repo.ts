@@ -87,7 +87,7 @@ export async function saveProfile(
     id: "me",
     name: "",
     target: 75,
-    theme: "system",
+    theme: "light",
     onboarded: false,
     createdAt: existing?.createdAt ?? t,
     ...existing,
@@ -125,7 +125,7 @@ export function applyTextScale(scale: number | undefined): void {
   }
 }
 
-export function applyTheme(pref: ThemePref): void {
+export function applyTheme(pref: ThemePref, remember = true): void {
   if (typeof document === "undefined") return;
   const dark =
     pref === "dark" ||
@@ -138,10 +138,12 @@ export function applyTheme(pref: ThemePref): void {
   document
     .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
     .forEach((m) => (m.content = colour));
-  try {
-    localStorage.setItem("dockin-theme", pref);
-  } catch {
-    /* private mode: ignore */
+  if (remember) {
+    try {
+      localStorage.setItem("dockin-theme", pref);
+    } catch {
+      /* private mode: ignore */
+    }
   }
   // The clock and battery follow the APP's theme: dark icons on the light
   // page, light icons on the dark one — even when the phone itself is in the

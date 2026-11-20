@@ -10,6 +10,7 @@ import { markSetupSeen } from "@/lib/setup";
 import { ConnectCamu, ConnectLms } from "@/components/College";
 import { SignIn } from "@/components/SignIn";
 import { cx } from "@/components/ui";
+import { HeroBand } from "@/components/FirstRun";
 
 /**
  * Everything DockIn needs from the phone, on one screen, once.
@@ -52,12 +53,15 @@ export default function SetupPage() {
   return (
     // Pinned to the screen and scrolling inside, for the same reason as onboarding:
     // dvh heights are unreliable under the text-size zoom.
-    <div className="paper-page fixed inset-0 z-40 overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-md px-5 pt-[max(1.25rem,calc(var(--sat)+0.75rem))] pb-[calc(7.5rem+var(--sab))]">
-        <div className="step-in flex items-center gap-4">
-          <span className="relative grid size-[72px] shrink-0 place-items-center">
-            <svg viewBox="0 0 72 72" className="absolute inset-0 -rotate-90" aria-hidden>
-              <circle cx="36" cy="36" r="30" fill="none" strokeWidth="7" className="stroke-[#e6d2b0] dark:stroke-[#3a2b1f]" />
+    <div className="intro-paper fixed inset-0 z-40 overflow-y-auto overscroll-contain">
+      <div className="mx-auto w-full max-w-md pb-[calc(7.5rem+var(--sab))]">
+        <HeroBand
+          title={all ? "You're all set!" : "Almost there!"}
+          sub={all ? "Attendance and assignments now come in by themselves." : "Connect your college once — DockIn fills itself in after that."}
+        >
+          <span className="anim-pop relative mx-auto mb-2 grid size-[76px] place-items-center rounded-full bg-[#fff4e6] shadow-[0_4px_0_rgb(60_20_5/0.35)]">
+            <svg viewBox="0 0 72 72" className="absolute inset-1 -rotate-90" aria-hidden>
+              <circle cx="36" cy="36" r="30" fill="none" strokeWidth="7" className="stroke-[#f0e2c8]" />
               <circle
                 cx="36"
                 cy="36"
@@ -70,17 +74,17 @@ export default function SetupPage() {
                 className="transition-[stroke-dasharray,stroke] duration-700 ease-out"
               />
             </svg>
-            {all ? <Check size={30} strokeWidth={3} className="anim-check text-[#209660]" /> : <span className="text-[17px] font-extrabold">{done}/{steps.length}</span>}
+            {all ? (
+              <Check size={30} strokeWidth={3} className="anim-check text-[#209660]" />
+            ) : (
+              <span className="text-[17px] font-extrabold text-[#5b2d14]">
+                {done}/{steps.length}
+              </span>
+            )}
           </span>
-          <div className="min-w-0">
-            <h1 className="font-display text-[26px] leading-tight font-extrabold tracking-tight">{all ? "You're all set!" : "Connect your college"}</h1>
-            <p className="mt-1 text-[13.5px] leading-snug text-muted">
-              {all ? "Attendance and assignments now come in by themselves." : "One tap each. After this, DockIn fills itself in."}
-            </p>
-          </div>
-        </div>
+        </HeroBand>
 
-        <div className="mt-6 space-y-2.5">
+        <div className="relative -mt-10 space-y-2.5 px-5">
           {configured && (
             <section className="account-card anim-pop rounded-3xl p-4" style={{ "--d": "80ms" } as CSSProperties}>
               <div className="flex items-start gap-3">
@@ -117,7 +121,7 @@ export default function SetupPage() {
           </p>
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md bg-gradient-to-t from-bg via-bg/95 to-bg/0 px-5 pt-8 pb-[max(1rem,calc(var(--sab)+0.5rem))]">
+        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md bg-gradient-to-t from-[#fbf1e1] via-[#fbf1e1]/95 to-[#fbf1e1]/0 px-5 pt-8 pb-[max(1rem,calc(var(--sab)+0.5rem))]">
           <button
             onClick={finish}
             className={cx(

@@ -42,8 +42,12 @@ function MicrosoftSquares() {
  * two fields; a small switch chooses which. Nothing is ever deleted: a device
  * that signs in joins the account and its data syncs up.
  */
-export function SignIn({ dark = false }: { dark?: boolean }) {
-  const [creating, setCreating] = useState(false);
+export function SignIn({ dark = false, onModeChange }: { dark?: boolean; onModeChange?: (creating: boolean) => void }) {
+  const [creating, setCreatingRaw] = useState(false);
+  const setCreating = (v: boolean) => {
+    setCreatingRaw(v);
+    onModeChange?.(v);
+  };
   const [error, setError] = useState<string | null>(readAuthRedirectError);
   const [busy, setBusy] = useState(false);
   const [username, setUsername] = useState("");

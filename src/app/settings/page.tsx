@@ -258,7 +258,7 @@ export default function ProfilePage() {
     try {
       localStorage.removeItem("dockin-theme");
     } catch {}
-    applyTheme("system");
+    applyTheme("light", false);
     router.replace("/onboarding");
   }
 
