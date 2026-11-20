@@ -1,5 +1,6 @@
 "use client";
 
+import type { ChatSolution } from "./solution";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { db } from "./db";
@@ -65,6 +66,8 @@ export interface ChatFile {
   path: string;
   /** Stored gzip-compressed (big files); unpacked on download. */
   gz?: boolean;
+  /** Sent as the answer to an LMS assignment (see lib/solution.ts). */
+  solution?: ChatSolution;
 }
 
 export type ChatData = ChatTask & Partial<ChatPoll> & Partial<ChatFile>;

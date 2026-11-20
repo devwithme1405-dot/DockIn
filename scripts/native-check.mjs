@@ -144,6 +144,10 @@ await page.addInitScript(
         phone.college = { ...phone.college, lms: { ...phone.lmsReady, connected: true, name: username, syncedAt: Date.now() } };
         return phone.college;
       },
+      lmsSubmit: ({ instance, name }) => {
+        phone.submitted = { instance, name };
+        return { status: "submitted" };
+      },
       disconnectCollege: ({ which }) => {
         phone.college = { ...phone.college, [which]: { connected: false } };
         return phone.college;
@@ -400,11 +404,21 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
   await page.screenshot({ path: `${SHOTS}/native-lms-tasks.png`, fullPage: true });
   // An LMS assignment offers to hand in your own file from DockIn.
   await page.locator("li:visible", { hasText: "Lab 7: Joins" }).first().locator("button").nth(1).click();
-  await waitFor("Upload to LMS");
+  await waitFor("Upload my file to LMS");
   await page.locator('input[type="file"]').first().setInputFiles({ name: "Lab7_Sachin.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
-  await waitFor("Submit to my LMS");
+  await page.getByRole("dialog", { name: "Hand in to LMS" }).getByRole("button", { name: /Get it ready/ }).click();
+  const check = page.getByRole("dialog", { name: "Check your copy" });
+  await check.getByRole("button", { name: /Submit to LMS/ }).click({ timeout: 8000 });
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: `${SHOTS}/native-lms-sending.png` });
+  await page.getByRole("dialog", { name: "Submitted" }).getByText("Submitted to LMS").waitFor({ timeout: 8000 });
+  await page.getByText("The LMS confirmed it's handed in").waitFor({ timeout: 2000 });
+  await page.waitForTimeout(700);
   await page.screenshot({ path: `${SHOTS}/native-lms-submit.png` });
-  await page.keyboard.press("Escape");
+  const sent = await page.evaluate(() => window.__phone.get().submitted ?? null);
+  if (!sent || sent.name !== "Lab7_Sachin.pdf" || typeof sent.instance !== "number") throw new Error("the phone was not asked to submit: " + JSON.stringify(sent));
+  await page.getByRole("dialog", { name: "Submitted" }).getByRole("button", { name: "Done" }).click();
+  await page.waitForTimeout(300);
   await page.keyboard.press("Escape");
 });
 

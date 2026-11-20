@@ -127,3 +127,40 @@ describe("shared task nudges", () => {
     expect(mine[1].title).toBe("Lab 7: Joins is due in 30 mins");
   });
 });
+
+describe("solution reminders", () => {
+  it("nudges a minute after a friend sends it, and 3 hours before it is due", () => {
+    const sent = at("12:00");
+    const items = buildReminders({
+      sessions: [],
+      subjects: [],
+      tasks: [],
+      overall: null,
+      target: 75,
+      today: day,
+      now: sent + 10_000,
+      solutions: [{ id: "m1", title: "DBMS Assignment 4", from: "Vaibhav", sentAt: sent, dueDate: "2026-03-11", dueTime: "23:59", thread: "g:abc" }],
+    });
+    const mine = items.filter((x) => x.title.includes("DBMS Assignment 4"));
+    expect(mine).toHaveLength(2);
+    expect(mine[0].at).toBe(sent + 90_000);
+    expect(mine[0].title).toMatch(/haven't submitted/);
+    expect(mine[0].body).toMatch(/Vaibhav/);
+    expect(mine[0].path).toBe("/circle?chat=g%3Aabc");
+    expect(mine[1].at).toBe(new Date("2026-03-11T20:59:00").getTime());
+  });
+
+  it("says nothing once it is too late for the first nudge and there is no deadline", () => {
+    const items = buildReminders({
+      sessions: [],
+      subjects: [],
+      tasks: [],
+      overall: null,
+      target: 75,
+      today: day,
+      now: at("15:00"),
+      solutions: [{ id: "m1", title: "OS Lab", from: "Yash", sentAt: at("12:00"), dueDate: null, dueTime: null, thread: "d:a:b" }],
+    });
+    expect(items.filter((x) => x.title.includes("OS Lab"))).toHaveLength(0);
+  });
+});

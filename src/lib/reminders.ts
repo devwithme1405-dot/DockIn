@@ -41,6 +41,8 @@ export interface ReminderInput {
   now: number;
   /** Tasks friends or a group shared with you that you have not finished yet. */
   shared?: { id: string; title: string; dueDate: string | null; dueTime: string | null; from: string }[];
+  /** Solutions friends sent for LMS assignments you have NOT submitted yet. */
+  solutions?: { id: string; title: string; from: string; sentAt: number; dueDate: string | null; dueTime: string | null; thread: string }[];
 }
 
 const pctOf = (s: AttendanceSummary) => (s.pct === null ? null : Math.round(s.pct));
@@ -68,7 +70,7 @@ export function adviceFor(s: AttendanceSummary | undefined, target: number): { g
  * Build the reminder list. Ids are 1..N for this batch — the phone cancels the
  * previous batch wholesale, so they only need to be unique here.
  */
-export function buildReminders({ sessions, subjects, tasks, overall, stats, target, today, now, shared }: ReminderInput): ReminderItem[] {
+export function buildReminders({ sessions, subjects, tasks, overall, stats, target, today, now, shared, solutions }: ReminderInput): ReminderItem[] {
   const items: ReminderItem[] = [];
   let id = 1;
   const name = new Map(subjects.map((s) => [s.id, s.name]));
@@ -169,6 +171,26 @@ export function buildReminders({ sessions, subjects, tasks, overall, stats, targ
         body: `${sh.from} · you haven't marked it done yet`,
         path: "/circle?tab=work",
       });
+    }
+  }
+
+  // A friend sent the solution and you still haven't handed it in: a nudge a
+  // minute after it arrives, and again three hours before it is due. Submitting
+  // ticks the task, which takes it off this list.
+  const seenAssign = new Set<string>();
+  for (const so of solutions ?? []) {
+    if (seenAssign.has(so.title)) continue;
+    seenAssign.add(so.title);
+    const path = `/circle?chat=${encodeURIComponent(so.thread)}`;
+    const soon = so.sentAt + 90_000;
+    if (soon > now && soon <= horizon) {
+      items.push({ id: id++, at: soon, title: `You haven't submitted: ${so.title}`, body: `${so.from} sent the solution — put your name on it and submit in one tap`, path });
+    }
+    if (so.dueDate) {
+      const before = at(so.dueDate, so.dueTime ?? "23:59") - 3 * 3_600_000;
+      if (before > now && before <= horizon && before > soon) {
+        items.push({ id: id++, at: before, title: `${so.title} is due in 3 hours`, body: `Not submitted yet · ${so.from}'s solution is in the chat`, path });
+      }
     }
   }
 

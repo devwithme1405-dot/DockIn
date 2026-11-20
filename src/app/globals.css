@@ -1199,3 +1199,58 @@ html[data-boot] .page-enter {
   outline-offset: -1px;
 }
 .chat-root { background-position: center; }
+
+/* ---------------------------------------------------------------------------
+   Solution studio: the page being edited, the beam, the name swap, the send. */
+.studio-beam {
+  background: linear-gradient(180deg, transparent, rgb(224 122 44 / 0.16) 45%, rgb(224 122 44 / 0.42) 50%, rgb(224 122 44 / 0.16) 55%, transparent);
+  animation: studio-beam 1.6s ease-in-out infinite;
+}
+@keyframes studio-beam {
+  0% { transform: translateY(-60%); }
+  100% { transform: translateY(420%); }
+}
+.studio-doc { animation: studio-float 3.2s ease-in-out infinite; }
+@keyframes studio-float {
+  50% { transform: translateY(-5px) rotate(-0.6deg); }
+}
+.studio-old { animation: studio-wobble 0.9s ease-in-out infinite; }
+@keyframes studio-wobble {
+  50% { background-color: rgb(255 190 120 / 0.95); }
+}
+.studio-caret { animation: studio-caret 0.7s steps(1) infinite; }
+@keyframes studio-caret {
+  50% { opacity: 0; }
+}
+.studio-spark { animation: studio-spark 1.1s ease-out both; }
+@keyframes studio-spark {
+  0% { transform: scale(0) rotate(0); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: scale(1.15) rotate(70deg) translateY(-10px); opacity: 0; }
+}
+.studio-fly { animation: studio-fly 1.3s cubic-bezier(.5, 0, .4, 1) infinite; }
+@keyframes studio-fly {
+  0% { transform: translate(-50%, 0) rotate(0); opacity: 0; }
+  15% { opacity: 1; }
+  55% { transform: translate(-50%, 34px) rotate(-5deg) scale(0.92); opacity: 1; }
+  100% { transform: translate(-50%, 92px) scale(0.45); opacity: 0; }
+}
+.studio-halo { animation: studio-halo 1.8s ease-out infinite; }
+@keyframes studio-halo {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+.studio-burst { animation: studio-burst 700ms 180ms cubic-bezier(.2, .8, .3, 1) both; }
+@keyframes studio-burst {
+  0% { transform: translate(-50%, -50%) rotate(var(--a)) translateY(0) scale(0.4); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--a)) translateY(-86px) scale(1); opacity: 0; }
+}
+html.lite .studio-doc,
+html.lite .studio-old,
+html.lite .studio-halo { animation: none; }
+html.lite .studio-beam { animation-duration: 2.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-doc, .studio-old, .studio-beam, .studio-halo, .studio-fly, .studio-spark, .studio-burst { animation: none; }
+  .studio-beam { opacity: 0; }
+}

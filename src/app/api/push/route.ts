@@ -96,9 +96,11 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
     const { data: m } = await sb.from("messages").select("thread,author,body,kind,data").eq("id", e.id).maybeSingle();
     if (!m || m.author !== me) return null;
     const thread = m.thread as string;
-    const d = (m.data ?? {}) as { title?: string; question?: string; name?: string };
-    const text =
-      m.kind === "task"
+    const d = (m.data ?? {}) as { title?: string; question?: string; name?: string; solution?: { title?: string } };
+    const sol = m.kind === "file" && d.solution?.title ? String(d.solution.title).slice(0, 80) : null;
+    const text = sol
+      ? `📝 Sent the solution for "${sol}" — tap to put your name on it and submit`
+      : m.kind === "task"
         ? `📌 ${d.title ?? "Task"}`
         : m.kind === "poll"
           ? `📊 Poll: ${d.question ?? ""}`

@@ -151,7 +151,10 @@ interface DockInPlugin {
   installUpdate(): Promise<void>;
   /** Open a document (base64) in the phone's own viewer app. */
   openFile(options: { name: string; mime: string; data: string }): Promise<void>;
-  lmsSubmit(options: { instance: number; name: string; mime: string; data: string }): Promise<void>;
+  /** status: what the LMS says afterwards ("submitted", "draft", "new"…); missing on older app builds. */
+  lmsSubmit(options: { instance: number; name: string; mime: string; data: string }): Promise<{ status?: string } | void>;
+  /** A page of HTML as an A4 PDF (base64), with no dialog. Added in the solution-sharing build. */
+  htmlToPdf(options: { html: string }): Promise<{ data: string }>;
   /** Open Camu, signed in, at a path, with a note in the top bar. */
   openCamu(options: { path?: string; note?: string }): Promise<void>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */

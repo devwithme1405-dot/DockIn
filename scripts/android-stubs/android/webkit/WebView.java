@@ -13,4 +13,5 @@ public class WebView extends View {
   public void setWebViewClient(WebViewClient c) {}
   public void setWebChromeClient(WebChromeClient c) {}
   public void destroy() {}
+  public android.print.PrintDocumentAdapter createPrintDocumentAdapter(String name) { return null; }
 }

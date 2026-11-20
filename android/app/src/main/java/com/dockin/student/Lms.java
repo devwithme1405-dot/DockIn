@@ -165,18 +165,18 @@ final class Lms {
      * Only the app door (a token) can do this; on the website door it answers
      * {@link WebOnly} and the app opens the assignment page instead.
      */
-    static void submitAssignment(Context c, long assignId, String fileName, String mime, byte[] data)
+    static String submitAssignment(Context c, long assignId, String fileName, String mime, byte[] data)
             throws IOException, Refused, JSONException, WebOnly {
         String user = Vault.get(c, V_USER);
         if (user == null) throw new Refused("Connect the LMS first.");
         String token = Vault.get(c, V_TOKEN);
         if (token == null) throw new WebOnly();
         try {
-            submitWithToken(token, assignId, fileName, mime, data);
+            return submitWithToken(token, assignId, fileName, mime, data);
         } catch (Refused e) {
             token = appToken(user, savedPassword(c));
             Vault.put(c, V_TOKEN, token);
-            submitWithToken(token, assignId, fileName, mime, data);
+            return submitWithToken(token, assignId, fileName, mime, data);
         }
     }
 
@@ -187,7 +187,8 @@ final class Lms {
         }
     }
 
-    private static void submitWithToken(String token, long assignId, String fileName, String mime, byte[] data)
+    /** @return what the LMS now says about the submission: "submitted", "draft", or "unknown". */
+    private static String submitWithToken(String token, long assignId, String fileName, String mime, byte[] data)
             throws IOException, Refused, JSONException {
         Map<String, String> f = new LinkedHashMap<>();
         f.put("token", token);
@@ -222,6 +223,20 @@ final class Lms {
             call(token, "mod_assign_submit_for_grading", submit);
         } catch (IOException ignored) {
             // No separate "submit" step on this assignment: saving was handing it in.
+        }
+
+        // Ask the LMS what it now holds, so the app never says "submitted" on a guess.
+        try {
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put("assignid", String.valueOf(assignId));
+            JSONObject st = call(token, "mod_assign_get_submission_status", q);
+            JSONObject last = st.optJSONObject("lastattempt");
+            JSONObject sub = last == null ? null : last.optJSONObject("submission");
+            if ((sub == null || sub.optString("status", "").isEmpty()) && last != null) sub = last.optJSONObject("teamsubmission");
+            String status = sub == null ? "" : sub.optString("status", "");
+            return status.isEmpty() ? "unknown" : status;
+        } catch (IOException e) {
+            return "unknown";
         }
     }
 

@@ -65,6 +65,8 @@ import {
   votePoll,
 } from "@/lib/chat";
 import { handOver } from "./AssignmentFile";
+import { SendDocSheet, SolutionCard } from "./SolutionStudio";
+import { docKind } from "@/lib/solution";
 import { TaskForm } from "./TaskParts";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Group, Task } from "@/lib/types";
@@ -181,6 +183,7 @@ export function ChatView({
   const starred = useLiveQuery(() => db.starred.where("thread").equals(thread).toArray(), [thread]);
   const starSet = useMemo(() => new Set((starred ?? []).map((x) => x.id)), [starred]);
   const docInput = useRef<HTMLInputElement>(null);
+  const [docAsk, setDocAsk] = useState<File | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -304,6 +307,11 @@ export function ChatView({
 
   async function sendDoc(f: File | undefined) {
     if (!f) return;
+    // A Word file or PDF might be someone's assignment solution: ask first.
+    if (docKind(f.name, f.type)) {
+      setDocAsk(f);
+      return;
+    }
     setUploading(true);
     try {
       const file = await uploadChatFile(thread, f);
@@ -842,6 +850,7 @@ export function ChatView({
         </div>
       </Sheet>
 
+      {docAsk && <SendDocSheet key={docAsk.name + docAsk.size + docAsk.lastModified} file={docAsk} thread={thread} onClose={() => setDocAsk(null)} />}
       <Sheet open={polling} onClose={() => setPolling(false)} title="New poll">
         <PollForm
           onSend={async (poll) => {
@@ -1125,6 +1134,8 @@ function Bubble({
             </span>
           ) : m.kind === "poll" && m.data?.options ? (
             <PollCard m={m} people={people} />
+          ) : m.kind === "file" && m.data?.path && (m.data as ChatFile).solution?.title ? (
+            <SolutionCard f={m.data as ChatFile} mine={mine} from={name} />
           ) : m.kind === "file" && m.data?.path ? (
             <FileCard f={m.data as ChatFile} />
           ) : m.kind === "task" && m.data ? (

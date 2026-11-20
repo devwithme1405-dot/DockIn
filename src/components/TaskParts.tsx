@@ -30,9 +30,7 @@ import {
 import { addDays, toDateStr, weekdayOf } from "@/lib/dates";
 import type { Priority, Subject, Subtask, Task, TaskKind } from "@/lib/types";
 import { Button, cx, useToast } from "./ui";
-import { LmsSubmitSheet } from "./LmsSubmit";
-import { handOver } from "./AssignmentFile";
-import { lmsRef } from "@/lib/lmsSubmit";
+import { LmsHandIn } from "./SolutionStudio";
 
 export const KIND_ICON: Record<TaskKind, typeof FileText> = {
   assignment: FileText,
@@ -561,61 +559,3 @@ export function TaskForm({
   );
 }
 
-/**
- * An LMS assignment's own hand-in: pick your file, check it, submit it to your
- * own submission with your saved LMS login. Quizzes and the rest just open.
- */
-function LmsHandIn({ task }: { task: Task }) {
-  const ref = lmsRef(task.id);
-  const input = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<{ blob: Blob; name: string } | null>(null);
-  const isAssign = ref?.module === "assign";
-  // Only a quiz has to be done on the LMS itself; everything else stays in DockIn.
-  const quiz = !isAssign && !!task.url && (ref?.module === "quiz" || task.kind === "quiz");
-  if (!isAssign && !quiz) return null;
-  return (
-    <div className="mb-4 flex gap-2">
-      {isAssign && (
-        <>
-          <input
-            ref={input}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) setFile({ blob: f, name: f.name });
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => input.current?.click()}
-            className="btn-leather flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl text-[14.5px]"
-          >
-            Upload to LMS
-          </button>
-        </>
-      )}
-      {quiz && (
-        <a
-          href={task.url}
-          target="_blank"
-          rel="noreferrer"
-          className="btn-paper flex h-12 flex-1 items-center justify-center gap-1.5 rounded-2xl px-4 text-[14px]"
-        >
-          Take the quiz on LMS ↗
-        </a>
-      )}
-      <LmsSubmitSheet
-        open={!!file}
-        onClose={() => setFile(null)}
-        title={task.title}
-        file={file}
-        instance={isAssign && ref ? ref.instance : null}
-        lmsUrl={task.url}
-        onOpenFile={() => file && void handOver(file.blob, file.name)}
-        onSubmitted={() => void setTaskDone(task.id, true)}
-      />
-    </div>
-  );
-}

@@ -514,8 +514,9 @@ public class DockInPlugin extends Plugin {
             public void run() {
                 try {
                     byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
-                    Lms.submitAssignment(c, instance, name, mime, data);
-                    call.resolve();
+                    JSObject res = new JSObject();
+                    res.put("status", Lms.submitAssignment(c, instance, name, mime, data));
+                    call.resolve(res);
                 } catch (Lms.WebOnly e) {
                     call.reject("WEB_ONLY");
                 } catch (Lms.Refused e) {
@@ -525,6 +526,115 @@ public class DockInPlugin extends Plugin {
                 }
             }
         }, "dockin-lms-submit").start();
+    }
+
+    /** Kept alive while it prints; a WebView nobody holds can be collected mid-way. */
+    private android.webkit.WebView printing;
+
+    /**
+     * Turns a page of HTML (a Word file drawn by the web app) into an A4 PDF,
+     * the way "Print → Save as PDF" would, without showing any dialog.
+     */
+    @PluginMethod
+    public void htmlToPdf(final PluginCall call) {
+        final String html = call.getString("html");
+        if (html == null || html.isEmpty()) {
+            call.reject("Nothing to convert.");
+            return;
+        }
+        if (getActivity() == null) {
+            call.reject("Open DockIn and try again.");
+            return;
+        }
+        final Context c = getContext();
+        final boolean[] finished = {false};
+        getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                final android.webkit.WebView w = new android.webkit.WebView(c);
+                printing = w;
+                final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+                ui.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (finished[0]) return;
+                        finished[0] = true;
+                        printing = null;
+                        w.destroy();
+                        call.reject("Converting took too long.");
+                    }
+                }, 45000);
+                w.setWebViewClient(new android.webkit.WebViewClient() {
+                    private boolean started = false;
+
+                    @Override
+                    public void onPageFinished(android.webkit.WebView view, String url) {
+                        if (started) return;
+                        started = true;
+                        android.print.PrintAttributes attrs = new android.print.PrintAttributes.Builder()
+                                .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
+                                .setResolution(new android.print.PrintAttributes.Resolution("pdf", "pdf", 300, 300))
+                                .setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS)
+                                .build();
+                        final java.io.File out = new java.io.File(c.getCacheDir(), "dockin-print.pdf");
+                        android.print.DockInPdfPrinter.print(view.createPrintDocumentAdapter("DockIn"), attrs, out,
+                                new android.print.DockInPdfPrinter.Done() {
+                                    @Override
+                                    public void ok(final java.io.File f) {
+                                        new Thread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                try {
+                                                    byte[] bytes = readAll(f);
+                                                    //noinspection ResultOfMethodCallIgnored
+                                                    f.delete();
+                                                    JSObject res = new JSObject();
+                                                    res.put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP));
+                                                    done(true);
+                                                    call.resolve(res);
+                                                } catch (Exception e) {
+                                                    done(true);
+                                                    call.reject("Could not read the PDF.");
+                                                }
+                                            }
+                                        }, "dockin-print").start();
+                                    }
+
+                                    @Override
+                                    public void fail(String message) {
+                                        done(true);
+                                        call.reject(message);
+                                    }
+
+                                    private void done(boolean b) {
+                                        ui.post(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                finished[0] = true;
+                                                printing = null;
+                                                w.destroy();
+                                            }
+                                        });
+                                    }
+                                });
+                    }
+                });
+                w.loadDataWithBaseURL("https://dockin.app/print/", html, "text/html", "utf-8", null);
+            }
+        });
+    }
+
+    private static byte[] readAll(java.io.File f) throws java.io.IOException {
+        java.io.FileInputStream in = new java.io.FileInputStream(f);
+        try {
+            java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[16384];
+            int n;
+            while ((n = in.read(chunk)) > 0) buf.write(chunk, 0, n);
+            return buf.toByteArray();
+        } finally {
+            in.close();
+        }
     }
 
     @PluginMethod

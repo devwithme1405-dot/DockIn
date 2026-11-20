@@ -11,7 +11,7 @@
  */
 
 import { chromium } from "playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 
 const BASE = process.env.BASE ?? "http://localhost:3000";
 const REF = (process.env.SUPABASE_REF ?? "qfwldkdwxkqjmscttlza").trim();
@@ -34,6 +34,7 @@ const messages = [
   { id: "m3", thread: `g:${G}`, author: RIYA, body: "", kind: "task", data: { title: "Lab 7: Joins", kind: "assignment", dueDate: new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 10), dueTime: "23:59", subject: "Database Management Systems" }, reply_to: null, created_at: t(30), deleted_at: null },
   { id: "m4", thread: `g:${G}`, author: YASH, body: "Thanks Riya 🙏", kind: "text", data: null, reply_to: null, created_at: t(20), deleted_at: null },
   { id: "m5", thread: `g:${G}`, author: RIYA, body: "", kind: "poll", data: { question: "Kal DBMS class chal rahe?", options: ["Haan", "Nahi", "Proxy laga do"] }, reply_to: null, created_at: t(15), deleted_at: null },
+  { id: "m7", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Assignment4_Vaibhav.pdf", size: 61000, type: "application/pdf", path: "g/sol/Assignment4_Vaibhav.pdf", solution: { instance: 41, title: "DBMS Assignment 4", course: "Database Management Systems", dueDate: new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10), dueTime: "23:59", authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(10), deleted_at: null },
   { id: "m6", thread: dm, author: YASH, body: "", kind: "file", data: { name: "DBMS_Lab7_question.pdf", size: 182000, type: "application/pdf", path: "x/y/DBMS_Lab7_question.pdf" }, reply_to: null, created_at: t(40), deleted_at: null },
 ];
 const votes = [{ message_id: "m5", user_id: YASH, choice: 0 }];
@@ -110,6 +111,10 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
   const req = route.request();
   const url = new URL(req.url());
   const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  if (url.pathname.startsWith("/storage/v1/object/")) {
+    if (req.method() === "GET") return route.fulfill({ status: 200, contentType: "application/pdf", body: readFileSync(new URL("../tests/fixtures/solution-chrome.pdf", import.meta.url)) });
+    return json({ Key: url.pathname.split("/object/")[1], Id: "x" });
+  }
   if (url.pathname.startsWith("/auth/v1/user")) return json(user);
   if (url.pathname.startsWith("/auth/v1/")) return json({});
   const m = url.pathname.match(/^\/rest\/v1\/(rpc\/)?([a-z_]+)/);
@@ -162,8 +167,10 @@ await page.evaluate(async () => {
   await new Promise((res) => {
     const r = indexedDB.open("dockin");
     r.onsuccess = () => {
-      const tx = r.result.transaction(["profile"], "readwrite");
+      const tx = r.result.transaction(["profile", "tasks"], "readwrite");
       tx.objectStore("profile").put({ id: "me", name: "Sachin", target: 75, theme: "light", onboarded: true, createdAt: 0, updatedAt: Date.now() });
+      const due = new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10);
+      tx.objectStore("tasks").put({ id: "lms-assign-41", title: "DBMS Assignment 4", notes: "Database Management Systems", kind: "assignment", subjectId: null, dueDate: due, dueTime: "23:59", room: "", priority: "normal", done: false, doneAt: null, subtasks: [], source: "lms", url: "https://lms.example/mod/assign/view.php?id=41", createdAt: 0, updatedAt: Date.now(), deletedAt: null });
       tx.oncomplete = () => res();
       tx.onerror = () => res();
     };
@@ -462,6 +469,63 @@ await step("Back from a chat returns to the list", async () => {
   if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends: " + page.url());
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${SHOTS}/chat-friends-home.png` });
+});
+
+await step("a friend's solution: card, my name in, animation, check", async () => {
+  await page.getByRole("button", { name: /CSE E1/ }).first().click();
+  const chat = page.getByRole("dialog").first();
+  await chat.getByText("Assignment solution").waitFor({ timeout: 4000 });
+  await chat.getByText("You haven't submitted yet").waitFor({ timeout: 3000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/solution-card.png` });
+  await chat.getByRole("button", { name: /Edit & submit/ }).click();
+  const studio = page.getByRole("dialog", { name: "Make my copy" });
+  await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
+  await studio.getByText("Vaibhav Sharma", { exact: true }).waitFor({ timeout: 2000 });
+  await studio.getByText("DBMS Assignment 4").first().waitFor({ timeout: 2000 });
+  const make = studio.getByRole("button", { name: /Make my copy/ });
+  if (!(await make.isDisabled())) throw new Error("should ask for my enrollment first");
+  await studio.getByPlaceholder("Your enrollment no.").fill("e23cseu0155");
+  await page.screenshot({ path: `${SHOTS}/solution-setup.png` });
+  await make.click();
+  await page.waitForTimeout(1900);
+  await page.screenshot({ path: `${SHOTS}/solution-working.png` });
+  const check = page.getByRole("dialog", { name: "Check your copy" });
+  await check.getByText(/places changed/).waitFor({ timeout: 15000 });
+  await check.getByText("Their name is gone").waitFor({ timeout: 2000 });
+  await check.getByText("Submitting works in the DockIn app", { exact: false }).waitFor({ timeout: 2000 });
+  await page.screenshot({ path: `${SHOTS}/solution-preview.png` });
+  await check.getByLabel("Close").click();
+  await page.waitForTimeout(300);
+  if (await page.getByRole("dialog", { name: /Check your copy|Make my copy/ }).count()) throw new Error("studio did not close");
+  // Asked once: the enrollment is remembered for next time.
+  await chat.getByRole("button", { name: /Edit & submit/ }).click();
+  await page.getByRole("dialog", { name: "Make my copy" }).getByText("Names in the file").waitFor({ timeout: 10000 });
+  const roll = await page.getByPlaceholder("Your enrollment no.").inputValue();
+  if (roll !== "E23CSEU0155") throw new Error(`enrollment not remembered: "${roll}"`);
+  await page.goBack();
+  await page.waitForTimeout(400);
+  if (await page.getByRole("dialog", { name: "Make my copy" }).count()) throw new Error("Back did not close the studio");
+});
+
+await step("sending a PDF asks: just a file, or a solution for which assignment", async () => {
+  const chat = page.getByRole("dialog").first();
+  await chat.locator('input[type="file"]').first().setInputFiles({ name: "OS_Lab3_Sachin.pdf", mimeType: "application/pdf", buffer: readFileSync(new URL("../tests/fixtures/solution-chrome.pdf", import.meta.url)) });
+  const ask = page.getByRole("dialog", { name: "Send this file" });
+  await ask.getByText("Solution for an LMS assignment").click();
+  await page.getByRole("dialog", { name: "Which assignment?" }).getByText("DBMS Assignment 4").click();
+  const who = page.getByRole("dialog", { name: "Your details in it" });
+  await who.getByText("found 1×").first().waitFor({ timeout: 8000 }).catch(() => {});
+  await who.getByLabel("Your name").fill("Vaibhav Sharma");
+  await who.getByText(/found \d+×/).first().waitFor({ timeout: 3000 });
+  await page.screenshot({ path: `${SHOTS}/solution-send.png` });
+  await who.getByRole("button", { name: /Send solution/ }).click();
+  await chat.getByText("Friends can put their own name on it", { exact: false }).waitFor({ timeout: 6000 });
+  const sent = messages.find((m) => m.data?.solution && m.author === ME);
+  if (!sent || sent.data.solution.instance !== 41 || sent.data.solution.authorName !== "Vaibhav Sharma") throw new Error("solution data not sent: " + JSON.stringify(sent?.data));
+  await page.screenshot({ path: `${SHOTS}/solution-sent.png` });
+  await page.goBack();
+  await page.waitForTimeout(400);
 });
 
 await browser.close();
