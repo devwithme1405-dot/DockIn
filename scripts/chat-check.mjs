@@ -35,7 +35,6 @@ const messages = [
   { id: "m4", thread: `g:${G}`, author: YASH, body: "Thanks Riya 🙏", kind: "text", data: null, reply_to: null, created_at: t(20), deleted_at: null },
   { id: "m5", thread: `g:${G}`, author: RIYA, body: "", kind: "poll", data: { question: "Kal DBMS class chal rahe?", options: ["Haan", "Nahi", "Proxy laga do"] }, reply_to: null, created_at: t(15), deleted_at: null },
   { id: "m7", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Assignment4_Vaibhav.pdf", size: 61000, type: "application/pdf", path: "g/sol/Assignment4_Vaibhav.pdf", solution: { instance: 41, title: "DBMS Assignment 4", course: "Database Management Systems", dueDate: new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10), dueTime: "23:59", authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(10), deleted_at: null },
-  { id: "m8", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: 900101, title: "DBMS Assignment 4 (practice)", course: "Database Management Systems", dueDate: null, dueTime: null, authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(5), deleted_at: null },
   { id: "m6", thread: dm, author: YASH, body: "", kind: "file", data: { name: "DBMS_Lab7_question.pdf", size: 182000, type: "application/pdf", path: "x/y/DBMS_Lab7_question.pdf" }, reply_to: null, created_at: t(40), deleted_at: null },
 ];
 const votes = [{ message_id: "m5", user_id: YASH, choice: 0 }];
@@ -59,6 +58,8 @@ const tables = {
   poll_votes: votes,
   blocks: [],
   friend_stats: [],
+  practice_assignments: [],
+  practice_submissions: [],
 };
 {
   const due = new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 10);
@@ -98,6 +99,11 @@ const rpcs = {
   my_people: [
     { user_id: YASH, name: "Yash", avatar: null, branch: "CSE", year: 2, section: "E1", bio: null, attendance_state: "safe", friend_status: "accepted", requested_by: ME, requested_at: Date.now() - 3 * 86400_000, since: Date.now() - 2 * 86400_000 },
     { user_id: "00000000-0000-4000-8000-000000000004", name: "Aman Verma", avatar: null, branch: "CSE", year: 2, section: "E2", bio: null, attendance_state: null, friend_status: "pending", requested_by: "00000000-0000-4000-8000-000000000004", requested_at: Date.now() - 3600_000 },
+  ],
+  group_people: [
+    { user_id: ME, name: "Sachin", avatar: null, branch: null, year: 2, role: "owner" },
+    { user_id: YASH, name: "Yash", avatar: null, branch: null, year: 2, role: "member" },
+    { user_id: RIYA, name: "Riya Sharma", avatar: null, branch: null, year: 2, role: "member" },
   ],
   ensure_profile: [{ user_id: ME, code: "SACH1234", name: "Sachin", avatar: null, branch: null, year: 2, section: "E1", bio: null, attendance_state: null, share_attendance: false }],
 };
@@ -140,6 +146,18 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
     messages.push(row);
     const one = (req.headers()["accept"] || "").includes("vnd.pgrst.object");
     return json(one ? row : [row], 201);
+  }
+  if (name.startsWith("practice_")) {
+    if (req.method() === "POST") {
+      const b = JSON.parse(req.postData() || "[]");
+      for (const r of Array.isArray(b) ? b : [b]) tables[name].push({ id: `p${tables[name].length + 1}-${Date.now()}`, created_at: new Date().toISOString(), ...r });
+      return json([], 201);
+    }
+    if (req.method() === "DELETE") {
+      const inst = url.searchParams.get("instance");
+      tables[name] = tables[name].filter((r) => inst && String(r.instance) !== inst.replace("eq.", ""));
+      return json([], 200);
+    }
   }
   if (name === "poll_votes" && req.method() === "POST") {
     const b = JSON.parse(req.postData() || "{}");
@@ -529,29 +547,32 @@ await step("sending a PDF asks: just a file, or a solution for which assignment"
   await page.waitForTimeout(400);
 });
 
-await step("Practice LMS: switch on, add an assignment, submit a friend's solution, see it there", async () => {
+await step("Practice LMS for a group: turn on, add an assignment, submit, watch it land", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Practice LMS/ }).click();
   await page.waitForURL("**/practice-lms", { timeout: 5000 });
-  await page.getByRole("button", { name: /Turn on Practice LMS/ }).click();
-  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).first().waitFor({ timeout: 4000 });
-  // My own assignment, which must show up in Tasks.
+  await page.getByRole("button", { name: /CSE E1.*Use this/ }).click();
+  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).first().waitFor({ timeout: 6000 });
+  if (tables.practice_assignments.length !== 3) throw new Error(`expected 3 starters on the server, got ${tables.practice_assignments.length}`);
   await page.getByRole("button", { name: /Add assignment/ }).click();
   const add = page.getByRole("dialog", { name: "Add an assignment" });
   await add.getByPlaceholder("e.g. CN Assignment 2").fill("CN Assignment 2");
   await add.getByPlaceholder("e.g. Computer Networks").fill("Computer Networks");
   await add.getByRole("button", { name: "Add assignment" }).click();
-  await page.locator("button:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 4000 });
+  await page.locator("button:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 5000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/practice-lms.png` });
   await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
   await page.locator("li:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 5000 });
 
+  // Yash sends his solution for the group's DBMS practice assignment.
+  const dbms = tables.practice_assignments.find((r) => r.title === "DBMS Assignment 4 (practice)");
+  messages.push({ id: "m9", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: dbms.instance, title: dbms.title, course: dbms.course, dueDate: null, dueTime: null, authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: new Date().toISOString(), deleted_at: null });
   await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
   const card = chat.locator("div", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Edit & submit" }).last();
-  await card.getByText("You haven't submitted yet").waitFor({ timeout: 4000 });
+  await card.getByText("You haven't submitted yet").waitFor({ timeout: 6000 });
   await card.getByRole("button", { name: /Edit & submit/ }).click();
   const studio = page.getByRole("dialog", { name: "Make my copy" });
   await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
@@ -563,13 +584,16 @@ await step("Practice LMS: switch on, add an assignment, submit a friend's soluti
   await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });
   await done.getByRole("button", { name: "Done" }).click();
   await card.getByText("You've submitted this").waitFor({ timeout: 4000 });
+  const sub = tables.practice_submissions.find((r) => r.instance === dbms.instance);
+  if (!sub || sub.status !== "submitted" || !String(sub.path).startsWith(`g_${G}/practice/`)) throw new Error("submission not on the server: " + JSON.stringify(sub));
 
+  // The laptop view: the group's page shows it, under the right assignment.
   await page.goto(`${BASE}/practice-lms`, { waitUntil: "networkidle" });
-  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Submitted" }).first().click();
+  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "1/3 submitted" }).first().click();
   const view = page.getByRole("dialog", { name: "DBMS Assignment 4 (practice)" });
   await view.getByText("Submitted for grading").waitFor({ timeout: 4000 });
-  await view.getByText("Solution_Practice.pdf").first().waitFor({ timeout: 2000 });
-  await view.getByText(/early|late/).waitFor({ timeout: 2000 }).catch(() => {});
+  await view.getByText("Everyone in the group").waitFor({ timeout: 2000 });
+  await view.getByText("Riya Sharma").waitFor({ timeout: 2000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/practice-assignment.png` });
 });

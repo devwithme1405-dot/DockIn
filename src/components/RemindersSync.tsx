@@ -12,6 +12,7 @@ import { toDateStr } from "@/lib/dates";
 import { getSupabase } from "@/lib/supabase";
 import type { ChatFile } from "@/lib/chat";
 import { findMyAssignment } from "@/lib/solution";
+import { practiceOn, pullPractice } from "@/lib/practiceLms";
 
 /**
  * Keeps the phone's reminders in step with the data: whenever the timetable,
@@ -39,6 +40,15 @@ export function RemindersSync() {
         dueTime: sh.dueTime,
         from: sh.groupName ? `${sh.authorName} in ${sh.groupName}` : sh.authorName,
       }));
+  }, []);
+
+  // The group's Practice LMS (when on): its assignments in Tasks, kept fresh.
+  useEffect(() => {
+    const pull = () => {
+      if (practiceOn()) void pullPractice().catch(() => {});
+    };
+    pull();
+    return onPhone("resume", pull);
   }, []);
 
   // Solutions friends sent for assignments still open on my LMS.
