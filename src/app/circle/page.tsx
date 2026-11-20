@@ -28,8 +28,9 @@ import {
   UserRound,
   PenSquare,
   ChevronDown,
-  ChevronRight,
   BarChart3,
+  Coffee,
+  Plane,
   UserPlus,
   Users,
   X,
@@ -592,17 +593,40 @@ function Circle() {
       {!searching && (
         <button
           onClick={() => setCompareOpen(true)}
-          className="tile-tint anim-pop mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl p-3.5 text-left active:scale-[0.99]"
-          style={{ "--tint": "#d9772b", "--d": "260ms" } as React.CSSProperties}
+          className="compare-tile anim-pop mx-4 mt-3 block w-[calc(100%-2rem)] overflow-hidden rounded-3xl p-4 text-left active:scale-[0.99]"
+          style={{ "--d": "260ms" } as React.CSSProperties}
         >
-          <span className="tile-icon grid size-11 shrink-0 place-items-center rounded-2xl">
-            <BarChart3 size={21} />
+          <span className="flex items-start gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11.5px] font-extrabold tracking-wide text-[#ffe2c2] uppercase">You vs your friends</span>
+              <span className="mt-0.5 block text-[19px] leading-tight font-extrabold text-white">Compare with friends</span>
+              <span className="mt-1 block text-[12.5px] leading-snug text-[#ffe9d2]">See who&apos;s ahead, who&apos;s done the work, plan a trip, find free time.</span>
+            </span>
+            {accepted.length > 0 && (
+              <span className="flex shrink-0 -space-x-2.5 pt-1">
+                {accepted.slice(0, 3).map((f) => (
+                  <span key={f.id} className="rounded-full ring-2 ring-[#b8602a]">
+                    <Avatar name={f.name} avatar={f.avatar} size={30} />
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15.5px] font-extrabold">Compare with friends</span>
-            <span className="block truncate text-[12.5px] text-muted">Attendance, who&apos;s done what, trip planner, who&apos;s free</span>
+          <span className="mt-3 grid grid-cols-4 gap-1.5">
+            {(
+              [
+                [BarChart3, "Attendance"],
+                [ListChecks, "Tasks"],
+                [Plane, "Trip plan"],
+                [Coffee, "Free now"],
+              ] as const
+            ).map(([Icon, label]) => (
+              <span key={label} className="flex flex-col items-center gap-1 rounded-2xl bg-white/15 py-2 text-white">
+                <Icon size={18} />
+                <span className="text-[10.5px] font-bold">{label}</span>
+              </span>
+            ))}
           </span>
-          <ChevronRight size={19} className="shrink-0 text-muted" />
         </button>
       )}
 

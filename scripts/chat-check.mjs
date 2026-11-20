@@ -415,11 +415,12 @@ await step("chat themes, jumbo emoji, links and starring", async () => {
 await step("Compare: attendance board, shared tasks, trip planner, free now", async () => {
   await page.getByRole("button", { name: /Compare with friends/ }).click();
   const panel = page.getByRole("dialog", { name: "Compare" });
-  await panel.getByText("Share your numbers to compare").waitFor({ timeout: 3000 });
+  await panel.getByText("Turn on sharing to start comparing").waitFor({ timeout: 3000 });
   await panel.getByRole("switch", { name: "Attendance" }).click();
   await panel.getByRole("switch", { name: "Tasks & deadlines" }).click();
   await panel.getByRole("switch", { name: "Timetable" }).click();
   await panel.getByText("78.2%").first().waitFor({ timeout: 3000 });
+  await panel.getByText("Who's ahead?").waitFor({ timeout: 2000 });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${SHOTS}/compare-attendance.png` });
   await panel.getByRole("button", { name: /Tasks/ }).first().click();
@@ -432,7 +433,7 @@ await step("Compare: attendance board, shared tasks, trip planner, free now", as
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/compare-trip.png` });
   await panel.getByRole("button", { name: /Free now/ }).click();
-  await panel.getByText("Everyone free together").waitFor({ timeout: 3000 });
+  await panel.getByText("When you're all free together", { exact: true }).waitFor({ timeout: 3000 });
   await page.screenshot({ path: `${SHOTS}/compare-free.png` });
   await page.goBack();
   await page.waitForTimeout(400);

@@ -72,7 +72,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
   const TABS: [Tab, string, typeof BarChart3][] = [
     ["attendance", "Attendance", BarChart3],
     ["tasks", "Tasks", ListChecks],
-    ["trip", "Trip", Plane],
+    ["trip", "Trip plan", Plane],
     ["free", "Free now", Coffee],
   ];
 
@@ -84,23 +84,25 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
             <ArrowLeft size={23} />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="text-[18px] leading-tight font-extrabold">Compare</p>
-            <p className="text-[12px] text-muted">You and {friends.length} friend{friends.length === 1 ? "" : "s"}</p>
+            <p className="text-[18px] leading-tight font-extrabold">Compare with friends</p>
+            <p className="text-[12px] text-muted">You and {friends.length} friend{friends.length === 1 ? "" : "s"} · only what each person shares</p>
           </div>
           <button onClick={() => setEditing((v) => !v)} aria-label="What I share" className="flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-bold">
             {sharingAny ? <Eye size={15} /> : <Lock size={15} />} {sharingAny ? "Sharing" : "Private"}
           </button>
         </div>
-        <nav className="flex px-1" aria-label="Compare sections">
+        <nav className="no-scrollbar flex gap-1.5 overflow-x-auto px-3 pb-2.5 [scrollbar-width:none]" aria-label="Compare sections">
           {TABS.map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
               aria-current={tab === id ? "page" : undefined}
-              className={cx("relative flex flex-1 items-center justify-center gap-1 pt-1 pb-2.5 text-[13px] font-bold transition-colors", tab === id ? "text-[#b85d1c]" : "text-muted")}
+              className={cx(
+                "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-bold transition-colors",
+                tab === id ? "bg-[#3b2416] text-[#fff6ea] dark:bg-[#f0d2ab] dark:text-[#2a1608]" : "bg-surface-2 text-muted",
+              )}
             >
               <Icon size={14} /> {label}
-              <span className={cx("absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-[#d9772b] transition-transform duration-200", tab === id ? "scale-x-100" : "scale-x-0")} />
             </button>
           ))}
         </nav>
@@ -110,20 +112,20 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
         {(editing || !sharingAny) && (
           <section className="form-card anim-pop mb-3">
             <div className="flex items-start gap-2">
-              <p className="flex-1 text-[15px] font-extrabold">{sharingAny ? "What friends can see" : "Share your numbers to compare"}</p>
+              <p className="flex-1 text-[15px] font-extrabold">{sharingAny ? "What your friends can see" : "Turn on sharing to start comparing"}</p>
               {sharingAny && (
                 <button onClick={() => setEditing(false)} className="h-8 rounded-full bg-surface-2 px-3 text-[12.5px] font-bold">
                   Done
                 </button>
               )}
             </div>
-            <p className="mt-0.5 text-[12.5px] text-muted">Only your accepted friends see this. Switch anything off and it disappears for them at once.</p>
+            <p className="mt-0.5 text-[12.5px] text-muted">Only friends you&apos;ve accepted see this — never anyone else. Turn something off and it disappears for them instantly.</p>
             <div className="mt-3 space-y-2">
               {(
                 [
-                  ["attendance", "Attendance", "Overall and subject-wise %"],
-                  ["tasks", "Tasks & deadlines", "Pending, overdue, which shared tasks you've done"],
-                  ["schedule", "Timetable", "For the trip planner and “who's free now”"],
+                  ["attendance", "Attendance", "Your overall % and each subject's"],
+                  ["tasks", "Tasks & deadlines", "How much is pending, and which shared tasks you've finished"],
+                  ["schedule", "Timetable", "Lets friends plan trips with you and see when you're free"],
                 ] as const
               ).map(([k, title, sub]) => (
                 <label key={k} className="field flex items-center gap-3 px-3.5 py-2.5">
@@ -138,6 +140,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
           </section>
         )}
 
+        <TabIntro tab={tab} />
         {tab === "attendance" && <AttendanceTab people={people} target={profile?.target ?? 75} />}
         {tab === "tasks" && <TasksTab people={people} />}
         {tab === "trip" && <TripTab people={people} />}
@@ -145,13 +148,14 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
 
         {silent.length > 0 && (
           <section className="mt-5">
-            <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Not sharing yet</h2>
+            <h2 className="mb-1 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Not sharing yet</h2>
+            <p className="mb-2 text-[12.5px] text-muted">Send them a nudge — they show up here once they turn sharing on.</p>
             <ul className="space-y-1.5">
               {silent.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 rounded-2xl bg-surface/80 px-3 py-2">
+                <li key={p.id} className="account-card flex items-center gap-3 rounded-2xl px-3 py-2">
                   <Avatar name={p.name} avatar={p.avatar} size={36} />
                   <span className="min-w-0 flex-1 truncate text-[14.5px] font-semibold">{p.name}</span>
-                  <button onClick={() => void nudge(p)} className="flex h-8 items-center gap-1.5 rounded-full bg-surface-2 px-3 text-[12.5px] font-bold">
+                  <button onClick={() => void nudge(p)} className="btn-connect flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-bold">
                     <Send size={13} /> Ask
                   </button>
                 </li>
@@ -160,6 +164,59 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+const INTRO: Record<Tab, { title: string; line: string; tint: string; Icon: typeof BarChart3 }> = {
+  attendance: { title: "Who's ahead?", line: "Everyone's attendance side by side — overall and in every subject.", tint: "#2f74d8", Icon: BarChart3 },
+  tasks: { title: "Who's done the work?", line: "Shared assignments ticked off, and how much each of you still has left.", tint: "#de5137", Icon: ListChecks },
+  trip: { title: "Planning a trip?", line: "Pick the days — see what missing those classes does to everyone's attendance.", tint: "#1f9a5f", Icon: Plane },
+  free: { title: "Who's free right now?", line: "Who's in class, who isn't, and when you're all free together today.", tint: "#e5951a", Icon: Coffee },
+};
+
+function TabIntro({ tab }: { tab: Tab }) {
+  const { title, line, tint, Icon } = INTRO[tab];
+  return (
+    <div key={tab} className="anim-pop mb-3 flex items-center gap-3 px-1">
+      <span className="grid size-11 shrink-0 place-items-center rounded-2xl text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_3px_0_rgb(0_0_0/0.12)]" style={{ background: tint }}>
+        <Icon size={21} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[17px] leading-tight font-extrabold">{title}</span>
+        <span className="block text-[12.5px] leading-snug text-muted">{line}</span>
+      </span>
+    </div>
+  );
+}
+
+/** The top three on a podium: gold in the middle, silver left, bronze right. */
+function Podium({ people, target }: { people: Person[]; target: number }) {
+  const top = people.slice(0, 3);
+  const order = top.length === 3 ? [top[1], top[0], top[2]] : top.length === 2 ? [top[1], top[0]] : top;
+  const place = (p: Person) => top.indexOf(p);
+  const H = [96, 72, 56];
+  const C = ["linear-gradient(180deg,#f8d36b,#e0a623)", "linear-gradient(180deg,#e4e8ee,#b9c0ca)", "linear-gradient(180deg,#eebf91,#c98552)"];
+  return (
+    <div className="account-card mb-4 flex items-end justify-center gap-3 rounded-3xl px-3 pt-4">
+      {order.map((p) => {
+        const n = place(p);
+        const a = p.s!.attendance!;
+        const v = pct(a.present, a.total);
+        return (
+          <div key={p.id} className="anim-pop flex w-[30%] max-w-[7.5rem] flex-col items-center" style={{ "--d": `${(2 - n) * 90}ms` } as CSSProperties}>
+            <div className="relative">
+              <Avatar name={p.name} avatar={p.avatar} size={n === 0 ? 54 : 44} />
+              {n === 0 && <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[18px]">👑</span>}
+            </div>
+            <p className="mt-1 w-full truncate text-center text-[13px] font-extrabold">{p.me ? "You" : p.name.split(" ")[0]}</p>
+            <p className={cx("text-[15px] font-extrabold tabular-nums", TONE_TEXT[tone(v, p.s!.target ?? target)])}>{fmtPct(v)}</p>
+            <div className="podium-rise mt-1.5 grid w-full place-items-center rounded-t-2xl text-[22px] font-extrabold text-white/90 [text-shadow:0_1px_2px_rgb(0_0_0/0.25)]" style={{ height: H[n], background: C[n] }}>
+              {n + 1}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -180,7 +237,7 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-2xl bg-surface/80 px-4 py-6 text-center text-[13.5px] text-muted">{children}</p>;
+  return <p className="account-card rounded-3xl px-5 py-7 text-center text-[13.5px] leading-snug text-muted">{children}</p>;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,12 +254,13 @@ function AttendanceTab({ people, target: myTarget }: { people: Person[]; target:
   for (const p of withAtt) for (const s of p.s!.attendance!.subjects) if (!subjectMap.has(subjectKey(s))) subjectMap.set(subjectKey(s), s.code || s.name);
   const subjects = [...subjectMap];
 
-  if (!withAtt.length) return <Empty>Nobody&apos;s attendance to compare yet. Switch yours on above and ask a friend.</Empty>;
+  if (!withAtt.length) return <Empty>No attendance to compare yet. Turn on “Attendance” above and ask a friend to do the same.</Empty>;
 
   return (
     <div className="space-y-4">
+      {ranked.length >= 2 && <Podium people={ranked} target={myTarget} />}
       <section>
-        <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Overall</h2>
+        <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Everyone, ranked · tap to see subjects</h2>
         <ol className="space-y-2">
           {ranked.map((p, i) => {
             const a = p.s!.attendance!;
@@ -210,7 +268,7 @@ function AttendanceTab({ people, target: myTarget }: { people: Person[]; target:
             const t = tone(v, p.s!.target ?? myTarget);
             const isOpen = open === p.id;
             return (
-              <li key={p.id} className={cx("lift anim-pop overflow-hidden rounded-3xl bg-surface", p.me && "ring-2 ring-[#d9772b]/50")} style={{ "--d": `${i * 40}ms` } as CSSProperties}>
+              <li key={p.id} className={cx("account-card anim-pop overflow-hidden rounded-3xl", p.me && "ring-2 ring-[#d9772b]/50")} style={{ "--d": `${i * 40}ms` } as CSSProperties}>
                 <button onClick={() => setOpen(isOpen ? null : p.id)} className="flex w-full items-center gap-3 p-3 text-left">
                   <span className={cx("grid size-7 shrink-0 place-items-center rounded-full text-[12.5px] font-extrabold", i === 0 ? "bg-[#f5c542] text-[#5a3d00]" : i === 1 ? "bg-[#d9dde3] text-[#3a3f47]" : i === 2 ? "bg-[#e3b48a] text-[#5a3315]" : "bg-surface-2 text-muted")}>
                     {i + 1}
@@ -258,7 +316,7 @@ function AttendanceTab({ people, target: myTarget }: { people: Person[]; target:
 
       {subjects.length > 0 && (
         <section>
-          <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Subject by subject</h2>
+          <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Pick a subject</h2>
           <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
             {subjects.map(([k, label]) => (
               <button key={k} onClick={() => setSubject(subject === k ? null : k)} aria-pressed={(subject ?? subjects[0][0]) === k} className="chip">
@@ -276,7 +334,7 @@ function AttendanceTab({ people, target: myTarget }: { people: Person[]; target:
               .filter((x): x is NonNullable<typeof x> => !!x)
               .sort((a, b) => (b.v ?? 0) - (a.v ?? 0));
             return (
-              <ul className="lift space-y-2.5 rounded-3xl bg-surface p-3.5">
+              <ul className="account-card space-y-2.5 rounded-3xl p-3.5">
                 <li className="truncate text-[13px] font-bold text-muted">{rows[0]?.s.name}</li>
                 {rows.map(({ p, s, v }) => {
                   const t = tone(v, p.s!.target);
@@ -320,20 +378,20 @@ function TasksTab({ people }: { people: Person[] }) {
     .filter((r) => r.who.length > 1 || !r.who[0].p.me)
     .sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
 
-  if (!withTasks.length) return <Empty>No one shares tasks yet. Switch “Tasks &amp; deadlines” on above.</Empty>;
+  if (!withTasks.length) return <Empty>No tasks shared yet. Turn on “Tasks &amp; deadlines” above — friends who do the same show up here.</Empty>;
   const ranked = [...withTasks].sort((a, b) => b.s!.tasks!.overdue - a.s!.tasks!.overdue || b.s!.tasks!.pending - a.s!.tasks!.pending);
 
   return (
     <div className="space-y-4">
       {shared.length > 0 && (
         <section>
-          <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Shared tasks — who&apos;s done</h2>
+          <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Shared tasks · who&apos;s finished</h2>
           <ul className="space-y-2">
             {shared.map((r, i) => {
               const done = r.who.filter((w) => w.done).length;
               const late = r.due && r.due < today;
               return (
-                <li key={i} className="lift anim-pop rounded-3xl bg-surface p-3.5" style={{ "--d": `${Math.min(i, 6) * 40}ms` } as CSSProperties}>
+                <li key={i} className="account-card anim-pop rounded-3xl p-3.5" style={{ "--d": `${Math.min(i, 6) * 40}ms` } as CSSProperties}>
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-bold">{r.title}</span>
@@ -366,12 +424,12 @@ function TasksTab({ people }: { people: Person[] }) {
       )}
 
       <section>
-        <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Work left</h2>
+        <h2 className="mb-2 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">How much work everyone has left</h2>
         <ul className="space-y-2">
           {ranked.map((p, i) => {
             const t = p.s!.tasks!;
             return (
-              <li key={p.id} className={cx("lift anim-pop rounded-3xl bg-surface p-3", p.me && "ring-2 ring-[#d9772b]/50")} style={{ "--d": `${i * 40}ms` } as CSSProperties}>
+              <li key={p.id} className={cx("account-card anim-pop rounded-3xl p-3", p.me && "ring-2 ring-[#d9772b]/50")} style={{ "--d": `${i * 40}ms` } as CSSProperties}>
                 <div className="flex items-center gap-3">
                   <Avatar name={p.name} avatar={p.avatar} size={40} />
                   <span className="min-w-0 flex-1">
@@ -430,13 +488,13 @@ function TripTab({ people }: { people: Person[] }) {
     ["Next week", addDays(today, 1), addDays(today, 7)],
   ];
 
-  if (!able.length) return <Empty>Trip planning needs a shared timetable. Switch “Timetable” on above, and ask friends to as well.</Empty>;
+  if (!able.length) return <Empty>Planning a trip needs everyone&apos;s timetable. Turn on “Timetable” above and ask your friends to do the same.</Empty>;
 
   return (
     <div className="space-y-3">
       <section className="form-card">
         <p className="form-label">
-          <CalendarRange size={14} /> When are you going?
+          <CalendarRange size={14} /> When is the trip?
         </p>
         <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
           {quick.map(([label, a, b]) => (
@@ -506,7 +564,7 @@ function TripTab({ people }: { people: Person[] }) {
             const below = subs.filter((x) => x.m > 0 && x.after !== null && x.after < s.target);
             const verdict = below.length ? "risky" : after !== null && after < s.target ? "risky" : "safe";
             return (
-              <li key={p.id} className="lift anim-pop overflow-hidden rounded-3xl bg-surface" style={{ "--d": `${i * 50}ms` } as CSSProperties}>
+              <li key={p.id} className="account-card anim-pop overflow-hidden rounded-3xl" style={{ "--d": `${i * 50}ms` } as CSSProperties}>
                 <div className="flex items-center gap-3 p-3">
                   <Avatar name={p.name} avatar={p.avatar} size={40} />
                   <span className="min-w-0 flex-1">
@@ -516,7 +574,7 @@ function TripTab({ people }: { people: Person[] }) {
                     </span>
                   </span>
                   <span className={cx("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-extrabold", verdict === "safe" ? "bg-safe-soft text-safe" : "bg-danger-soft text-danger")}>
-                    {verdict === "safe" ? "Safe to go" : `${below.length || 1} below ${s.target}%`}
+                    {verdict === "safe" ? "Safe to go ✓" : `${below.length || 1} subject${(below.length || 1) === 1 ? "" : "s"} below ${s.target}%`}
                   </span>
                 </div>
                 <ul className="space-y-1.5 border-t border-card-edge/50 px-4 py-3">
@@ -554,7 +612,7 @@ function FreeTab({ people }: { people: Person[] }) {
     return d.getHours() * 60 + d.getMinutes();
   });
   const able = people.filter((p) => p.s?.today && p.s.today.date === today);
-  if (!able.length) return <Empty>Nobody&apos;s timetable for today is shared yet.</Empty>;
+  if (!able.length) return <Empty>No one&apos;s timetable for today is shared yet. Turn on “Timetable” above.</Empty>;
 
   const rows = able.map((p) => {
     const cls = p.s!.today!.classes
@@ -583,14 +641,14 @@ function FreeTab({ people }: { people: Person[] }) {
   return (
     <div className="space-y-3">
       <section className="tile-tint rounded-3xl p-4" style={{ "--tint": "#2f9c8c" } as CSSProperties}>
-        <p className="text-[12.5px] font-extrabold tracking-wide text-muted uppercase">Everyone free together</p>
+        <p className="text-[12.5px] font-extrabold tracking-wide text-muted uppercase">When you&apos;re all free together</p>
         <p className="mt-1 text-[17px] font-extrabold">
           {gaps.length ? gaps.slice(0, 2).map(([a, b]) => `${fmt(a)} – ${fmt(b)}`).join("  ·  ") : "No common break left today"}
         </p>
       </section>
       <ul className="space-y-2">
         {sorted.map(({ p, current, next }, i) => (
-          <li key={p.id} className="lift anim-pop flex items-center gap-3 rounded-3xl bg-surface p-3" style={{ "--d": `${i * 40}ms` } as CSSProperties}>
+          <li key={p.id} className="account-card anim-pop flex items-center gap-3 rounded-3xl p-3" style={{ "--d": `${i * 40}ms` } as CSSProperties}>
             <span className="relative">
               <Avatar name={p.name} avatar={p.avatar} size={42} />
               <span className={cx("absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full ring-2 ring-surface", current ? "bg-danger" : "bg-safe")} />

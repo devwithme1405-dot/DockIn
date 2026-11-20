@@ -341,14 +341,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const onboarding = pathname === "/onboarding" || pathname === "/setup";
-  const ready = !restoring && profile !== undefined && (onboarding || !!profile?.onboarded);
+  // Signing in on the welcome screens starts a restore from the cloud: keep the
+  // screen up meanwhile (it used to blank out and come back — a flicker).
+  const ready = (!restoring || (onboarding && bootedOnce)) && profile !== undefined && (onboarding || !!profile?.onboarded);
   if (ready && minShown && !bootedOnce) setBootedOnce(true);
   const showBoot = (!ready || !minShown) && !bootedOnce;
   const activeTab = tabOf(pathname);
 
   return (
     <ToastProvider>
-      <div className={cx("paper-page mx-auto min-h-dvh w-full max-w-md", !onboarding && "page-curl")}>
+      <div className="paper-page mx-auto min-h-dvh w-full max-w-md">
         {ready && (
           <main
             className={cx(!onboarding && "pb-[calc(6.5rem+var(--sab))]")}

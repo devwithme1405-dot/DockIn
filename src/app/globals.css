@@ -465,30 +465,6 @@ html[data-navved] .stagger > * {
     repeating-linear-gradient(180deg, transparent 0 33px, var(--rule) 33px 34px);
 }
 
-/* The corner of the page lifting, top right. */
-.page-curl {
-  position: relative;
-}
-.page-curl::before {
-  content: "";
-  position: absolute;
-  /* Below the status bar, never on top of the clock and battery. */
-  top: var(--sat, 0px);
-  right: 0;
-  z-index: 29;
-  width: 30px;
-  height: 30px;
-  pointer-events: none;
-  background: linear-gradient(225deg, #d9c19a 0 49%, transparent 50%),
-    linear-gradient(225deg, transparent 50%, #fff9ee 51%, #efdcbc 78%, #d9bf96 100%);
-  border-bottom-left-radius: 8px;
-  box-shadow: -3px 3px 6px -2px rgb(90 50 20 / 30%);
-}
-[data-theme="dark"] .page-curl::before {
-  background: linear-gradient(225deg, #120c08 0 49%, transparent 50%),
-    linear-gradient(225deg, transparent 50%, #3e2f22 51%, #2e2218 100%);
-}
-
 /* Screens used to paint their own flat colour; the page shows through now. */
 .page-wash {
   background: transparent;
@@ -1328,4 +1304,48 @@ html.lite .studio-beam { animation-duration: 2.4s; }
 @keyframes step-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .intro-marker, .intro-ring, .intro-tick, .intro-strike, .step-in { animation-duration: 1ms; animation-delay: 0ms; }
+}
+
+/* Welcome slides v2: handwritten headings, a warm page, things drawing themselves. */
+.font-script { font-family: "Kalam", "Segoe Print", cursive; font-weight: 700; letter-spacing: -0.01em; }
+.intro-paper {
+  background-color: #fbf1e1;
+  background-image:
+    var(--grain),
+    radial-gradient(120% 60% at 50% 0%, #fffaf2, transparent 70%),
+    radial-gradient(90% 50% at 50% 100%, #f6e3c6, transparent 70%);
+  color: #3b2414;
+}
+.intro-brush { transform-origin: left center; animation: brush-in 600ms 380ms cubic-bezier(0.3, 0.9, 0.3, 1) both; }
+@keyframes brush-in { from { transform: scaleX(0); opacity: 0.4; } to { transform: scaleX(1); opacity: 1; } }
+.intro-sparks { animation: sparks-in 700ms 500ms cubic-bezier(0.2, 1.4, 0.4, 1) both; transform-box: fill-box; transform-origin: center; }
+@keyframes sparks-in { from { opacity: 0; transform: scale(0.3) rotate(-20deg); } to { opacity: 1; transform: none; } }
+.intro-sketch :is(path, rect, circle, ellipse) {
+  stroke-dasharray: 520;
+  stroke-dashoffset: 520;
+  fill-opacity: 0;
+  animation: sketch-draw 1.5s 350ms ease-out forwards, sketch-fill 600ms 1.2s ease-out forwards;
+}
+@keyframes sketch-draw { to { stroke-dashoffset: 0; } }
+@keyframes sketch-fill { to { fill-opacity: 1; } }
+.intro-pin { transform-box: fill-box; animation: pin-drop 520ms cubic-bezier(0.3, 1.5, 0.5, 1) both; animation-delay: var(--d, 0ms); }
+@keyframes pin-drop { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+.anim-slide-r { animation: slide-r 460ms cubic-bezier(0.22, 0.9, 0.25, 1) both; animation-delay: var(--d, 0ms); }
+@keyframes slide-r { from { opacity: 0; transform: translateX(34px); } to { opacity: 1; transform: none; } }
+.intro-swoosh path { stroke-dasharray: 200; stroke-dashoffset: 200; animation: sketch-draw 600ms 650ms ease-out forwards; }
+.intro-check { stroke-dasharray: 16; stroke-dashoffset: 16; animation: sketch-draw 320ms ease-out forwards; animation-delay: var(--d, 0ms); }
+html.lite .intro-sketch :is(path, rect, circle, ellipse) { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .intro-brush, .intro-sparks, .intro-pin, .anim-slide-r { animation-duration: 1ms; animation-delay: 0ms; }
+  .intro-sketch :is(path, rect, circle, ellipse), .intro-swoosh path, .intro-check { animation: none; stroke-dashoffset: 0; fill-opacity: 1; }
+}
+.podium-rise { transform-origin: bottom; animation: podium-rise 620ms 200ms cubic-bezier(0.2, 1.1, 0.3, 1) both; }
+@keyframes podium-rise { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* The Compare entry on Friends: warm leather-orange, so it reads as a place to go. */
+.compare-tile {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgb(255 210 150 / 0.35), transparent 60%),
+    linear-gradient(150deg, #d9772b, #a14a1c);
+  box-shadow: inset 0 1px 0 rgb(255 230 200 / 0.35), 0 4px 0 #7a3714, 0 14px 24px -14px rgb(120 50 15 / 0.8);
 }

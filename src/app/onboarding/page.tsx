@@ -96,7 +96,9 @@ export default function OnboardingPage() {
               )}
             </div>
 
-            <div className="mt-auto pt-6">
+            {/* Right under the form, not pinned to the bottom: the keyboard opening
+                must not make it jump. */}
+            <div className="pt-5">
               {session ? (
                 <button onClick={() => setStep(2)} className="btn-leather flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16.5px]">
                   Continue <ArrowRight size={19} />
