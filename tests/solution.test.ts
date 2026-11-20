@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignInstance, docKind, findMyAssignment, pickableAssignments, solutionFor } from "@/lib/solution";
+import { assignInstance, docKind, findMyAssignment, hits, pickableAssignments, solutionFor, suggestNames, theirDetails } from "@/lib/solution";
 import type { Task } from "@/lib/types";
 
 const task = (id: string, title: string, over: Partial<Task> = {}): Task => ({
@@ -48,5 +48,29 @@ describe("matching a friend's solution to my LMS", () => {
     expect(assignInstance("lms-assign-12")).toBe(12);
     expect(docKind("a.DOCX")).toBe("docx");
     expect(docKind("a.pptx")).toBeNull();
+  });
+});
+
+describe("finding whose name to swap, when the sender got it wrong", () => {
+  const text = "DBMS ASSIGNMENT 4\nName: Yash Agarwal   Enrollment: S25CSEU0155 Section E1\nSubmitted by YASH AGARWAL (S25CSEU0155) to Dr. Rakesh Gupta.";
+  const me = { name: "Sachin Kumar", roll: "E23CSEU0155" };
+
+  it("counts names whatever the spacing and case", () => {
+    expect(hits(text, "yash agarwal")).toBe(2);
+    expect(hits("NameYashAgarwal", "Yash Agarwal")).toBe(1);
+    expect(hits(text, "Rahul")).toBe(0);
+  });
+  it("reads the author's name off the page", () => {
+    expect(suggestNames(text)).toEqual(["Yash Agarwal"]);
+    expect(suggestNames("Student Name - Riya Sharma\nRoll No: E23")).toEqual(["Riya Sharma"]);
+  });
+  it("uses the file's own name and roll when the sender's aren't in it", () => {
+    expect(theirDetails(text, { name: "Yashh", roll: "" }, me)).toEqual({ name: "Yash Agarwal", roll: "S25CSEU0155" });
+  });
+  it("swaps the whole name when only the first name was given", () => {
+    expect(theirDetails(text, { name: "Yash", roll: "S25CSEU0155" }, me)).toEqual({ name: "Yash Agarwal", roll: "S25CSEU0155" });
+  });
+  it("never picks my own enrollment as theirs", () => {
+    expect(theirDetails("Roll: E23CSEU0155", { name: "", roll: "" }, me).roll).toBe("");
   });
 });

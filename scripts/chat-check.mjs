@@ -500,7 +500,7 @@ await step("a friend's solution: card, my name in, animation, check", async () =
   await chat.getByRole("button", { name: /Edit & submit/ }).first().click();
   const studio = page.getByRole("dialog", { name: "Make my copy" });
   await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
-  await studio.getByText("Vaibhav Sharma", { exact: true }).waitFor({ timeout: 2000 });
+  if ((await studio.getByLabel("Name in the file now").inputValue()) !== "Vaibhav Sharma") throw new Error("their name not filled in");
   await studio.getByText("DBMS Assignment 4").first().waitFor({ timeout: 2000 });
   const make = studio.getByRole("button", { name: /Make my copy/ });
   if (!(await make.isDisabled())) throw new Error("should ask for my enrollment first");
@@ -567,7 +567,7 @@ await step("Practice LMS for a group: turn on, add an assignment, submit, watch 
 
   // Yash sends his solution for the group's DBMS practice assignment.
   const dbms = tables.practice_assignments.find((r) => r.title === "DBMS Assignment 4 (practice)");
-  messages.push({ id: "m9", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: dbms.instance, title: dbms.title, course: dbms.course, dueDate: null, dueTime: null, authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: new Date().toISOString(), deleted_at: null });
+  messages.push({ id: "m9", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: dbms.instance, title: dbms.title, course: dbms.course, dueDate: null, dueTime: null, authorName: "Yash", authorRoll: "" } }, reply_to: null, created_at: new Date().toISOString(), deleted_at: null });
   await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
@@ -579,6 +579,9 @@ await step("Practice LMS for a group: turn on, add an assignment, submit, watch 
   await studio.getByRole("button", { name: /Make my copy/ }).click();
   const check = page.getByRole("dialog", { name: "Check your copy" });
   await check.getByText("Practice LMS — this stays on your phone").waitFor({ timeout: 15000 });
+  // Even with the sender's details wrong, the file's own name and roll were found and swapped.
+  await check.getByText(/[1-9]\d* places changed/).waitFor({ timeout: 3000 });
+  await check.getByText("Their name is gone").waitFor({ timeout: 2000 });
   await check.getByRole("button", { name: /Submit to Practice LMS/ }).click();
   const done = page.getByRole("dialog", { name: "Submitted" });
   await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });

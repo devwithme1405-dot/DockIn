@@ -34,6 +34,7 @@ import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { DraftOnly, WebOnlyLms, submitToLms } from "@/lib/lmsSubmit";
 import { useBackClose } from "@/lib/backClose";
+import { guessRolls } from "@/lib/docx";
 import { ensurePracticeFromSolution, isPractice, usePracticeOn } from "@/lib/practiceLms";
 import {
   SOLUTION_MAX,
@@ -42,6 +43,8 @@ import {
   canMakePdf,
   detectAuthor,
   docKind,
+  suggestNames,
+  theirDetails,
   findMyAssignment,
   hits,
   makeCopy,
@@ -244,7 +247,12 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
   }, [file, kind]);
 
   const guess = info && profile ? detectAuthor(info.text, file.name, profile) : null;
-  const who = me ?? (guess ? { name: guess.name, roll: guess.roll } : { name: "", roll: "" });
+  const guessed = guess && info ? theirDetails(info.text, { name: guess.name, roll: guess.roll }, { name: "", roll: "" }) : null;
+  const who = me ?? (guessed ? { name: guessed.name, roll: guessed.roll } : { name: "", roll: "" });
+  // Friends can only get their own name in if what is written here is really in the file.
+  const readable = !!info && !info.scanned;
+  const whoFound = readable ? hits(info!.text, who.name) + hits(info!.text, who.roll) : 0;
+  const nameIdeas = readable ? suggestNames(info!.text, [who.name]).slice(0, 3) : [];
 
   async function sendPlain() {
     setBusy(true);
@@ -421,6 +429,16 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
                 found={hits(info.text, who.name)}
                 placeholder="Vaibhav Sharma"
               />
+              {hits(info.text, who.name) === 0 && nameIdeas.length > 0 && (
+                <div className="-mt-1.5 mb-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[12px] text-muted">The file says:</span>
+                  {nameIdeas.map((n) => (
+                    <button key={n} onClick={() => setMe({ ...who, name: n })} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-bold">
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
               <DetailInput
                 label="Your enrollment no."
                 value={who.roll}
@@ -447,9 +465,15 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
           {file.size > SOLUTION_MAX && (
             <p className="mt-2 text-[12px] text-muted">Over 5 MB — it&apos;ll be compressed before sending.</p>
           )}
+          {readable && whoFound === 0 && (
+            <p className="mt-1 flex gap-2 rounded-2xl bg-orange/10 px-3.5 py-2.5 text-[12.5px] leading-snug">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-mess" />
+              <span>Type your name or enrollment exactly as it&apos;s written in the file — otherwise friends&apos; copies keep your name.</span>
+            </p>
+          )}
           <button
             onClick={() => void sendSolution()}
-            disabled={busy || !info}
+            disabled={busy || !info || (readable && whoFound === 0)}
             className="btn-leather mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15.5px] disabled:opacity-60"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={17} />} {busy ? "Sending…" : "Send solution"}
@@ -544,6 +568,7 @@ export function CopyStudio({
   const [chosenId, setChosenId] = useState<string | null>(given?.id ?? null);
   const [picking, setPicking] = useState(false);
   const [mine, setMine] = useState<{ name: string; roll: string } | null>(null);
+  const [theirEdit, setTheirEdit] = useState<{ name: string; roll: string } | null>(null);
   const [format, setFormat] = useState<OutFormat>("keep");
   const [copy, setCopy] = useState<Awaited<ReturnType<typeof makeCopy>> | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
@@ -588,16 +613,24 @@ export function CopyStudio({
   const me = mine ?? { name: profile?.name?.trim() ?? "", roll: profile?.roll?.trim() ?? "" };
   const info = src?.info ?? null;
   const swapping = !own && !!info && !info.scanned;
-  const swaps =
-    swapping && solution
-      ? [
-          { find: solution.authorName, replace: me.name },
-          { find: solution.authorRoll, replace: me.roll },
-        ]
-      : [];
-  const theirHits = swapping && solution ? hits(info!.text, solution.authorName) + hits(info!.text, solution.authorRoll) : 0;
-  const needName = swapping && !!solution?.authorName && hits(info!.text, solution.authorName) > 0 && me.name.trim().length < 2;
-  const needRoll = swapping && !!solution?.authorRoll && hits(info!.text, solution.authorRoll) > 0 && me.roll.trim().length < 2;
+  // Whose details come out: what the sender said — or, when the file says
+  // otherwise, what is actually written in it. Editable either way.
+  const their =
+    theirEdit ??
+    (swapping && solution ? theirDetails(info!.text, { name: solution.authorName, roll: solution.authorRoll }, me) : { name: "", roll: "" });
+  const nameHits = swapping ? hits(info!.text, their.name) : 0;
+  const rollHits = swapping ? hits(info!.text, their.roll) : 0;
+  const swaps = swapping
+    ? [
+        { find: their.name, replace: me.name },
+        { find: their.roll, replace: me.roll },
+      ]
+    : [];
+  const theirHits = nameHits + rollHits;
+  const needName = swapping && nameHits > 0 && me.name.trim().length < 2;
+  const needRoll = swapping && rollHits > 0 && me.roll.trim().length < 2;
+  const nameIdeas = swapping ? suggestNames(info!.text, [me.name, their.name]).slice(0, 3) : [];
+  const rollIdeas = swapping ? guessRolls(info!.text).filter((r) => ![me.roll, their.roll].some((x) => x.trim().toLowerCase() === r.toLowerCase())).slice(0, 3) : [];
   const practice = isPractice(instance);
   const canSubmit = instance !== null && (practice || (isNativeApp() && !!state.lms?.connected));
 
@@ -751,18 +784,22 @@ export function CopyStudio({
                 <div className="rounded-2xl border-[1.5px] border-card-edge bg-card p-3">
                   <SwapRow
                     label="Name"
-                    theirs={solution.authorName}
-                    found={hits(info!.text, solution.authorName)}
+                    theirs={their.name}
+                    onTheirs={(v) => setTheirEdit({ ...their, name: v })}
+                    ideas={nameIdeas}
+                    found={nameHits}
                     value={me.name}
                     onChange={(v) => setMine({ ...me, name: v })}
                     placeholder="Your full name"
                     need={needName}
                   />
-                  <div className="my-2.5 h-px bg-line" />
+                  <div className="my-3 h-px bg-line" />
                   <SwapRow
                     label="Enrollment"
-                    theirs={solution.authorRoll}
-                    found={hits(info!.text, solution.authorRoll)}
+                    theirs={their.roll}
+                    onTheirs={(v) => setTheirEdit({ ...their, roll: v.toUpperCase() })}
+                    ideas={rollIdeas}
+                    found={rollHits}
                     value={me.roll}
                     onChange={(v) => setMine({ ...me, roll: v.toUpperCase() })}
                     placeholder="Your enrollment no."
@@ -770,11 +807,17 @@ export function CopyStudio({
                     mono
                   />
                 </div>
-                <p className="mt-1.5 px-1 text-[12px] text-muted">
-                  {theirHits === 0
-                    ? "Their name isn't written as text in this file, so it stays as it is."
-                    : "Saved for next time — edit it here whenever you need."}
-                </p>
+                {theirHits === 0 ? (
+                  <p className="mt-2 flex gap-2 rounded-2xl bg-orange/10 px-3.5 py-2.5 text-[12.5px] leading-snug">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-mess" />
+                    <span>
+                      Neither is written in this file, so nothing would change. Type their name and enrollment <b>exactly as the file shows them</b> in the top boxes
+                      {nameIdeas.length || rollIdeas.length ? " — or tap one the file has" : ""}.
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-1.5 px-1 text-[12px] text-muted">Your details are saved for next time — edit them here whenever you need.</p>
+                )}
               </Section>
             )}
 
@@ -821,8 +864,9 @@ export function CopyStudio({
             copy={copy}
             original={swapping ? swapText(info!.text, swaps) : copy.text || info?.text || ""}
             marks={swapping ? [me.name, me.roll] : []}
-            leftover={swapping && solution ? hits(copy.text, solution.authorName) + hits(copy.text, solution.authorRoll) : 0}
+            leftover={swapping ? hits(copy.text, their.name) + hits(copy.text, their.roll) : 0}
             swapped={swapping}
+            theirName={their.name}
             scanned={!!info?.scanned}
           />
         )}
@@ -854,7 +898,7 @@ export function CopyStudio({
               disabled={needName || needRoll}
               className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px] disabled:opacity-50"
             >
-              <Sparkles size={18} /> {swapping ? "Make my copy" : own ? "Get it ready" : "Use this file"}
+              <Sparkles size={18} /> {swapping ? (theirHits ? "Make my copy" : "Use it unchanged") : own ? "Get it ready" : "Use this file"}
             </button>
           )}
           {phase === "preview" && copy && (
@@ -982,6 +1026,8 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 function SwapRow({
   label,
   theirs,
+  onTheirs,
+  ideas,
   found,
   value,
   onChange,
@@ -991,6 +1037,8 @@ function SwapRow({
 }: {
   label: string;
   theirs: string;
+  onTheirs: (v: string) => void;
+  ideas: string[];
   found: number;
   value: string;
   onChange: (v: string) => void;
@@ -1001,16 +1049,45 @@ function SwapRow({
   return (
     <div>
       <div className="flex items-center justify-between gap-2 text-[12px]">
-        <span className="font-bold text-muted">{label}</span>
-        <span className={cx("font-semibold", found ? "text-muted" : "text-warn")}>{found ? `in the file ${found}×` : "not in the file"}</span>
+        <span className="font-bold text-muted">{label} in the file now</span>
+        <span className={cx("flex items-center gap-1 font-bold", found ? "text-safe" : "text-warn")}>
+          {found ? (
+            <>
+              <Check size={12} strokeWidth={3} /> found {found}×
+            </>
+          ) : (
+            "not in the file"
+          )}
+        </span>
       </div>
-      <p className={cx("mt-1 truncate text-[13.5px] text-muted line-through decoration-[#e07a2c]/70 decoration-2", mono && "font-mono")}>{theirs || "—"}</p>
-      <div className="mt-1 flex items-center gap-2">
+      <input
+        value={theirs}
+        onChange={(e) => onTheirs(e.target.value.slice(0, 80))}
+        placeholder="As written in the file"
+        aria-label={`${label} in the file now`}
+        className={cx(
+          "mt-1 h-10 w-full rounded-xl border-[1.5px] bg-surface-2 px-3 text-[14px] font-semibold outline-none focus:border-orange",
+          found ? "border-transparent text-muted line-through decoration-[#e07a2c]/70 decoration-2" : "border-[#e9a865]",
+          mono && "font-mono tracking-wide",
+        )}
+      />
+      {!found && ideas.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11.5px] text-muted">The file has:</span>
+          {ideas.map((x) => (
+            <button key={x} onClick={() => onTheirs(x)} className={cx("rounded-full bg-mess-soft px-2.5 py-1 text-[12px] font-bold", mono && "font-mono")}>
+              {x}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mt-1.5 flex items-center gap-2">
         <ArrowRight size={15} className="shrink-0 text-mess" />
         <input
           value={value}
           onChange={(e) => onChange(e.target.value.slice(0, 80))}
           placeholder={placeholder}
+          aria-label={`Your ${label.toLowerCase()}`}
           autoFocus={need}
           className={cx(
             "h-11 min-w-0 flex-1 rounded-xl border-[1.5px] bg-bg px-3 text-[15.5px] font-bold outline-none focus:border-orange",
@@ -1260,6 +1337,7 @@ function Preview({
   leftover,
   swapped,
   scanned,
+  theirName,
 }: {
   copy: Awaited<ReturnType<typeof makeCopy>>;
   original: string;
@@ -1267,6 +1345,7 @@ function Preview({
   leftover: number;
   swapped: boolean;
   scanned: boolean;
+  theirName: string;
 }) {
   const ext = (copy.name.split(".").pop() ?? "").toUpperCase();
   const text = original.trim();
@@ -1288,7 +1367,16 @@ function Preview({
         </button>
       </div>
 
-      {swapped && (
+      {swapped && copy.changed === 0 && (
+        <p className="flex gap-2 rounded-2xl bg-danger/10 px-3.5 py-3 text-[13px] leading-snug text-danger">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            <b>Nothing was changed.</b> {theirName ? `"${theirName}" isn't written as text in this file` : "Their details aren't in this file"} — go Back and fix the
+            top boxes to match the file.
+          </span>
+        </p>
+      )}
+      {swapped && copy.changed > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <span className="flex items-center gap-1 rounded-full bg-safe/12 px-2.5 py-1 text-[12px] font-bold text-safe">
             <Check size={13} strokeWidth={3} /> {copy.changed} {copy.changed === 1 ? "place" : "places"} changed

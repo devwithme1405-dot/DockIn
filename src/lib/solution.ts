@@ -132,7 +132,59 @@ export function detectAuthor(text: string, fileName: string, me: { name?: string
   };
 }
 
-export const hits = (text: string, find: string) => (find.trim().length > 1 ? countIn(text, find) : 0);
+/**
+ * How often a name is in the text. Lenient on spacing (PDF text often loses or
+ * adds spaces between words) and on case — the same way the PDF rewrite finds it.
+ */
+export function hits(text: string, find: string): number {
+  const words = find.trim().split(/\s+/).filter(Boolean);
+  if (find.trim().length < 2 || !words.length) return 0;
+  const re = new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s*"), "gi");
+  return text.match(re)?.length ?? 0;
+}
+
+/**
+ * Names the file itself gives for its author — after "Name:", "Student name -",
+ * "Submitted by" — so a wrong or missing name can be fixed with one tap.
+ */
+export function suggestNames(text: string, not: string[] = []): string[] {
+  const found: string[] = [];
+  const pats = [
+    /(?:^|[\n\s|])(?:student'?s?\s+)?name\s*(?:of\s+(?:the\s+)?student\s*)?[:\-–—]\s*([A-Za-z][A-Za-z.' ]{1,48})/gi,
+    /submitted\s+by\s*[:\-–—]?\s*([A-Za-z][A-Za-z.' ]{1,48})/gi,
+  ];
+  const stop = /\s+(?:enrol+(?:ment)?|roll|reg(?:istration)?|section|sec|id|sap|branch|course|batch|class|semester|sem|to|date|subject|no)\b.*$/i;
+  for (const re of pats) {
+    for (const m of text.matchAll(re)) {
+      const name = m[1].replace(stop, "").replace(/\s{2,}.*$/, "").replace(/[.' ]+$/, "").trim();
+      if (name.length < 3 || name.split(/\s+/).length > 5) continue;
+      found.push(name);
+    }
+  }
+  const skip = new Set(not.map((x) => x.trim().toLowerCase()).filter(Boolean));
+  const seen = new Set<string>();
+  return found.filter((n) => {
+    const k = n.toLowerCase();
+    if (seen.has(k) || skip.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/**
+ * Whose name and enrollment to swap out: what the sender said, unless the file
+ * doesn't have it — then what the file itself shows (never my own).
+ */
+export function theirDetails(text: string, said: { name: string; roll: string }, me: { name: string; roll: string }) {
+  const myRoll = me.roll.trim().toLowerCase();
+  const named = suggestNames(text, [me.name]);
+  const saidName = said.name.trim().toLowerCase();
+  // "Yash" said, "Yash Agarwal" written: swap the whole name, not half of it.
+  const fuller = saidName ? named.find((n) => n.toLowerCase() !== saidName && n.toLowerCase().includes(saidName)) : undefined;
+  const name = fuller ?? (hits(text, said.name) > 0 ? said.name : (named[0] ?? said.name));
+  const roll = hits(text, said.roll) > 0 ? said.roll : (guessRolls(text).find((r) => r.toLowerCase() !== myRoll) ?? said.roll);
+  return { name: name.trim(), roll: roll.trim() };
+}
 
 // ---------------------------------------------------------------------------
 // Making my copy
