@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Eye, EyeOff, Lock, User } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, User } from "lucide-react";
 import {
   fetchProviders,
   readAuthRedirectError,
@@ -75,62 +75,81 @@ export function SignIn({ dark = false }: { dark?: boolean }) {
     setBusy(false);
   }
 
-  const field =
-    "h-12 w-full rounded-xl border-[1.5px] border-card-edge bg-card px-3.5 text-[16px] text-text outline-none placeholder:text-muted/70 focus:border-accent";
+  const field = "field h-[52px] w-full pl-11 text-[16px] placeholder:text-muted/70";
   const muted = dark ? "text-white/70" : "text-muted";
-  const strong = dark ? "text-white" : "text-text";
   const oneTap = !isNativeApp() && (providers?.google || providers?.azure);
 
   return (
     <div>
+      {/* Sign in / Create account: a clear switch, not a small link under the button. */}
+      <div className="relative mb-5 grid grid-cols-2 rounded-2xl bg-surface-2 p-1" role="tablist" aria-label="Sign in or create an account">
+        <span
+          aria-hidden
+          className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-xl bg-[#fffdf8] shadow-[0_2px_6px_-2px_rgb(90_50_20/0.35)] transition-transform duration-300 ease-[cubic-bezier(0.3,0.9,0.3,1)] dark:bg-[#56402d]"
+          style={{ transform: creating ? "translateX(100%)" : "none" }}
+        />
+        {(
+          [
+            [false, "Sign in"],
+            [true, "Create account"],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            key={label}
+            role="tab"
+            aria-selected={creating === mode}
+            onClick={() => {
+              setCreating(mode);
+              setError(null);
+            }}
+            className={cx("relative z-[1] h-11 rounded-xl text-[14.5px] font-extrabold transition-colors", creating === mode ? "text-text" : muted)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <label className={cx("mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-user">
         Username
       </label>
       <div className="relative">
-        <User size={18} className="pointer-events-none absolute inset-y-0 left-3.5 my-auto text-muted" />
+        <User size={18} className="pointer-events-none absolute inset-y-0 left-4 my-auto text-[#a07850]" />
         <input
           id="dockin-user"
-          className={cx(field, "pl-10")}
+          className={field}
           type="text"
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder="pick a username"
+          placeholder={creating ? "Pick a username" : "Type your username"}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
       </div>
 
-      <label className={cx("mt-3 mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-pass">
+      <label className={cx("mt-3.5 mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-pass">
         Password
       </label>
       <div className="relative">
+        <Lock size={18} className="pointer-events-none absolute inset-y-0 left-4 my-auto text-[#a07850]" />
         <input
           id="dockin-pass"
           className={cx(field, "pr-11")}
           type={show ? "text" : "password"}
           autoComplete={creating ? "new-password" : "current-password"}
-          placeholder={creating ? "at least 6 characters" : "your password"}
+          placeholder={creating ? "At least 6 characters" : "Type your password"}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ready && void submit()}
         />
         <ShowButton show={show} onToggle={() => setShow((s) => !s)} />
       </div>
+      {creating && <p className={cx("mt-1.5 text-[12px]", muted)}>Username: 3+ letters or numbers. Remember your password — there&apos;s no email reset.</p>}
 
-      <Button className="mt-4 w-full" onClick={submit} disabled={busy || !ready}>
-        <Lock size={17} /> {creating ? "Create account" : "Sign in"} <ArrowRight size={17} />
+      <Button className="mt-5 w-full" onClick={submit} disabled={busy || !ready}>
+        {busy ? <Loader2 size={18} className="animate-spin" /> : null}
+        {creating ? "Create my account" : "Sign in"} {!busy && <ArrowRight size={17} />}
       </Button>
-
-      <button
-        onClick={() => {
-          setCreating((c) => !c);
-          setError(null);
-        }}
-        className={cx("mx-auto mt-3 block text-[13px] font-bold", strong)}
-      >
-        {creating ? "Already have an account? Sign in" : "New here? Create an account"}
-      </button>
 
       {oneTap && (
         <>
@@ -180,7 +199,7 @@ function ShowButton({ show, onToggle }: { show: boolean; onToggle: () => void })
       type="button"
       onClick={onToggle}
       aria-label={show ? "Hide password" : "Show password"}
-      className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted"
+      className="absolute inset-y-0 right-0 grid w-12 place-items-center text-muted"
     >
       {show ? <EyeOff size={18} /> : <Eye size={18} />}
     </button>

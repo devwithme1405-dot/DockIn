@@ -1,3 +1,4 @@
+import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { db } from "./db";
 import { addDays, fromDateStr, toDateStr, weekdayOf } from "./dates";
 import { SEED_CATEGORIES, samePerson } from "./money";
@@ -141,6 +142,12 @@ export function applyTheme(pref: ThemePref): void {
     localStorage.setItem("dockin-theme", pref);
   } catch {
     /* private mode: ignore */
+  }
+  // The clock and battery follow the APP's theme: dark icons on the light
+  // page, light icons on the dark one — even when the phone itself is in the
+  // other mode (otherwise they vanish into the page).
+  if (Capacitor.isNativePlatform()) {
+    void SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }).catch(() => {});
   }
 }
 

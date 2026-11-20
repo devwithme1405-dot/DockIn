@@ -99,25 +99,23 @@ export function HeroHeader({
   icon: LucideIcon;
   right?: ReactNode;
 }) {
+  const scrolled = useScrolled(90);
   return (
     <>
-      <StickyBar className="px-5 pb-1.5">
-        {(scrolled) => (
-          <div className="relative flex h-11 items-center justify-end gap-1">
-            <p
-              aria-hidden={!scrolled}
-              className={cx(
-                "pointer-events-none absolute inset-x-12 truncate text-center text-[16px] font-semibold transition-opacity duration-150",
-                scrolled ? "opacity-100" : "opacity-0",
-              )}
-            >
-              {title}
-            </p>
-            {right}
-          </div>
-        )}
-      </StickyBar>
-      <div className="leather stitched mx-5 mt-1 mb-3 rounded-[26px] p-5">
+      {/* Takes no room at rest — the plate sits right under the status bar.
+          Once the plate has scrolled away, a slim frosted bar slides in with the title. */}
+      <div className="sticky top-0 z-30 h-0">
+        <div
+          aria-hidden={!scrolled}
+          className={cx(
+            "absolute inset-x-0 top-0 border-b border-line bg-bg/80 px-5 pt-[max(0.5rem,var(--sat))] pb-2 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform] duration-200",
+            scrolled ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
+          )}
+        >
+          <p className="truncate text-center text-[16px] leading-7 font-semibold">{title}</p>
+        </div>
+      </div>
+      <div className="leather stitched relative mx-5 mt-[calc(var(--sat)+0.75rem)] mb-3 rounded-[26px] p-5">
         <div className="relative z-[1] flex items-center gap-4">
           <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-black/15 text-on-ink shadow-[inset_0_2px_4px_rgb(40_15_0/45%),0_1px_0_rgb(255_220_180/25%)]">
             <Icon size={28} strokeWidth={2.1} />
@@ -128,6 +126,7 @@ export function HeroHeader({
             </h1>
             {subtitle != null && <p className="mt-1.5 truncate text-[13.5px] font-semibold text-ink-muted">{subtitle}</p>}
           </div>
+          {right && <div className="ml-auto flex shrink-0 items-center gap-1">{right}</div>}
         </div>
       </div>
     </>

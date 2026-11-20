@@ -37,6 +37,21 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> contentReady = true);
     }
 
+    /** The page shown when a screen can't load; it retries every few seconds. */
+    static String retryPage(String url) {
+        String safe = url.replace("\\", "").replace("\"", "").replace("'", "").replace("<", "");
+        return "<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>"
+                + "<style>html,body{margin:0;height:100%;background:#f6ecd9;color:#3b2414;font:16px/1.4 system-ui,Roboto,sans-serif}"
+                + "main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box}"
+                + ".cap{width:84px;height:84px;border-radius:24px;background:linear-gradient(160deg,#c06a2b,#864220);display:grid;place-items:center;font-size:40px}"
+                + "h1{font-size:22px;margin:22px 0 6px}p{margin:0;color:#7a5a43;font-size:14.5px;max-width:280px}"
+                + "button{margin-top:26px;height:48px;padding:0 28px;border:0;border-radius:16px;background:#864220;color:#fff;font-weight:700;font-size:15px}</style></head>"
+                + "<body><main><div class='cap'>\uD83C\uDF93</div><h1>Can't reach DockIn</h1><p>Check your internet. This opens by itself when you're back online.</p>"
+                + "<button onclick=\"location.replace('" + safe + "')\">Try again</button></main>"
+                + "<script>function t(){fetch('/',{cache:'no-store'}).then(function(r){if(r.ok)location.replace('" + safe + "')}).catch(function(){})}"
+                + "addEventListener('online',t);setInterval(t,4000)</script></body></html>";
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // Plugins written inside the app are not found automatically; they are
@@ -61,6 +76,21 @@ public class MainActivity extends BridgeActivity {
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     WebResourceResponse r = Bundled.intercept(app, request, true);
                     return r != null ? r : super.shouldInterceptRequest(view, request);
+                }
+
+                /**
+                 * A screen that fails to load shows DockIn's own "reconnecting"
+                 * page — never Android's grey "Web page not available" — and
+                 * goes back to the same screen by itself once the network is up.
+                 */
+                @Override
+                public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                    if (request != null && request.isForMainFrame() && request.getUrl() != null
+                            && "dock-in.vercel.app".equals(request.getUrl().getHost())) {
+                        view.loadDataWithBaseURL("https://dock-in.vercel.app/", retryPage(request.getUrl().toString()), "text/html", "utf-8", null);
+                        return;
+                    }
+                    super.onReceivedError(view, request, error);
                 }
             });
         }

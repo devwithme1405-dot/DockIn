@@ -1,208 +1,189 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CloudUpload, Loader2, ShieldCheck } from "lucide-react";
 import { saveProfile } from "@/lib/repo";
-import { Button, Chip, Field, cx, inputCls } from "@/components/ui";
+import { cx } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { SignIn } from "@/components/SignIn";
+import { IntroSlides } from "@/components/Intro";
 import { useAuth, accountName } from "@/lib/auth";
 
+const d = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
+
 /**
- * Three screens: the welcome, signing in (skippable), and your name with the
- * attendance you need. Subjects and classes are not asked for — Camu has them,
- * and in a browser they are added on the Attendance screen when wanted.
+ * First run: three welcome slides, then signing in (skippable), then your
+ * name and the attendance your college asks for. Subjects and classes are
+ * never asked — Camu has them.
  */
 export default function OnboardingPage() {
   const router = useRouter();
   const { session } = useAuth();
   const [stepRaw, setStep] = useState<number | null>(null);
-  // Someone who is already signed in (e.g. just back from a sign-in link) skips straight to their name.
+  // Someone already signed in (e.g. back from a sign-in link) goes straight to their name.
   const step = stepRaw ?? (session ? 2 : 0);
-  const metaName = String(
-    session?.user.user_metadata?.full_name ??
-      session?.user.user_metadata?.name ??
-      "",
-  ).trim();
+  const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "").trim();
   const [nameRaw, setName] = useState<string | null>(null);
   const name = nameRaw ?? metaName;
   const [target, setTarget] = useState(75);
   const [busy, setBusy] = useState(false);
 
   async function finish() {
+    if (!name.trim() || busy) return;
     setBusy(true);
     await saveProfile({ name: name.trim(), target, onboarded: true });
     router.replace("/");
   }
 
-  if (step === 0) return <Welcome onStart={() => setStep(1)} />;
+  if (step === 0) return <IntroSlides onDone={() => setStep(1)} />;
 
   return (
-    // Pinned to the real screen edges (like the welcome) and scrolling inside:
-    // the app's text-size zoom on <html> makes dvh heights lie, which pushed
-    // these steps off the top of the screen on phones.
+    // Pinned to the screen and scrolling inside: the app's text-size zoom on
+    // <html> makes dvh heights lie.
     <div className="paper-page fixed inset-0 z-40 overflow-y-auto overscroll-contain">
-      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-6 pt-[max(2rem,var(--sat))] pb-[max(1.5rem,var(--sab))]">
-        <div
-          className="flex items-center gap-1.5"
-          aria-label={`Step ${step} of 2`}
-        >
-          {[1, 2].map((i) => (
-            <span
-              key={i}
-              className={cx(
-                "h-1 flex-1 rounded-full transition-colors",
-                i <= step ? "bg-accent" : "bg-surface-2",
-              )}
-            />
-          ))}
-        </div>
-
-        <div className="flex-1 pt-10">
-          {step === 1 && (
-            <>
-              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-                Sign in to back things up
-              </h1>
-              <p className="mt-3 text-muted">
-                Your tasks and settings come back on a new phone. You can
-                skip this and do it later.
-              </p>
-              <div className="mt-8">
-                {session ? (
-                  <div className="rounded-2xl bg-safe-soft px-4 py-3.5">
-                    <p className="text-[13px] text-muted">Signed in as</p>
-                    <p className="font-semibold text-safe">
-                      {accountName(session.user.email)}
-                    </p>
-                  </div>
-                ) : (
-                  <SignIn />
-                )}
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <h1 className="text-[28px] font-semibold leading-tight tracking-tight">
-                About you
-              </h1>
-              <p className="mt-3 text-muted">
-                Two quick things, both changeable later.
-              </p>
-              <div className="mt-8">
-                <Field label="What should we call you?">
-                  <input
-                    className={inputCls}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Sachin"
-                    autoComplete="given-name"
-                  />
-                </Field>
-                <p className="mb-2.5 text-[13px] font-medium text-muted">
-                  Attendance your college asks for
-                </p>
-                <div className="flex flex-wrap gap-2.5">
-                  {[75, 70, 65, 80, 85].map((t) => (
-                    <Chip
-                      key={t}
-                      active={target === t}
-                      onClick={() => setTarget(t)}
-                    >
-                      {t}%
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="secondary"
-            onClick={() => setStep(step - 1)}
-            disabled={busy}
-          >
-            Back
-          </Button>
-          {step < 2 ? (
-            <Button
-              className="flex-1"
-              variant={!session ? "secondary" : "primary"}
-              onClick={() => setStep(step + 1)}
-            >
-              {!session ? "Skip for now" : "Continue"}
-            </Button>
-          ) : (
-            <Button className="flex-1" onClick={finish} disabled={busy}>
-              {busy ? "Setting up…" : "Continue"}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Welcome({ onStart }: { onStart: () => void }) {
-  return (
-    // `fixed inset-0` covers the whole screen behind the status and navigation
-    // bars (the page is viewport-fit: cover), so the image reaches every edge —
-    // min-h-dvh left a strip of bare background under the gesture bar.
-    <div className="fixed inset-0 isolate z-50 overflow-hidden bg-[#1b2a5a] text-white">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/welcome.webp"
-        srcSet="/welcome-sm.webp 1278w, /welcome.webp 1704w"
-        sizes="100vw"
-        alt=""
-        decoding="async"
-        fetchPriority="high"
-        className="absolute inset-0 -z-20 h-full w-full object-cover object-[50%_70%]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-x-0 top-0 -z-10 h-[52%] bg-gradient-to-b from-[#0a1230]/70 via-[#0a1230]/25 to-transparent"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-x-0 bottom-0 -z-10 h-[34%] bg-gradient-to-t from-[#0a0f24]/80 via-[#0a0f24]/35 to-transparent"
-      />
-
-      <div className="flex h-full flex-col justify-between px-6 pt-[max(1.75rem,var(--sat))] pb-[max(1.75rem,var(--sab))]">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <Logo size={34} />
-            <span className="text-[20px] font-semibold tracking-tight drop-shadow">
-              DockIn
-            </span>
-          </div>
-          <h1 className="mt-9 text-[40px] leading-[1.08] tracking-tight drop-shadow-[0_2px_14px_rgba(5,10,35,0.55)]">
-            <span className="block font-bold">Your College Life.</span>
-            <span className="block font-light">In One Place.</span>
-          </h1>
-          <p className="mt-4 max-w-[19rem] text-[15px] leading-relaxed text-white/90 drop-shadow-[0_1px_8px_rgba(5,10,35,0.6)]">
-            Track attendance, manage expenses, never miss a deadline, and stay
-            ahead.
-          </p>
-        </div>
-
-        <div>
-          <button
-            onClick={onStart}
-            className="btn-leather flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16px]"
-          >
-            Get Started
-            <ArrowRight size={19} />
+      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-6 pt-[max(1rem,calc(var(--sat)+0.5rem))] pb-[max(1.25rem,calc(var(--sab)+0.75rem))]">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setStep(step - 1)} aria-label="Back" disabled={busy} className="btn-paper grid size-11 shrink-0 place-items-center rounded-2xl">
+            <ArrowLeft size={20} />
           </button>
-          <p className="mt-3 text-center text-xs text-white/70">
-            Free. Your data stays on this phone for now.
-          </p>
+          <div className="flex flex-1 gap-1.5" aria-label={`Step ${step} of 2`}>
+            {[1, 2].map((n) => (
+              <span key={n} className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e6d2b0] dark:bg-[#3a2b1f]">
+                <span className={cx("block h-full rounded-full bg-[#a5562a] transition-transform duration-500 ease-out origin-left", n <= step ? "scale-x-100" : "scale-x-0")} />
+              </span>
+            ))}
+          </div>
+          <span className="w-11 text-right text-[12.5px] font-bold text-muted">{step}/2</span>
         </div>
+
+        {step === 1 && (
+          <div key="auth" className="step-in flex flex-1 flex-col">
+            <div className="mt-7 flex items-center gap-3">
+              <Logo size={52} />
+              <div>
+                <h1 className="font-display text-[26px] leading-tight font-extrabold tracking-tight">Welcome to DockIn</h1>
+                <p className="text-[13.5px] text-muted">Sign in to keep everything safe.</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              {[
+                [<CloudUpload key="c" size={15} />, "Backed up"],
+                [<ShieldCheck key="s" size={15} />, "Private"],
+                [<Check key="k" size={15} />, "Free"],
+              ].map(([icon, label], n) => (
+                <span key={String(label)} className="anim-pop flex items-center gap-1.5 rounded-full bg-[#e3f6ec] px-3 py-1.5 text-[12px] font-bold text-[#1f7f4b] dark:bg-[#1e3d27] dark:text-[#8fe0a5]" style={d(100 + n * 60)}>
+                  {icon}
+                  {label}
+                </span>
+              ))}
+            </div>
+
+            <div className="intro-card anim-pop mt-5 p-4" style={d(160)}>
+              {session ? (
+                <div className="flex items-center gap-3 py-2">
+                  <span className="grid size-11 place-items-center rounded-2xl bg-[#209660] text-white">
+                    <Check size={22} strokeWidth={3} />
+                  </span>
+                  <div>
+                    <p className="text-[13px] text-muted">Signed in as</p>
+                    <p className="text-[16px] font-extrabold">{accountName(session.user.email)}</p>
+                  </div>
+                </div>
+              ) : (
+                <SignIn />
+              )}
+            </div>
+
+            <div className="mt-auto pt-6">
+              {session ? (
+                <button onClick={() => setStep(2)} className="btn-leather flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16.5px]">
+                  Continue <ArrowRight size={19} />
+                </button>
+              ) : (
+                <button onClick={() => setStep(2)} className="mx-auto block h-11 rounded-full px-5 text-[14.5px] font-bold text-muted active:bg-black/5">
+                  Skip for now — I&apos;ll sign in later
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div key="about" className="step-in flex flex-1 flex-col">
+            <h1 className="font-display mt-7 text-[28px] leading-tight font-extrabold tracking-tight">
+              What should we
+              <br />
+              call you?
+            </h1>
+            <p className="mt-1.5 text-[14px] text-muted">So DockIn can greet you properly.</p>
+
+            <label className="mt-5 block">
+              <span className="sr-only">Your name</span>
+              <input
+                className="field h-14 w-full px-4 text-[18px] font-bold placeholder:font-semibold"
+                value={name}
+                onChange={(e) => setName(e.target.value.slice(0, 40))}
+                placeholder="Type your name here"
+                autoComplete="given-name"
+                enterKeyHint="done"
+              />
+            </label>
+            <p className={cx("mt-2 h-5 text-[14px] font-bold text-[#a5562a] transition-opacity duration-300", name.trim() ? "opacity-100" : "opacity-0")}>
+              Hi {name.trim().split(/\s+/)[0]} 👋
+            </p>
+
+            <h2 className="mt-5 text-[17px] font-extrabold">Attendance your college asks for</h2>
+            <p className="mt-0.5 text-[13px] text-muted">DockIn tells you how many classes you can miss above this.</p>
+            <div className="mt-3 grid grid-cols-5 gap-2">
+              {[65, 70, 75, 80, 85].map((t, n) => {
+                const on = target === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTarget(t)}
+                    aria-pressed={on}
+                    className={cx(
+                      "anim-pop relative flex flex-col items-center gap-1 rounded-2xl border-[1.5px] py-3 transition-[transform,background-color,border-color] active:scale-95",
+                      on ? "border-[#a5562a] bg-[#fff1e0] dark:bg-[#3a2416]" : "border-card-edge bg-[#fffdf8] dark:bg-[#241a13]",
+                    )}
+                    style={d(80 + n * 50)}
+                  >
+                    <svg viewBox="0 0 36 36" className="size-9 -rotate-90" aria-hidden>
+                      <circle cx="18" cy="18" r="14" fill="none" stroke="currentColor" strokeWidth="4" className="text-[#efe0c4] dark:text-[#3a2b1f]" />
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="14"
+                        fill="none"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        stroke={on ? "#a5562a" : "#d1b48c"}
+                        strokeDasharray={`${(t / 100) * 88} 88`}
+                        className="transition-[stroke] duration-300"
+                      />
+                    </svg>
+                    <span className={cx("text-[15px] font-extrabold", on ? "text-[#8a4520] dark:text-[#f0b27a]" : "")}>{t}%</span>
+                    {t === 75 && <span className="absolute -top-2 rounded-full bg-[#209660] px-1.5 py-px text-[9px] font-extrabold text-white">MOST</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-auto pt-8">
+              <button
+                onClick={() => void finish()}
+                disabled={!name.trim() || busy}
+                className="btn-leather flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16.5px] disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={19} className="animate-spin" /> : null}
+                {busy ? "Setting up…" : "Let's go"} {!busy && <ArrowRight size={19} />}
+              </button>
+              {!name.trim() && <p className="mt-2 text-center text-[12.5px] text-muted">Type your name to continue</p>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

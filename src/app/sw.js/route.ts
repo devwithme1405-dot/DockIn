@@ -17,10 +17,25 @@ const BUILD = process.env.NEXT_PUBLIC_BUILD ?? "dev";
 /** Pages worth having before they are asked for, so a cold start never waits. */
 const SHELL = ["/", "/attendance", "/timetable", "/cafeteria", "/tasks", ...(FRIENDS ? ["/circle"] : []), "/settings", "/onboarding"];
 
+/** Shown only when there is no network and nothing cached yet; it reconnects on its own. */
+const OFFLINE_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f6ecd9"><title>DockIn</title>
+<style>html,body{margin:0;height:100%;background:#f6ecd9;color:#3b2414;font:16px/1.4 system-ui,-apple-system,Roboto,sans-serif}
+main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box}
+.cap{width:84px;height:84px;border-radius:24px;background:linear-gradient(160deg,#c06a2b,#864220);display:grid;place-items:center;box-shadow:0 14px 30px -14px #864220;font-size:40px}
+h1{font-size:22px;margin:22px 0 6px}p{margin:0;color:#7a5a43;font-size:14.5px;max-width:280px}
+.dot{width:8px;height:8px;border-radius:50%;background:#c06a2b;display:inline-block;margin:0 3px;animation:b 1s infinite ease-in-out}.dot:nth-child(2){animation-delay:.15s}.dot:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,80%,100%{transform:scale(.6);opacity:.5}40%{transform:scale(1);opacity:1}}
+button{margin-top:26px;height:48px;padding:0 28px;border:0;border-radius:16px;background:linear-gradient(180deg,#a5562a,#7a3c1c);color:#fff;font-weight:700;font-size:15px}</style></head>
+<body><main><div class="cap">🎓</div><h1>Can't reach DockIn</h1><p>Check your internet. DockIn will open by itself as soon as you're back online.</p>
+<div style="margin-top:18px"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+<button onclick="location.reload()">Try again</button></main>
+<script>function t(){fetch("/",{cache:"no-store"}).then(function(r){if(r.ok)location.reload()}).catch(function(){})}addEventListener("online",t);setInterval(t,4000)</script></body></html>`;
+
 const source = `
 const BUILD = ${JSON.stringify(BUILD)};
 const CACHE = "dockin-" + BUILD;
 const SHELL = ${JSON.stringify(SHELL)};
+const OFFLINE = ${JSON.stringify(OFFLINE_PAGE)};
 
 // Network with a deadline and one retry: a stalled connection must never leave
 // the app waiting forever for a file (that was the stuck brown screen).
@@ -31,6 +46,20 @@ function fetchSoon(req, ms) {
     return fetch(req, { signal: ctl.signal }).finally(() => clearTimeout(t));
   };
   return once().catch(() => once());
+}
+
+// Any cached screen boots the app, which then draws the right one from the URL.
+async function anyShell() {
+  for (const u of ["/", ...SHELL]) {
+    const r = await caches.match(u, { ignoreSearch: true });
+    if (r) return r;
+  }
+  return null;
+}
+
+// Nothing cached and no network: DockIn's own page, which retries by itself.
+function offline() {
+  return new Response(OFFLINE, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 // Install = download the WHOLE new version first: every shell page and every
@@ -101,23 +130,27 @@ self.addEventListener("fetch", (event) => {
   // to the app shell, which boots and renders the right screen from the URL.
   if (req.mode === "navigate") {
     event.respondWith(
-      caches.match(req, { ignoreSearch: true }).then((hit) => {
-        const fresh = fetch(req)
-          .then((res) => {
-            if (res && res.ok) {
-              const copy = res.clone();
-              caches.open(CACHE).then((c) => c.put(req, copy));
-            }
-            return res;
-          })
-          .catch(() => hit || caches.match("/"));
+      (async () => {
+        const hit = (await caches.match(req, { ignoreSearch: true })) || (await caches.match(url.pathname));
+        const fresh = fetch(req).then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(url.pathname, copy));
+          }
+          return res;
+        });
         if (hit) {
           fresh.catch(function () {});
           return hit;
         }
-        const bail = new Promise((r) => setTimeout(r, 2500)).then(() => caches.match("/"));
-        return Promise.race([fresh, bail]).then((r) => r || fresh);
-      }),
+        // Never answer with nothing: that is Android's "Web page not available".
+        const first = await Promise.race([fresh.catch(() => null), new Promise((r) => setTimeout(() => r(null), 2500))]);
+        if (first) return first;
+        const shell = await anyShell();
+        if (shell) return shell;
+        const late = await fresh.catch(() => null);
+        return late || offline();
+      })(),
     );
     return;
   }

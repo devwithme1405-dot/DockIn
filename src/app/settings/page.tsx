@@ -907,10 +907,8 @@ function CollegeCard() {
   const { native } = useCollege();
   if (!native) return null;
   return (
-    <section className="pb-2" aria-label="College accounts">
-      <div className="border-b border-line">
-        <ConnectCamu compact />
-      </div>
+    <section className="space-y-2.5 pb-2" aria-label="College accounts">
+      <ConnectCamu compact />
       <ConnectLms compact />
     </section>
   );

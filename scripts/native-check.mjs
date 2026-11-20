@@ -255,7 +255,7 @@ await page.evaluate(async () => {
 await step("setup comes up once, straight after opening the app", async () => {
   await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
   await page.waitForURL(/\/setup$/, { timeout: 8000 });
-  await waitFor("Set up DockIn once");
+  await waitFor("Connect your college");
   const t = await text();
   for (const want of ["Connect Camu", "Connect the LMS"]) {
     if (!t.includes(want)) throw new Error(`setup is missing "${want}"`);

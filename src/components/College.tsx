@@ -58,7 +58,7 @@ export function CamuStatus({ camu, className }: { camu: CamuState; className?: s
         <button
           onClick={() => run(connectCamu)}
           disabled={busy}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-medium text-on-accent disabled:opacity-60"
+          className="btn-connect inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold disabled:opacity-60"
         >
           {busy && <Loader2 size={13} className="animate-spin" />} Sign in
         </button>
@@ -111,7 +111,7 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
           <button
             onClick={() => run(() => disconnect("camu"))}
             disabled={busy}
-            className="h-9 shrink-0 rounded-full bg-surface-2 px-3.5 text-[13px] font-medium text-muted"
+            className="btn-disconnect h-9 shrink-0 rounded-full px-3.5 text-[13px] font-bold disabled:opacity-60"
           >
             Disconnect
           </button>
@@ -171,7 +171,7 @@ export function ConnectLms({ compact = false, onDone }: { compact?: boolean; onD
           <button
             onClick={() => run(() => disconnect("lms"))}
             disabled={busy}
-            className="h-9 shrink-0 rounded-full bg-surface-2 px-3.5 text-[13px] font-medium text-muted"
+            className="btn-disconnect h-9 shrink-0 rounded-full px-3.5 text-[13px] font-bold disabled:opacity-60"
           >
             Disconnect
           </button>
@@ -215,7 +215,7 @@ export function ConnectLms({ compact = false, onDone }: { compact?: boolean; onD
           <button
             type="submit"
             disabled={busy || !user.trim() || !pass}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-[14.5px] font-medium text-on-accent disabled:opacity-50"
+            className="btn-connect flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14.5px] font-bold disabled:opacity-50"
           >
             {busy && <Loader2 size={15} className="animate-spin" />} Sign in to the LMS
           </button>
@@ -248,7 +248,7 @@ function Row({
   children?: ReactNode;
 }) {
   return (
-    <div className={cx(compact ? "py-3" : "lift rounded-3xl bg-surface p-4")}>
+    <div className={cx("account-card rounded-3xl", compact ? "p-3.5" : "p-4")}>
       <div className="flex items-start gap-3">
         <span
           className={cx(
@@ -274,7 +274,7 @@ function Action({ busy, onClick, children }: { busy: boolean; onClick: () => voi
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-medium text-on-accent disabled:opacity-60"
+      className="btn-connect inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold disabled:opacity-60"
     >
       {busy && <Loader2 size={13} className="animate-spin" />}
       {children}

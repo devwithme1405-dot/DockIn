@@ -105,7 +105,7 @@ export function PhoneSetup({ bare = false }: { bare?: boolean }) {
         </div>
       </div>
 
-      <ol className="mt-4 border-t border-line">
+      <ol className="mt-4 space-y-2">
         <Step
           done={status.notifications === "granted"}
           title="Let DockIn notify you"
@@ -227,7 +227,7 @@ function Step({
   children?: ReactNode;
 }) {
   return (
-    <li className="flex gap-3 border-b border-line py-3 last:border-b-0">
+    <li className="account-card flex gap-3 rounded-2xl p-3.5">
       <span
         className={cx(
           "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold",
@@ -256,7 +256,7 @@ function ActionButton({ busy, onClick, children }: { busy: boolean; onClick: () 
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 text-[13px] font-medium text-on-accent disabled:opacity-60"
+      className="btn-connect inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold disabled:opacity-60"
     >
       {busy && <Loader2 size={13} className="animate-spin" />}
       {children}

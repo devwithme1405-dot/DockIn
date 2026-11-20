@@ -50,7 +50,9 @@ import {
   makeCopy,
   pickableAssignments,
   readText,
+  readTextOnce,
   solutionFor,
+  warmPdfEngine,
   type ChatSolution,
   type FileText as DocText,
   type OutFormat,
@@ -108,7 +110,7 @@ function useMyTask(sol: ChatSolution | undefined): { task: Task | null; ready: b
  * whether they have submitted it yet, and two choices: download it as it is, or
  * put their own name on it and submit.
  */
-export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; from: string }) {
+export function SolutionCard({ f, mine, from, sentAt }: { f: ChatFile; mine: boolean; from: string; sentAt?: number }) {
   const sol = f.solution!;
   const toast = useToast();
   const { task } = useMyTask(sol);
@@ -118,6 +120,18 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
   const done = !!task?.done;
   const ext = (f.name.split(".").pop() ?? "").toUpperCase();
   const practiceIsOn = usePracticeOn();
+  // Still to hand in: fetch the file and read it in the background, so
+  // "Edit & submit" opens straight away. Only for recent solutions, once.
+  useEffect(() => {
+    if (done || !task || !sentAt || Date.now() - sentAt > 7 * 86_400_000) return;
+    const t = window.setTimeout(() => {
+      warmPdfEngine();
+      void downloadChatFile(f)
+        .then((blob) => readTextOnce(f.path, blob, f.name))
+        .catch(() => {});
+    }, 900);
+    return () => window.clearTimeout(t);
+  }, [done, task, sentAt, f]);
   // A practice assignment I don't have yet: with Practice LMS on, it joins my Tasks.
   useEffect(() => {
     if (!task && practiceIsOn && isPractice(sol.instance)) void ensurePracticeFromSolution(sol);
@@ -185,6 +199,7 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
             </button>
             <button
               type="button"
+              onPointerDown={() => warmPdfEngine()}
               onClick={(e) => {
                 e.stopPropagation();
                 setStudio(true);
@@ -201,6 +216,7 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
           fileName={f.name}
           fileSize={f.size}
           load={() => downloadChatFile(f)}
+          cacheKey={f.path}
           solution={sol}
           from={mine ? "You" : from}
           onClose={() => setStudio(false)}
@@ -421,10 +437,13 @@ export function CopyStudio({
   solution,
   from,
   task: given,
+  cacheKey,
   onClose,
 }: {
   fileName: string;
   fileSize: number;
+  /** Same key → the file's text is read only once per session. */
+  cacheKey?: string;
   load: () => Promise<Blob>;
   solution?: ChatSolution | null;
   from?: string;
@@ -465,7 +484,8 @@ export function CopyStudio({
         const blob = await loader();
         const kind = docKind(fileName, blob.type);
         // Your own file goes in as it is even if DockIn can't read it.
-        const info = kind ? await readText(blob, fileName).catch((e) => (own ? null : Promise.reject(e))) : null;
+        const read = cacheKey ? readTextOnce(cacheKey, blob, fileName) : readText(blob, fileName);
+        const info = kind ? await read.catch((e) => (own ? null : Promise.reject(e))) : null;
         if (!alive) return;
         if (!info && !own) throw new SolutionError("Only Word (.docx) and PDF files can be changed.");
         setSrc({ blob, info });
@@ -479,7 +499,7 @@ export function CopyStudio({
     return () => {
       alive = false;
     };
-  }, [loader, fileName, own]);
+  }, [loader, fileName, own, cacheKey]);
 
   const all = tasks ?? [];
   const auto = solution ? findMyAssignment(solution, all) : null;
@@ -1391,6 +1411,7 @@ export function LmsHandIn({ task }: { task: Task }) {
           fileName={theirs.f.name}
           fileSize={theirs.f.size}
           load={() => downloadChatFile(theirs.f)}
+          cacheKey={theirs.f.path}
           solution={theirs.f.solution}
           from={theirs.from}
           task={task}

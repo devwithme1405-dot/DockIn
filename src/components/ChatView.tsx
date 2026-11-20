@@ -1135,7 +1135,7 @@ function Bubble({
           ) : m.kind === "poll" && m.data?.options ? (
             <PollCard m={m} people={people} />
           ) : m.kind === "file" && m.data?.path && (m.data as ChatFile).solution?.title ? (
-            <SolutionCard f={m.data as ChatFile} mine={mine} from={name} />
+            <SolutionCard f={m.data as ChatFile} mine={mine} from={name} sentAt={m.createdAt} />
           ) : m.kind === "file" && m.data?.path ? (
             <FileCard f={m.data as ChatFile} />
           ) : m.kind === "task" && m.data ? (

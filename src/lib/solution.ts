@@ -120,6 +120,27 @@ export async function readText(blob: Blob, name: string): Promise<FileText> {
   return { kind, text, scanned: text.replace(/\s+/g, "").length < 40 };
 }
 
+const textMemo = new Map<string, Promise<FileText>>();
+
+/**
+ * readText, remembered per file for this session: a solution read once in the
+ * background opens instantly when "Edit & submit" is tapped.
+ */
+export function readTextOnce(key: string, blob: Blob, name: string): Promise<FileText> {
+  const have = textMemo.get(key);
+  if (have) return have;
+  const p = readText(blob, name);
+  textMemo.set(key, p);
+  p.catch(() => textMemo.delete(key));
+  if (textMemo.size > 12) textMemo.delete(textMemo.keys().next().value!);
+  return p;
+}
+
+/** Loads the PDF engine ahead of time (it is split out of the main bundle). */
+export function warmPdfEngine(): void {
+  void import("./pdfSwap").catch(() => {});
+}
+
 /** The sender's own name and enrollment, as they appear in the file. */
 export function detectAuthor(text: string, fileName: string, me: { name?: string; roll?: string }) {
   const name = me.name?.trim() ?? "";
