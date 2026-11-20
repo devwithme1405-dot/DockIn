@@ -131,7 +131,7 @@ export function FriendsPanel({
 
   return (
     <div className="paper-page fixed inset-0 z-[45] flex flex-col" role="dialog" aria-label="Friends">
-      <header className="solid-bar flex items-center gap-1.5 rounded-none border-x-0 border-t-0 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
+      <header className="solid-bar flex items-center gap-1.5 rounded-none border-x-0 border-t-0 px-1.5 pt-[max(0.4rem,var(--sat))] pb-1.5">
         <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
           <ArrowLeft size={23} />
         </button>

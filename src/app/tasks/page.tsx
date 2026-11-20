@@ -354,7 +354,7 @@ export default function TasksPage() {
       <button
         onClick={() => setAdding(true)}
         aria-label="Add task"
-        className="btn-leather no-rise fixed! right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl"
+        className="btn-leather no-rise fixed! right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(6.5rem+var(--sab))] z-30 grid size-14 place-items-center rounded-2xl"
       >
         <Plus size={26} />
       </button>

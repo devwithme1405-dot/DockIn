@@ -132,6 +132,15 @@ function Circle() {
   // An open conversation lives in the address (?chat=…), so a notification can
   // open it and the phone's back button closes it.
   const chat = params.get("chat");
+  // Keep the chat on screen for a moment after it is closed, so it can slide away.
+  const [shownChat, setShownChat] = useState<{ thread: string; leaving: boolean } | null>(null);
+  if (chat && shownChat?.thread !== chat) setShownChat({ thread: chat, leaving: false });
+  if (!chat && shownChat && !shownChat.leaving) setShownChat({ ...shownChat, leaving: true });
+  useEffect(() => {
+    if (!shownChat?.leaving) return;
+    const t = window.setTimeout(() => setShownChat(null), 230);
+    return () => window.clearTimeout(t);
+  }, [shownChat]);
   const threads = useThreads();
   const people = usePeople();
   const [scanning, setScanning] = useState(false);
@@ -474,7 +483,7 @@ function Circle() {
 
   return (
     <div className="page-wash pb-4">
-      <header className="flex items-center gap-2 px-4 pt-[max(0.9rem,env(safe-area-inset-top))] pb-1">
+      <header className="flex items-center gap-2 px-4 pt-[max(0.9rem,var(--sat))] pb-1">
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-[28px] leading-none font-extrabold tracking-[-0.03em]">Friends</h1>
           <svg viewBox="0 0 120 10" className="mt-1 h-2 w-[104px] text-orange" aria-hidden>
@@ -693,7 +702,7 @@ function Circle() {
         <button
           onClick={() => setComposing(true)}
           aria-label="New chat"
-          className="fixed right-4 bottom-[calc(6.4rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-[#d9772b] text-white shadow-[0_10px_24px_-8px_rgba(196,83,42,0.8)] active:scale-95"
+          className="fixed right-4 bottom-[calc(6.4rem+var(--sab))] z-30 grid size-14 place-items-center rounded-full bg-[#d9772b] text-white shadow-[0_10px_24px_-8px_rgba(196,83,42,0.8)] active:scale-95"
         >
           <PenSquare size={23} />
         </button>
@@ -856,7 +865,7 @@ function Circle() {
         <button
           onClick={() => setSheet("share")}
           aria-label="Share an assignment"
-          className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-2xl bg-ink text-on-ink shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
+          className="fixed right-[max(1.25rem,calc((100vw-28rem)/2+1.25rem))] bottom-[calc(5.5rem+var(--sab))] z-30 grid size-14 place-items-center rounded-2xl bg-ink text-on-ink shadow-[0_10px_28px_-6px_rgba(31,95,214,0.65)] transition active:scale-95"
         >
           <Share2 size={23} />
         </button>
@@ -1151,7 +1160,8 @@ function Circle() {
         )}
       </Sheet>
 
-      {chat && me && (() => {
+      {shownChat && me && (() => {
+        const chat = shownChat.thread;
         const gid = chat.startsWith("g:") ? chat.slice(2) : null;
         const g = gid ? (groups ?? []).find((x) => x.id === gid) : null;
         const fid = otherIn(chat, me);
@@ -1160,6 +1170,7 @@ function Circle() {
           <ChatView
             key={chat}
             thread={chat}
+            leaving={shownChat.leaving}
             title={g ? g.name : (f?.name ?? "Chat")}
             subtitle={g ? `${g.members} ${g.members === 1 ? "member" : "members"}` : "Friend"}
             emoji={g ? (g.emoji ?? "👥") : null}
@@ -1515,7 +1526,7 @@ function ChatList({
   return (
     <div className="pb-24">
       {selecting && (
-        <div className="fixed inset-x-0 top-0 z-50 flex items-center gap-1 border-b border-card-edge bg-bg px-2 pt-[calc(env(safe-area-inset-top)+12px)] pb-3 shadow-[0_8px_20px_-14px_rgb(var(--shadow-ink)/0.6)] [animation:fade-in_150ms_ease-out]">
+        <div className="fixed inset-x-0 top-0 z-50 flex items-center gap-1 border-b border-card-edge bg-bg px-2 pt-[calc(var(--sat)+12px)] pb-3 shadow-[0_8px_20px_-14px_rgb(var(--shadow-ink)/0.6)] [animation:fade-in_150ms_ease-out]">
           <button onClick={done} aria-label="Cancel selection" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
             <X size={22} />
           </button>

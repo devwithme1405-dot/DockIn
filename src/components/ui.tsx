@@ -130,7 +130,7 @@ export function Sheet({
   return (
     <div className="no-rise fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
       <div className="anim-fade absolute inset-0 bg-black/45" onClick={onClose} />
-      <div className="anim-sheet paper-page absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t-[1.5px] border-card-edge px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
+      <div className="anim-sheet paper-page absolute inset-x-0 bottom-0 mx-auto max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t-[1.5px] border-card-edge px-5 pt-3 pb-[max(1.25rem,var(--sab))] shadow-2xl">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-[19px] font-extrabold">{title}</h2>
@@ -221,7 +221,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {toast && (
         <div
           key={toast.id}
-          className="pointer-events-none fixed inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-md justify-center px-4"
+          className="pointer-events-none fixed inset-x-0 bottom-[calc(6.25rem+var(--sab))] z-[60] mx-auto flex max-w-md justify-center px-4"
         >
           <div className="anim-toast pointer-events-auto flex items-center gap-4 rounded-xl bg-text px-4 py-2.5 text-sm font-medium text-bg shadow-[0_10px_24px_-8px_rgb(40_20_5/0.6)]">
             <span>{toast.message}</span>

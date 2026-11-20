@@ -52,7 +52,7 @@ export default function SetupPage() {
     // Pinned to the screen and scrolling inside, for the same reason as onboarding:
     // dvh heights are unreliable under the text-size zoom.
     <div className="paper-page fixed inset-0 z-40 overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-md px-5 pt-[max(1.75rem,env(safe-area-inset-top))] pb-[calc(6.5rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto w-full max-w-md px-5 pt-[max(1.75rem,var(--sat))] pb-[calc(6.5rem+var(--sab))]">
         <p className="text-[13px] font-semibold tracking-wide text-accent uppercase">
           {done} of {steps.length} done
         </p>
@@ -131,7 +131,7 @@ export default function SetupPage() {
         </section>
 
 
-        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md bg-gradient-to-t from-bg via-bg to-bg/0 px-5 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md bg-gradient-to-t from-bg via-bg to-bg/0 px-5 pt-6 pb-[max(1rem,var(--sab))]">
           <button
             onClick={finish}
             className={cx(

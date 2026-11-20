@@ -1150,3 +1150,52 @@ html.lite .ring-draw { animation-duration: 0.4s; }
 [data-theme="dark"] .chip[aria-pressed="true"],
 [data-theme="dark"] .chip[aria-checked="true"],
 [data-theme="dark"] .chip.on { background: #f0d2ab; border-color: #f0d2ab; color: #2a1608; }
+
+/* Safe areas. Android's WebView doesn't always fill env(): Capacitor injects
+   --safe-area-inset-* as well, so take whichever is bigger. */
+:root {
+  --sat: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+
+/* A chat slides in from the right and back out, like every messenger. */
+@keyframes chat-in {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: none; }
+}
+@keyframes chat-out {
+  from { transform: none; }
+  to { transform: translate3d(100%, 0, 0); }
+}
+.chat-in { animation: chat-in 280ms cubic-bezier(0.2, 0.85, 0.25, 1); }
+.chat-out { animation: chat-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards; }
+html.lite .chat-in { animation-duration: 180ms; }
+html.lite .chat-out { animation-duration: 150ms; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-in, .chat-out { animation-duration: 1ms; }
+}
+
+/* Launch: the first screen just appears (see TabHost). */
+html[data-boot] .stagger > *,
+html[data-boot] .tab-show,
+html[data-boot] .page-enter {
+  animation: none !important;
+}
+/* Skeletons only show up if loading actually takes a moment — a quick load
+   never flashes grey blocks first. */
+@keyframes skel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.skel-delay { animation: skel-in 180ms ease-out 260ms backwards; }
+
+/* Chat bubble styles (Customise chat → Bubbles). */
+[data-bubble="flat"] .bubble-out,
+[data-bubble="flat"] .bubble-in { box-shadow: none; }
+[data-bubble="outline"] .bubble-out,
+[data-bubble="outline"] .bubble-in {
+  box-shadow: none;
+  outline: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  outline-offset: -1px;
+}
+.chat-root { background-position: center; }

@@ -43,7 +43,7 @@ export default function OnboardingPage() {
     // the app's text-size zoom on <html> makes dvh heights lie, which pushed
     // these steps off the top of the screen on phones.
     <div className="paper-page fixed inset-0 z-40 overflow-y-auto overscroll-contain">
-      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-6 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex min-h-full w-full max-w-md flex-col px-6 pt-[max(2rem,var(--sat))] pb-[max(1.5rem,var(--sab))]">
         <div
           className="flex items-center gap-1.5"
           aria-label={`Step ${step} of 2`}
@@ -173,7 +173,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
         className="absolute inset-x-0 bottom-0 -z-10 h-[34%] bg-gradient-to-t from-[#0a0f24]/80 via-[#0a0f24]/35 to-transparent"
       />
 
-      <div className="flex h-full flex-col justify-between px-6 pt-[max(1.75rem,env(safe-area-inset-top))] pb-[max(1.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex h-full flex-col justify-between px-6 pt-[max(1.75rem,var(--sat))] pb-[max(1.75rem,var(--sab))]">
         <div>
           <div className="flex items-center gap-2.5">
             <Logo size={34} />

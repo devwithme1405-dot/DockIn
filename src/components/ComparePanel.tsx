@@ -78,7 +78,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
 
   return (
     <div className="paper-page fixed inset-0 z-[46] flex flex-col" role="dialog" aria-label="Compare">
-      <header className="solid-bar rounded-none border-x-0 border-t-0 pt-[max(0.4rem,env(safe-area-inset-top))]">
+      <header className="solid-bar rounded-none border-x-0 border-t-0 pt-[max(0.4rem,var(--sat))]">
         <div className="flex items-center gap-1.5 px-1.5 pb-1">
           <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
             <ArrowLeft size={23} />

@@ -224,7 +224,7 @@ export function QrScanner({
         )}
       </div>
 
-      <div className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+      <div className="absolute inset-x-0 top-0 flex items-center gap-3 px-4 pt-[max(1rem,var(--sat))]">
         <button onClick={onClose} aria-label="Close the scanner" className="grid size-11 place-items-center rounded-full bg-black/40 backdrop-blur">
           <X size={22} />
         </button>
@@ -240,7 +240,7 @@ export function QrScanner({
         )}
       </div>
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-5 pb-[max(1.5rem,var(--sab))]">
         {problem && !showMine ? (
           <p className="rounded-2xl bg-black/60 px-4 py-3 text-center text-[14px]">{problem}</p>
         ) : (

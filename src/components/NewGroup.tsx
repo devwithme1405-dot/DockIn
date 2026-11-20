@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Camera, Check, Search, X } from "lucide-react";
 import type { Friend } from "@/lib/types";
 import { Avatar, cx, useToast } from "./ui";
 import { useBackClose } from "@/lib/backClose";
+import { cropPhoto } from "./PhotoCropper";
 import { addGroupMembers, createGroup, pullSocial, updateGroup, SocialError } from "@/lib/social";
 import { uploadAvatarPhoto } from "@/lib/avatars";
 
@@ -84,7 +85,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
 
   return (
     <div className="paper-page fixed inset-0 z-[55] flex flex-col" role="dialog" aria-label="New group">
-      <header className="solid-bar flex items-center gap-1.5 rounded-none border-x-0 border-t-0 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
+      <header className="solid-bar flex items-center gap-1.5 rounded-none border-x-0 border-t-0 px-1.5 pt-[max(0.4rem,var(--sat))] pb-1.5">
         <button
           onClick={() => (step === 2 ? setStep(1) : onClose())}
           aria-label="Back"
@@ -140,9 +141,11 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
+              onChange={async (e) => {
+                const picked = e.target.files?.[0];
                 e.target.value = "";
+                if (!picked) return;
+                const f = await cropPhoto(picked);
                 if (!f) return;
                 if (photo) URL.revokeObjectURL(photo.url);
                 setPhoto({ file: f, url: URL.createObjectURL(f) });
@@ -259,7 +262,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
         </div>
       )}
 
-      <footer className="solid-bar absolute inset-x-0 bottom-0 rounded-none border-x-0 border-b-0 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <footer className="solid-bar absolute inset-x-0 bottom-0 rounded-none border-x-0 border-b-0 px-4 pt-3 pb-[max(1rem,var(--sab))]">
         {step === 1 ? (
           <button
             onClick={() => setStep(2)}

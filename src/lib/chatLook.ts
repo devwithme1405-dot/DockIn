@@ -8,16 +8,43 @@ import { useSyncExternalStore, type CSSProperties } from "react";
  * not data), shared by every chat.
  */
 
-export type ChatThemeId = "auto" | "day" | "sky" | "paper" | "blush" | "night" | "amoled";
-export type Wallpaper = "doodles" | "dots" | "grid" | "plain";
-export type TextSize = "s" | "m" | "l";
-export type Corners = "round" | "soft" | "sharp";
+export type ChatThemeId =
+  | "auto"
+  | "day"
+  | "sky"
+  | "paper"
+  | "blush"
+  | "ocean"
+  | "sunset"
+  | "forest"
+  | "sand"
+  | "slate"
+  | "night"
+  | "midnight"
+  | "amoled";
+export type Wallpaper = "doodles" | "dots" | "grid" | "waves" | "stripes" | "circles" | "gradient" | "photo" | "plain";
+export type BubbleStyle = "soft" | "flat" | "outline";
+export type Density = "cozy" | "compact";
 
 export interface ChatLook {
   theme: ChatThemeId;
   wallpaper: Wallpaper;
-  size: TextSize;
-  corners: Corners;
+  /** Text size in px (13–19). */
+  size: number;
+  /** Bubble corner radius in px (4–24). */
+  corners: number;
+  /** Override the theme's accent (links, ticks, buttons); null = theme's. */
+  accent: string | null;
+  /** Override my bubble colour; null = theme's. */
+  mine: string | null;
+  /** Pattern strength, 0.3–2 (1 = normal). */
+  pattern: number;
+  /** How much a photo wallpaper is darkened, 0–0.7. */
+  dim: number;
+  bubble: BubbleStyle;
+  density: Density;
+  /** Show people's pictures next to their messages in groups. */
+  avatars: boolean;
 }
 
 interface Palette {
@@ -142,6 +169,126 @@ export const PALETTES: Record<Exclude<ChatThemeId, "auto">, Palette> = {
     input: "#1e2c3a",
     chip: "rgb(30 44 58 / 0.92)",
   },
+  ocean: {
+    name: "Ocean",
+    dark: false,
+    bg: "#d7eeec",
+    wall: "#3f8a86",
+    wallAlpha: 0.13,
+    head: "#fbfefe",
+    out: "#c9ece6",
+    outText: "#0f2a27",
+    outMeta: "#4d847d",
+    outCard: "rgb(255 255 255 / 0.6)",
+    tick: "#16928a",
+    in: "#ffffff",
+    inText: "#13201f",
+    inMeta: "#7a908e",
+    inCard: "#eff7f6",
+    accent: "#13867f",
+    input: "#ffffff",
+    chip: "rgb(255 255 255 / 0.9)",
+  },
+  sunset: {
+    name: "Peach",
+    dark: false,
+    bg: "#fbe6d8",
+    wall: "#c0714a",
+    wallAlpha: 0.12,
+    head: "#fffaf6",
+    out: "#ffd9c2",
+    outText: "#3b1c0d",
+    outMeta: "#a8714f",
+    outCard: "rgb(255 255 255 / 0.6)",
+    tick: "#e0703a",
+    in: "#ffffff",
+    inText: "#2b1a12",
+    inMeta: "#9b8577",
+    inCard: "#fbf1ea",
+    accent: "#d0612b",
+    input: "#ffffff",
+    chip: "rgb(255 255 255 / 0.9)",
+  },
+  forest: {
+    name: "Forest",
+    dark: false,
+    bg: "#dfe8d6",
+    wall: "#5d7a46",
+    wallAlpha: 0.13,
+    head: "#fbfdf8",
+    out: "#cfe6b8",
+    outText: "#1b2a10",
+    outMeta: "#62804a",
+    outCard: "rgb(255 255 255 / 0.6)",
+    tick: "#4f8f2c",
+    in: "#ffffff",
+    inText: "#1a2014",
+    inMeta: "#808b76",
+    inCard: "#f2f6ee",
+    accent: "#3f7f22",
+    input: "#ffffff",
+    chip: "rgb(255 255 255 / 0.9)",
+  },
+  sand: {
+    name: "Sand",
+    dark: false,
+    bg: "#efe9df",
+    wall: "#8d8170",
+    wallAlpha: 0.12,
+    head: "#fdfcfa",
+    out: "#e6dccb",
+    outText: "#2a241b",
+    outMeta: "#857a68",
+    outCard: "rgb(255 255 255 / 0.6)",
+    tick: "#8a6d3b",
+    in: "#ffffff",
+    inText: "#24211c",
+    inMeta: "#8f887e",
+    inCard: "#f6f3ee",
+    accent: "#7a5f2e",
+    input: "#ffffff",
+    chip: "rgb(255 255 255 / 0.92)",
+  },
+  slate: {
+    name: "Slate",
+    dark: false,
+    bg: "#dfe3e8",
+    wall: "#5b6878",
+    wallAlpha: 0.13,
+    head: "#fbfcfd",
+    out: "#d2dbe6",
+    outText: "#16202b",
+    outMeta: "#647487",
+    outCard: "rgb(255 255 255 / 0.6)",
+    tick: "#3d6fb0",
+    in: "#ffffff",
+    inText: "#1a1f25",
+    inMeta: "#808893",
+    inCard: "#f1f3f6",
+    accent: "#3a5f8f",
+    input: "#ffffff",
+    chip: "rgb(255 255 255 / 0.9)",
+  },
+  midnight: {
+    name: "Midnight",
+    dark: true,
+    bg: "#101425",
+    wall: "#8e9bd6",
+    wallAlpha: 0.06,
+    head: "#171c31",
+    out: "#2c3f6e",
+    outText: "#f1f4fd",
+    outMeta: "#a8b7e0",
+    outCard: "rgb(0 0 0 / 0.2)",
+    tick: "#8fb3ff",
+    in: "#1d2440",
+    inText: "#e7eaf6",
+    inMeta: "#8a92b3",
+    inCard: "rgb(0 0 0 / 0.2)",
+    accent: "#7aa2ff",
+    input: "#1d2440",
+    chip: "rgb(29 36 64 / 0.92)",
+  },
   amoled: {
     name: "Black",
     dark: true,
@@ -164,52 +311,161 @@ export const PALETTES: Record<Exclude<ChatThemeId, "auto">, Palette> = {
   },
 };
 
-export const THEME_ORDER: ChatThemeId[] = ["auto", "day", "sky", "paper", "blush", "night", "amoled"];
+export const THEME_ORDER: ChatThemeId[] = ["auto", "day", "sky", "ocean", "forest", "paper", "sunset", "blush", "sand", "slate", "night", "midnight", "amoled"];
 export const WALLPAPERS: { id: Wallpaper; name: string }[] = [
   { id: "doodles", name: "Doodles" },
   { id: "dots", name: "Dots" },
   { id: "grid", name: "Notebook" },
+  { id: "waves", name: "Waves" },
+  { id: "stripes", name: "Lines" },
+  { id: "circles", name: "Bubbles" },
+  { id: "gradient", name: "Gradient" },
+  { id: "photo", name: "My photo" },
   { id: "plain", name: "Plain" },
 ];
-const SIZE_PX: Record<TextSize, number> = { s: 14, m: 15.5, l: 17 };
-const RADIUS_PX: Record<Corners, number> = { round: 20, soft: 14, sharp: 8 };
+export const ACCENTS = ["#1f8f5f", "#2f86d0", "#13867f", "#d0612b", "#c4466c", "#b8601e", "#3a5f8f", "#7a5f2e", "#e0a21b", "#5eb5f7"];
+export const BUBBLES = ["#d8f5c8", "#e3f6d4", "#d6ecff", "#c9ece6", "#ffe3b8", "#ffd9c2", "#ffdbe3", "#e6dccb", "#d2dbe6", "#2b5278", "#1d5c42", "#5a3a22"];
 
-const DEFAULT: ChatLook = { theme: "auto", wallpaper: "doodles", size: "m", corners: "round" };
+export const DEFAULT_LOOK: ChatLook = {
+  theme: "auto",
+  wallpaper: "doodles",
+  size: 15.5,
+  corners: 18,
+  accent: null,
+  mine: null,
+  pattern: 1,
+  dim: 0.25,
+  bubble: "soft",
+  density: "cozy",
+  avatars: true,
+};
 const KEY = "dockin-chat-look";
+const PHOTO_KEY = "dockin-chat-wall-photo";
 
-let current: ChatLook | null = null;
+type Stored = { all: ChatLook; chats: Record<string, Partial<ChatLook>> };
+let current: Stored | null = null;
+let photo: string | null | undefined;
 const listeners = new Set<() => void>();
+const OLD_SIZE: Record<string, number> = { s: 14, m: 15.5, l: 17 };
+const OLD_CORNERS: Record<string, number> = { round: 20, soft: 14, sharp: 8 };
 
-function read(): ChatLook {
+function upgrade(raw: Record<string, unknown> | null | undefined): Partial<ChatLook> {
+  if (!raw) return {};
+  const out = { ...raw } as Record<string, unknown>;
+  if (typeof out.size === "string") out.size = OLD_SIZE[out.size] ?? DEFAULT_LOOK.size;
+  if (typeof out.corners === "string") out.corners = OLD_CORNERS[out.corners] ?? DEFAULT_LOOK.corners;
+  return out as Partial<ChatLook>;
+}
+
+function read(): Stored {
   if (current) return current;
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "null") as Partial<ChatLook> | null;
-    current = { ...DEFAULT, ...(raw ?? {}) };
+    const raw = JSON.parse(localStorage.getItem(KEY) || "null") as (Record<string, unknown> & { all?: Record<string, unknown>; chats?: Record<string, Record<string, unknown>> }) | null;
+    if (raw && raw.all) {
+      current = {
+        all: { ...DEFAULT_LOOK, ...upgrade(raw.all) },
+        chats: Object.fromEntries(Object.entries(raw.chats ?? {}).map(([k, v]) => [k, upgrade(v)])),
+      };
+    } else current = { all: { ...DEFAULT_LOOK, ...upgrade(raw) }, chats: {} };
   } catch {
-    current = DEFAULT;
+    current = { all: DEFAULT_LOOK, chats: {} };
   }
   return current;
 }
 
-export function setChatLook(patch: Partial<ChatLook>) {
-  current = { ...read(), ...patch };
+function write(next: Stored) {
+  current = next;
+  cache.clear();
   try {
-    localStorage.setItem(KEY, JSON.stringify(current));
+    localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     /* fine: it just won't be remembered */
   }
   listeners.forEach((l) => l());
 }
 
-export function useChatLook(): ChatLook {
+/** Change the look for every chat, or (with `thread`) only for that chat. */
+export function setChatLook(patch: Partial<ChatLook>, thread?: string | null) {
+  const s = read();
+  if (thread) write({ ...s, chats: { ...s.chats, [thread]: { ...(s.chats[thread] ?? {}), ...patch } } });
+  else write({ ...s, all: { ...s.all, ...patch } });
+}
+
+/** Back to the default look (everywhere, or just this chat's own settings). */
+export function resetChatLook(thread?: string | null) {
+  const s = read();
+  if (thread) {
+    const chats = { ...s.chats };
+    delete chats[thread];
+    write({ ...s, chats });
+  } else write({ all: DEFAULT_LOOK, chats: s.chats });
+}
+
+export function hasOwnLook(thread: string): boolean {
+  return !!read().chats[thread];
+}
+
+const cache = new Map<string, ChatLook>();
+function lookFor(thread?: string | null): ChatLook {
+  const key = thread ?? "";
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const s = read();
+  const v = thread && s.chats[thread] ? { ...s.all, ...s.chats[thread] } : s.all;
+  cache.set(key, v);
+  return v;
+}
+
+/** The look for a chat (its own settings over the shared ones). */
+export function useChatLook(thread?: string | null): ChatLook {
   return useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    read,
-    () => DEFAULT,
+    () => lookFor(thread),
+    () => DEFAULT_LOOK,
   );
+}
+
+/** The wallpaper photo (one, shared by every chat that uses "My photo"). */
+export function useChatPhoto(): string | null {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => {
+      if (photo === undefined) {
+        try {
+          photo = localStorage.getItem(PHOTO_KEY);
+        } catch {
+          photo = null;
+        }
+      }
+      return photo;
+    },
+    () => null,
+  );
+}
+
+/** Stores a phone photo as the wallpaper, shrunk so it never weighs much. */
+export async function setChatPhoto(file: File): Promise<void> {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1080 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+  c.getContext("2d")?.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  const url = c.toDataURL("image/jpeg", 0.72);
+  try {
+    localStorage.setItem(PHOTO_KEY, url);
+  } catch {
+    throw new Error("That photo is too big to keep on this phone.");
+  }
+  photo = url;
+  listeners.forEach((l) => l());
 }
 
 /** "auto" follows the app: Mint by day, Night in dark mode. */
@@ -236,19 +492,48 @@ function svgUrl(body: string, size: number, color: string, alpha: number): strin
   return `url("data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, " "))}")`;
 }
 
-function wallpaperOf(w: Wallpaper, p: Palette): { image: string; size: string } {
-  if (w === "plain") return { image: "none", size: "auto" };
-  if (w === "dots")
-    return {
-      image: `radial-gradient(${hexA(p.wall, p.wallAlpha * 1.6)} 1.4px, transparent 1.6px)`,
-      size: "18px 18px",
-    };
-  if (w === "grid")
-    return {
-      image: `linear-gradient(${hexA(p.wall, p.wallAlpha)} 1px, transparent 1px), linear-gradient(90deg, ${hexA(p.wall, p.wallAlpha)} 1px, transparent 1px)`,
-      size: "22px 22px",
-    };
-  return { image: svgUrl(DOODLES, 170, p.wall, p.wallAlpha * 1.7), size: "170px 170px" };
+const WAVES = `<path d="M0 30c25-14 50 14 75 0s50-14 75 0M0 80c25-14 50 14 75 0s50-14 75 0M0 130c25-14 50 14 75 0s50-14 75 0"/>`;
+const CIRCLES = `<circle cx="30" cy="30" r="18"/><circle cx="110" cy="40" r="10"/><circle cx="70" cy="100" r="24"/><circle cx="135" cy="125" r="14"/><circle cx="20" cy="135" r="8"/>`;
+
+function wallpaperOf(look: ChatLook, p: Palette, picture: string | null): { image: string; size: string } {
+  const a = p.wallAlpha * look.pattern;
+  switch (look.wallpaper) {
+    case "plain":
+      return { image: "none", size: "auto" };
+    case "dots":
+      return { image: `radial-gradient(${hexA(p.wall, a * 1.6)} 1.4px, transparent 1.6px)`, size: "18px 18px" };
+    case "grid":
+      return {
+        image: `linear-gradient(${hexA(p.wall, a)} 1px, transparent 1px), linear-gradient(90deg, ${hexA(p.wall, a)} 1px, transparent 1px)`,
+        size: "22px 22px",
+      };
+    case "stripes":
+      return { image: `repeating-linear-gradient(135deg, ${hexA(p.wall, a * 0.9)} 0 1.5px, transparent 1.5px 16px)`, size: "auto" };
+    case "waves":
+      return { image: svgUrl(WAVES, 150, p.wall, a * 2.2), size: "150px 150px" };
+    case "circles":
+      return { image: svgUrl(CIRCLES, 160, p.wall, a * 2), size: "160px 160px" };
+    case "gradient":
+      return {
+        image: `radial-gradient(120% 80% at 0% 0%, ${hexA(p.accent, 0.22 * look.pattern)}, transparent 60%), radial-gradient(120% 80% at 100% 100%, ${hexA(p.tick, 0.2 * look.pattern)}, transparent 60%)`,
+        size: "auto",
+      };
+    case "photo":
+      if (!picture) return { image: "none", size: "auto" };
+      return { image: `linear-gradient(rgb(0 0 0 / ${look.dim}), rgb(0 0 0 / ${look.dim})), url("${picture}")`, size: "cover" };
+    default:
+      return { image: svgUrl(DOODLES, 170, p.wall, a * 1.7), size: "170px 170px" };
+  }
+}
+
+/** Readable text on a given bubble colour. */
+function inkOn(hex: string): { text: string; meta: string; dark: boolean } {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const dark = 0.299 * r + 0.587 * g + 0.114 * b < 140;
+  return dark ? { text: "#f4f7fb", meta: "rgb(235 240 248 / 0.72)", dark } : { text: "#17201a", meta: "rgb(30 40 35 / 0.55)", dark };
 }
 
 function hexA(hex: string, a: number): string {
@@ -257,30 +542,35 @@ function hexA(hex: string, a: number): string {
 }
 
 /** The CSS variables a chat screen is painted with. */
-export function chatVars(look: ChatLook, appDark: boolean): { style: CSSProperties; dark: boolean } {
+export function chatVars(look: ChatLook, appDark: boolean, picture: string | null = null): { style: CSSProperties; dark: boolean; attrs: Record<string, string> } {
   const p = paletteOf(look.theme, appDark);
-  const wall = wallpaperOf(look.wallpaper, p);
+  const wall = wallpaperOf(look, p, picture);
+  const accent = look.accent ?? p.accent;
+  const mine = look.mine ? { bg: look.mine, ...inkOn(look.mine) } : null;
   return {
     dark: p.dark,
+    attrs: { "data-bubble": look.bubble, "data-density": look.density },
     style: {
       "--chat-bg": p.bg,
       "--chat-wall": wall.image,
       "--chat-wall-size": wall.size,
       "--chat-head": p.head,
-      "--out-bg": p.out,
-      "--out-text": p.outText,
-      "--out-meta": p.outMeta,
-      "--out-card": p.outCard,
-      "--out-tick": p.tick,
+      "--out-bg": mine?.bg ?? p.out,
+      "--out-text": mine?.text ?? p.outText,
+      "--out-meta": mine?.meta ?? p.outMeta,
+      "--out-card": mine ? (mine.dark ? "rgb(0 0 0 / 0.2)" : "rgb(255 255 255 / 0.55)") : p.outCard,
+      "--out-tick": mine?.dark ? "#9fd4ff" : look.accent ?? p.tick,
       "--in-bg": p.in,
       "--in-text": p.inText,
       "--in-meta": p.inMeta,
       "--in-card": p.inCard,
-      "--chat-accent": p.accent,
+      "--chat-accent": accent,
       "--chat-input": p.input,
       "--chat-chip": p.chip,
-      "--chat-fs": `${SIZE_PX[look.size]}px`,
-      "--r": `${RADIUS_PX[look.corners]}px`,
+      "--chat-fs": `${look.size}px`,
+      "--r": `${look.corners}px`,
+      "--gap": look.density === "compact" ? "1px" : "3px",
+      "--gap-first": look.density === "compact" ? "6px" : "10px",
     } as CSSProperties,
   };
 }

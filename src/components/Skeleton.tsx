@@ -8,7 +8,7 @@ export function Bone({ className }: { className?: string }) {
 
 function Screen({ children, label = "Loading" }: { children: ReactNode; label?: string }) {
   return (
-    <div role="status" aria-busy="true" aria-live="polite">
+    <div role="status" aria-busy="true" aria-live="polite" className="skel-delay">
       <span className="sr-only">{label}</span>
       {children}
     </div>
@@ -35,7 +35,7 @@ function Rows({ n, className }: { n: number; className?: string }) {
 export function TodaySkeleton() {
   return (
     <Screen label="Loading your day">
-      <div className="flex h-11 items-center justify-between px-4 pt-[max(0.625rem,env(safe-area-inset-top))] box-content pb-2">
+      <div className="flex h-11 items-center justify-between px-4 pt-[max(0.625rem,var(--sat))] box-content pb-2">
         <div className="flex items-center gap-2.5">
           <Bone className="size-[30px] rounded-lg" />
           <div className="space-y-1.5">

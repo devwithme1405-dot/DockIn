@@ -13,6 +13,7 @@ import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
 import { StatsPublisher } from "./StatsPublisher";
 import { NotifyAsk } from "./NotifyAsk";
+import { CropHost } from "./PhotoCropper";
 import { SocialSync } from "./SocialSync";
 import { AppUpdate } from "./AppUpdate";
 import { useAuth } from "@/lib/auth";
@@ -350,7 +351,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className={cx("paper-page mx-auto min-h-dvh w-full max-w-md", !onboarding && "page-curl")}>
         {ready && (
           <main
-            className={cx(!onboarding && "pb-[calc(6.5rem+env(safe-area-inset-bottom))]")}
+            className={cx(!onboarding && "pb-[calc(6.5rem+var(--sab))]")}
           >
             {/* The tabs stay mounted underneath every other screen, so coming
                 back from Profile or a subject is as instant as switching tabs. */}
@@ -364,6 +365,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {ready && !onboarding && FRIENDS && <SocialSync />}
         {ready && !onboarding && FRIENDS && session && <StatsPublisher />}
         {isNativeApp() && <AppUpdate />}
+        <CropHost />
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second
           brown web overlay would only bring back the very gap it holds through.
@@ -402,7 +404,7 @@ function TabBar({ pathname }: { pathname: string }) {
     // glowing orange tile, the way a lit key looks on a desk.
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md px-3 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md px-3 pb-[max(0.625rem,var(--sab))]"
     >
       <ul
         className={cx(

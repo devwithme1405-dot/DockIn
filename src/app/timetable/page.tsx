@@ -164,7 +164,7 @@ export default function TimetablePage() {
   const hasManual = (slots?.length ?? 0) > 0;
 
   return (
-    <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+    <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+var(--sab))]">
       <HeroHeader title="Timetable" icon={CalendarClock} subtitle={heroLine} />
 
       <Segmented

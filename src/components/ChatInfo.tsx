@@ -12,6 +12,7 @@ import { Avatar, ConfirmSheet, Sheet, cx, useToast } from "./ui";
 import { Bone } from "./Skeleton";
 import { QrCode } from "./QrCode";
 import { useBackClose } from "@/lib/backClose";
+import { cropPhoto } from "./PhotoCropper";
 
 /** A photo, full screen — tap anywhere to close (like WhatsApp's profile view). */
 export function PhotoViewer({ name, avatar, emoji, onClose }: { name: string; avatar?: string | null; emoji?: string | null; onClose: () => void }) {
@@ -90,8 +91,10 @@ export function ChatInfo({
     };
   }, [group, reload]);
 
-  async function savePhoto(f: File | undefined) {
-    if (!f || !group) return;
+  async function savePhoto(picked: File | undefined) {
+    if (!picked || !group) return;
+    const f = await cropPhoto(picked);
+    if (!f) return;
     setBusy(true);
     try {
       const key = await uploadAvatarPhoto(f, group.photo ?? undefined);
@@ -141,7 +144,7 @@ export function ChatInfo({
 
   return (
     <div className="paper-page fixed inset-0 z-[60] flex flex-col [animation:sheet-in_220ms_cubic-bezier(.2,.9,.3,1)]" role="dialog" aria-label={`${title} info`}>
-      <header className="glass-bar flex items-center gap-1.5 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
+      <header className="glass-bar flex items-center gap-1.5 px-1.5 pt-[max(0.4rem,var(--sat))] pb-1.5">
         <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
           <ArrowLeft size={23} />
         </button>

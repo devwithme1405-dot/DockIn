@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import QRCode from "qrcode";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Bone } from "@/components/Skeleton";
@@ -41,6 +41,20 @@ function Cloche() {
       <path d="M19 41 a15 13 0 0 1 17 -7" stroke="#8f4a22" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity="0.35" />
     </svg>
   );
+}
+
+const PASS_KEY = "dockin-mess-pass-svg";
+let passCache: { value: string; svg: string } | null = null;
+const onPassCache = () => () => {};
+function cachedPass(): { value: string; svg: string } | null {
+  if (passCache) return passCache;
+  try {
+    const raw = localStorage.getItem(PASS_KEY);
+    passCache = raw ? (JSON.parse(raw) as { value: string; svg: string }) : null;
+  } catch {
+    passCache = null;
+  }
+  return passCache;
 }
 
 export default function CafeteriaPage() {
@@ -97,26 +111,32 @@ export default function CafeteriaPage() {
 
   // The pass — Camu's live one, else the pasted fallback — drawn once.
   const qrValue = (caf?.qr || profile?.messQr || "").trim();
-  const [svg, setSvg] = useState("");
+  // Drawn once and remembered (memory + phone storage), so the pass is there
+  // instantly every time — no blank square while it is generated.
+  const remembered = useSyncExternalStore(onPassCache, cachedPass, () => null);
+  const [fresh, setDrawn] = useState<{ value: string; svg: string } | null>(null);
+  const drawn = fresh ?? remembered;
+  const svg = drawn && drawn.value === qrValue ? drawn.svg : "";
   useEffect(() => {
+    if (!qrValue || (drawn && drawn.value === qrValue)) return;
     let alive = true;
-    if (!qrValue) {
-      void Promise.resolve().then(() => {
-        if (alive) setSvg("");
-      });
-      return () => {
-        alive = false;
-      };
-    }
     QRCode.toString(qrValue, { type: "svg", margin: 1, errorCorrectionLevel: "M" })
       .then((s) => {
-        if (alive) setSvg(s);
+        if (!alive) return;
+        const next = { value: qrValue, svg: s };
+        passCache = next;
+        try {
+          localStorage.setItem(PASS_KEY, JSON.stringify(next));
+        } catch {
+          /* memory only */
+        }
+        setDrawn(next);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [qrValue]);
+  }, [qrValue, drawn]);
 
   // Grows as it is scrolled into view, straight on the node in a rAF. The tab
   // stays alive while hidden, so it only reacts while it is actually on screen,

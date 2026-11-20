@@ -96,7 +96,7 @@ export function AppUpdate() {
   }
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[55] mx-auto max-w-md px-3 pt-[max(0.6rem,env(safe-area-inset-top))]">
+    <div className="fixed inset-x-0 top-0 z-[55] mx-auto max-w-md px-3 pt-[max(0.6rem,var(--sat))]">
       <div className="leather stitched flex items-center gap-3 rounded-2xl px-3.5 py-3 text-on-ink shadow-lg">
         <Download size={20} className="relative z-[1] shrink-0" />
         <div className="relative z-[1] min-w-0 flex-1">

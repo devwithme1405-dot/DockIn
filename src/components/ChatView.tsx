@@ -73,7 +73,7 @@ import { getSupabase } from "@/lib/supabase";
 import { addTask } from "@/lib/repo";
 import { ChatInfo, PhotoViewer } from "./ChatInfo";
 import { Bone } from "./Skeleton";
-import { chatVars, useChatLook } from "@/lib/chatLook";
+import { chatVars, useChatLook, useChatPhoto } from "@/lib/chatLook";
 import { ChatLookSheet } from "./ChatLook";
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -126,10 +126,13 @@ export function ChatView({
   people,
   group,
   friendId,
+  leaving = false,
   onClose,
   onLeft,
 }: {
   thread: ThreadId;
+  /** Closing: plays the slide-out before it unmounts. */
+  leaving?: boolean;
   title: string;
   subtitle?: string;
   emoji?: string | null;
@@ -171,9 +174,10 @@ export function ChatView({
   const [starredOpen, setStarredOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [leftAt, setLeftAt] = useState<number | null>(null);
-  const look = useChatLook();
+  const look = useChatLook(thread);
+  const picture = useChatPhoto();
   const appDark = typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
-  const paint = chatVars(look, appDark);
+  const paint = chatVars(look, appDark, look.wallpaper === "photo" ? picture : null);
   const starred = useLiveQuery(() => db.starred.where("thread").equals(thread).toArray(), [thread]);
   const starSet = useMemo(() => new Set((starred ?? []).map((x) => x.id)), [starred]);
   const docInput = useRef<HTMLInputElement>(null);
@@ -388,13 +392,14 @@ export function ChatView({
 
   return (
     <div
-      className="chat-root fixed inset-0 z-50 flex flex-col text-text"
+      className={cx("chat-root fixed inset-0 z-50 flex flex-col text-text", leaving ? "chat-out pointer-events-none" : "chat-in")}
       data-theme={paint.dark ? "dark" : "light"}
+      {...paint.attrs}
       style={paint.style}
       role="dialog"
       aria-label={`Chat with ${title}`}
     >
-      <header className="chat-head relative z-10 pt-[max(0.4rem,env(safe-area-inset-top))]">
+      <header className="chat-head relative z-10 pt-[max(0.4rem,var(--sat))]">
         <div className="flex items-center gap-1 px-1.5 pb-1">
           <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-black/5">
             <ArrowLeft size={23} />
@@ -503,7 +508,8 @@ export function ChatView({
               quotedName={(id) => (id === me ? "You" : (people.get(id)?.name ?? "Someone"))}
               mine={r.msg.author === me}
               showName={isGroup && r.first && r.msg.author !== me}
-              showAvatar={isGroup && r.last && r.msg.author !== me}
+              showAvatar={look.avatars && isGroup && r.last && r.msg.author !== me}
+              avatarSpace={look.avatars && isGroup}
               group={isGroup}
               first={r.first}
               last={r.last}
@@ -554,7 +560,7 @@ export function ChatView({
             end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
           }}
           aria-label="Jump to latest"
-          className="chat-chip anim-pop absolute right-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 grid size-11 place-items-center rounded-full"
+          className="chat-chip anim-pop absolute right-3 bottom-[calc(5rem+var(--sab))] z-10 grid size-11 place-items-center rounded-full"
         >
           <ArrowDown size={20} />
           {missed > 0 && (
@@ -565,7 +571,7 @@ export function ChatView({
         </button>
       )}
 
-      <footer className="chat-head px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <footer className="chat-head px-2.5 pt-2 pb-[calc(max(0.5rem,var(--sab))+0.4rem)]">
         {mentionList.length > 0 && (
           <ul className="mb-1.5 overflow-hidden rounded-2xl bg-[var(--chat-input)] ring-1 ring-black/10">
             {mentionList.map(([id, p]) => (
@@ -674,7 +680,7 @@ export function ChatView({
         </div>
       </Sheet>
 
-      <ChatLookSheet open={looking} onClose={() => setLooking(false)} appDark={appDark} />
+      {looking && <ChatLookSheet open onClose={() => setLooking(false)} appDark={appDark} thread={thread} />}
 
       <Sheet open={starredOpen} onClose={() => setStarredOpen(false)} title="Starred messages">
         {(starred ?? []).length === 0 ? (
@@ -950,6 +956,7 @@ function Bubble({
   mine,
   showName,
   showAvatar,
+  avatarSpace,
   group,
   first,
   last,
@@ -976,6 +983,7 @@ function Bubble({
   mine: boolean;
   showName: boolean;
   showAvatar: boolean;
+  avatarSpace: boolean;
   group: boolean;
   first: boolean;
   last: boolean;
@@ -1061,13 +1069,13 @@ function Bubble({
   const mineReact = reacts.find((r) => r.userId === me)?.emoji;
 
   return (
-    <div id={`msg-${m.id}`} className={cx("relative flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-2.5" : "mt-[3px]")}>
+    <div id={`msg-${m.id}`} className={cx("relative flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-[var(--gap-first)]" : "mt-[var(--gap)]")}>
       {dx > 10 && (
         <span className="absolute top-1/2 left-1 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-orange/15 text-mess" style={{ opacity: Math.min(1, dx / 56) }}>
           <CornerUpLeft size={16} />
         </span>
       )}
-      {group && !mine && <span className="w-8 shrink-0">{showAvatar && <Avatar name={name} avatar={avatar} size={32} />}</span>}
+      {group && avatarSpace && !mine && <span className="w-8 shrink-0">{showAvatar && <Avatar name={name} avatar={avatar} size={32} />}</span>}
       <div
         className={cx("min-w-0 touch-pan-y", card ? "w-[84%]" : "max-w-[80%]", mine && "flex flex-col items-end")}
         style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? "none" : "transform 180ms ease-out" }}

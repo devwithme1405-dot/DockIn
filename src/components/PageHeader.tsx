@@ -50,7 +50,7 @@ export function StickyBar({
         scrolled
           ? "border-line bg-bg/75 backdrop-blur-xl backdrop-saturate-150"
           : "border-transparent bg-transparent",
-        "pt-[max(0.625rem,env(safe-area-inset-top))]",
+        "pt-[max(0.625rem,var(--sat))]",
         className,
       )}
     >

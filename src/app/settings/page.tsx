@@ -38,6 +38,7 @@ import {
   resetAll,
   saveProfile,
 } from "@/lib/repo";
+import { cropPhoto } from "@/components/PhotoCropper";
 import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar, uploadAvatarPhoto } from "@/lib/avatars";
 import { useTasks } from "@/lib/hooks";
 import { fmtPct } from "@/lib/attendance";
@@ -808,8 +809,10 @@ function AvatarPicker({
               accept="image/*"
               className="hidden"
               onChange={async (e) => {
-                const f = e.target.files?.[0];
+                const picked = e.target.files?.[0];
                 e.target.value = "";
+                if (!picked) return;
+                const f = await cropPhoto(picked);
                 if (!f) return;
                 setUploading(true);
                 setPhotoErr(null);

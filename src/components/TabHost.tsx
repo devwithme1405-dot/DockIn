@@ -84,6 +84,10 @@ export function TabHost({ active }: { active: TabPath | null }) {
 
   useLayoutEffect(() => {
     if (shown.current === active) return;
+    // The first screen after launch appears as it is — no fade or rise (that
+    // read as a flicker on reopening the app). From the first tab switch on,
+    // screens animate in.
+    if (shown.current) document.documentElement.removeAttribute("data-boot");
     shown.current = active;
     if (!active) return;
     window.scrollTo(0, scrolls.current.get(active) ?? 0);
