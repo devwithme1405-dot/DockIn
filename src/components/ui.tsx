@@ -13,6 +13,7 @@ import {
 import { X, type LucideIcon } from "lucide-react";
 import type { AttendanceState } from "@/lib/types";
 import { gradientOf, parseAvatar } from "@/lib/avatars";
+import { useBackClose } from "@/lib/backClose";
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
@@ -117,6 +118,7 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
+  useBackClose(open, onClose);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

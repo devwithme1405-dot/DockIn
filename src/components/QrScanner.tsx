@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Flashlight, QrCode as QrIcon, ScanLine, X } from "lucide-react";
 import { QrCode } from "./QrCode";
 import { cx } from "./ui";
+import { useBackClose } from "@/lib/backClose";
 
 export type Scanned = { kind: "friend" | "group"; code: string };
 
@@ -62,6 +63,7 @@ export function QrScanner({
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const track = useRef<MediaStreamTrack | null>(null);
+  useBackClose(true, onClose);
   const [live, setLive] = useState(false);
   const [hit, setHit] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);

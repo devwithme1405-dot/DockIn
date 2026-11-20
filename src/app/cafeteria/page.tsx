@@ -30,7 +30,7 @@ function Cloche() {
   return (
     <svg
       viewBox="0 0 64 64"
-      className="h-14 w-14 shrink-0 text-on-ink drop-shadow-[0_3px_5px_rgba(40,15,0,0.45)]"
+      className="anim-float h-14 w-14 shrink-0 text-on-ink drop-shadow-[0_3px_5px_rgba(40,15,0,0.45)]"
       aria-hidden
     >
       <circle cx="32" cy="11" r="3.4" fill="currentColor" />
@@ -191,14 +191,15 @@ export default function CafeteriaPage() {
         {fromCamu ? (
           <ul className="mt-3.5 space-y-3">
             {camuMeals.map((m, i) => (
-              <CamuMealRow key={i} meal={m} active={active} />
+              <CamuMealRow key={i} meal={m} active={active} index={i} />
             ))}
           </ul>
         ) : hasManual ? (
           <ul className="mt-3.5 space-y-3">
-            {MEALS.map(({ key, label, from }) => (
+            {MEALS.map(({ key, label, from }, i) => (
               <MealCard
                 key={key}
+                index={i}
                 title={label}
                 time={from}
                 now={key === active}
@@ -231,27 +232,50 @@ export default function CafeteriaPage() {
         <div className="grid min-h-[70vh] place-items-center pt-7 pb-24">
           {qrValue ? (
             <div className="flex flex-col items-center">
-              <div
-                ref={qrRef}
-                className="relative rounded-[30px] border-[1.5px] border-card-edge bg-white p-6 shadow-[0_20px_44px_-14px_rgb(var(--shadow-ink)/0.5)] will-change-transform"
-                style={{ transformOrigin: "center" }}
-              >
-                {/* little corner brackets, like a scanner frame */}
-                <Corner className="left-2.5 top-2.5" />
-                <Corner className="right-2.5 top-2.5 rotate-90" />
-                <Corner className="bottom-2.5 left-2.5 -rotate-90" />
-                <Corner className="bottom-2.5 right-2.5 rotate-180" />
-                {svg ? (
-                  <div
-                    className="h-[240px] w-[240px] [&_svg]:h-full [&_svg]:w-full"
-                    // qrcode returns a self-contained SVG; it carries no script.
-                    dangerouslySetInnerHTML={{ __html: svg }}
-                    aria-label="Cafeteria QR code"
-                  />
-                ) : (
-                  <div className="h-[240px] w-[240px] animate-pulse rounded-2xl bg-black/5" />
-                )}
+              <div ref={qrRef} className="relative will-change-transform" style={{ transformOrigin: "center" }}>
+                {/* warm light behind the pass, breathing */}
+                <span className="anim-halo pointer-events-none absolute -inset-8 rounded-[48px] bg-[radial-gradient(closest-side,rgba(242,135,31,0.5),transparent)] blur-xl" aria-hidden />
+                {/* little dishes floating round it */}
+                {(
+                  [
+                    ["☕", "-top-6 -left-5", "0s"],
+                    ["🍛", "-top-7 -right-4", "-1.2s"],
+                    ["🍪", "-bottom-5 -left-6", "-2.1s"],
+                    ["🥗", "-right-6 -bottom-6", "-0.6s"],
+                  ] as const
+                ).map(([e, at, d]) => (
+                  <span
+                    key={e}
+                    aria-hidden
+                    className={cx("anim-float pointer-events-none absolute z-[2] grid size-11 place-items-center rounded-2xl bg-surface text-[22px] shadow-[0_8px_18px_-10px_rgb(var(--shadow-ink)/0.7)]", at)}
+                    style={{ "--d": d } as React.CSSProperties}
+                  >
+                    {e}
+                  </span>
+                ))}
+                {/* the light running round the edge */}
+                <div className="ring-spin relative rounded-[32px] p-[3px] shadow-[0_22px_46px_-16px_rgb(var(--shadow-ink)/0.6)]">
+                  <div className="relative overflow-hidden rounded-[29px] bg-white p-6">
+                    <Corner className="left-2.5 top-2.5" />
+                    <Corner className="right-2.5 top-2.5 rotate-90" />
+                    <Corner className="bottom-2.5 left-2.5 -rotate-90" />
+                    <Corner className="bottom-2.5 right-2.5 rotate-180" />
+                    {svg ? (
+                      <div
+                        className="h-[240px] w-[240px] [&_svg]:h-full [&_svg]:w-full"
+                        // qrcode returns a self-contained SVG; it carries no script.
+                        dangerouslySetInnerHTML={{ __html: svg }}
+                        aria-label="Cafeteria QR code"
+                      />
+                    ) : (
+                      <div className="h-[240px] w-[240px] animate-pulse rounded-2xl bg-black/5" />
+                    )}
+                  </div>
+                </div>
               </div>
+              <p className="mt-6 flex items-center gap-2 rounded-full bg-safe-soft px-3.5 py-1.5 text-[12.5px] font-bold text-safe">
+                <span className="anim-pulse size-2 rounded-full bg-safe" /> Ready to scan · {fmtDayLong(today)}
+              </p>
               {!caf?.qr && (
                 <button
                   onClick={() => setQrSheet(true)}
@@ -296,40 +320,117 @@ function Corner({ className }: { className: string }) {
   );
 }
 
+/** A small picture for a dish, so the menu reads at a glance. First match wins. */
+const FOOD_ICONS: [RegExp, string][] = [
+  [/coffee/i, "☕"],
+  [/\btea\b|chai/i, "🫖"],
+  [/milk|lassi|shake/i, "🥛"],
+  [/juice|nimbu|lemonade|shikanji/i, "🧃"],
+  [/egg|omelet|omelette|bhurji/i, "🍳"],
+  [/chicken|mutton|fish|keema|biryani/i, "🍗"],
+  [/paneer|cheese/i, "🧀"],
+  [/rice|pulao|khichdi|jeera/i, "🍚"],
+  [/roti|chapati|chapatti|naan|paratha|parantha|kulcha|puri|poori|bhatura|phulka/i, "🫓"],
+  [/dal|daal|rajma|chana|chole|sambar|kadhi/i, "🥣"],
+  [/salad|sprout/i, "🥗"],
+  [/curd|dahi|raita|yogurt/i, "🥛"],
+  [/bread|toast|sandwich|bun|pav/i, "🥪"],
+  [/pasta|macaroni|noodle|chowmein|maggi/i, "🍝"],
+  [/pizza/i, "🍕"],
+  [/burger/i, "🍔"],
+  [/samosa|pakora|pakoda|kachori|vada|cutlet|tikki/i, "🥟"],
+  [/poha|upma|idli|dosa|uttapam|muri|bhel|chaat/i, "🍛"],
+  [/soup/i, "🍜"],
+  [/banana/i, "🍌"],
+  [/fruit|apple|papaya|watermelon|melon/i, "🍎"],
+  [/ice ?cream|kulfi/i, "🍨"],
+  [/halwa|kheer|gulab|jalebi|sweet|rasgulla|ladoo|laddu|custard|dessert|cake|brownie/i, "🍮"],
+  [/pickle|achar|papad|chutney/i, "🫙"],
+  [/aloo|gobhi|gobi|bhindi|sabzi|sabji|veg|matar|baingan|kofta|curry|kadai|kadhai|palak/i, "🥘"],
+];
+function foodIcon(name: string): string {
+  for (const [re, icon] of FOOD_ICONS) if (re.test(name)) return icon;
+  return "🍽️";
+}
+/** "KADAI PANEER" / "kadai paneer" → "Kadai Paneer"; already-mixed case is left alone. */
+function dishName(raw: string): string {
+  const t = raw.replace(/\s+/g, " ").trim();
+  if (t !== t.toUpperCase() && t !== t.toLowerCase()) return t;
+  return t.toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase());
+}
+/** "07:30 AM - 09:30 AM" → "7:30 – 9:30 AM". */
+function tidyTime(t: string): string {
+  const m = t.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return t;
+  const a = `${Number(m[1])}:${m[2]}`;
+  const b = `${Number(m[4])}:${m[5]}`;
+  const ap1 = (m[3] ?? "").toUpperCase();
+  const ap2 = (m[6] ?? "").toUpperCase();
+  return ap1 && ap1 !== ap2 ? `${a} ${ap1} – ${b} ${ap2}` : `${a} – ${b}${ap2 ? ` ${ap2}` : ""}`;
+}
+/** Each meal has its own colour and mark. */
+const MEAL_LOOK: Record<string, { icon: string; tint: string; tint2: string }> = {
+  breakfast: { icon: "☕", tint: "#f0a23a", tint2: "#d9741f" },
+  lunch: { icon: "🍛", tint: "#e0662b", tint2: "#b8441a" },
+  snack: { icon: "🍪", tint: "#2f9c8c", tint2: "#1e7266" },
+  dinner: { icon: "🍲", tint: "#4b7fc4", tint2: "#2f5c9a" },
+};
+function lookOf(title: string) {
+  const k = title.toLowerCase();
+  if (k.startsWith("break")) return MEAL_LOOK.breakfast;
+  if (k.startsWith("lunch")) return MEAL_LOOK.lunch;
+  if (k.startsWith("snack") || k.startsWith("hi-tea") || k.startsWith("evening")) return MEAL_LOOK.snack;
+  return MEAL_LOOK.dinner;
+}
+
 /**
- * One meal card: a paper header with the meal and its time, then the food. The
- * meal being served now is edged in the tab bar's orange and wears the same
- * glowing tile as the current tab.
+ * One meal card: a tinted header with the meal's own colour and time, then each
+ * dish as a chip with its little picture. The meal being served now glows.
  */
-function MealCard({ title, time, now, lines }: { title: string; time: string; now: boolean; lines: string[] }) {
+function MealCard({ title, time, now, lines, index = 0 }: { title: string; time: string; now: boolean; lines: string[]; index?: number }) {
+  const look = lookOf(title);
+  const dishes = lines.flatMap((l) => l.split(/\s*,\s*/)).map(dishName).filter(Boolean);
   return (
-    <li className={cx("overflow-hidden rounded-2xl border-[1.5px]", now ? "border-orange/60" : "border-card-edge/70")}>
-      <div className={cx("flex items-center gap-2 px-3.5 py-2.5", now ? "bg-orange/15" : "bg-mess-soft")}>
-        <span className="text-[14px] font-extrabold text-mess">{title}</span>
-        {time && <span className="text-[12px] font-semibold text-muted tnum">{time}</span>}
-        {now && <span className="tab-glow ml-auto rounded-full px-2.5 py-0.5 text-[10.5px] font-bold">Now</span>}
+    <li
+      className={cx("tile-tint anim-pop overflow-hidden rounded-2xl", now && "ring-2 ring-orange/70")}
+      style={{ "--tint": look.tint, "--tint-2": look.tint2, "--d": `${index * 70}ms` } as React.CSSProperties}
+    >
+      <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2">
+        <span className="tile-icon grid size-9 shrink-0 place-items-center rounded-xl text-[18px]">{look.icon}</span>
+        <span className="min-w-0">
+          <span className="block text-[15.5px] leading-tight font-extrabold">{title}</span>
+          {time && <span className="block text-[12px] font-semibold text-muted tnum">{tidyTime(time)}</span>}
+        </span>
+        {now && (
+          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange to-[#d24f1e] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+            <span className="anim-pulse size-1.5 rounded-full bg-white" /> Serving now
+          </span>
+        )}
       </div>
-      {lines.length > 0 ? (
-        <ul className="space-y-1.5 bg-card px-4 py-3">
-          {lines.map((l, i) => (
-            <li key={i} className="flex gap-2.5 text-[14px] leading-snug text-text">
-              <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-orange" />
-              <span>{l}</span>
+      {dishes.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5 px-3.5 pb-3.5">
+          {dishes.map((d, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-1.5 rounded-full border border-card-edge/70 bg-surface/85 py-1 pr-3 pl-1.5 text-[13.5px] font-semibold text-text shadow-[0_2px_6px_-4px_rgb(var(--shadow-ink)/0.5)]"
+            >
+              <span className="grid size-6 place-items-center rounded-full bg-bg text-[14px] leading-none">{foodIcon(d)}</span>
+              {d}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="bg-card px-4 py-3 text-[13.5px] text-muted">Not published yet</p>
+        <p className="px-3.5 pb-3.5 text-[13.5px] text-muted">Not up yet — check back closer to the meal.</p>
       )}
     </li>
   );
 }
 
 /** One meal straight from Camu: splits its label into the meal and the timing. */
-function CamuMealRow({ meal, active }: { meal: CamuMeal; active: Meal }) {
+function CamuMealRow({ meal, active, index }: { meal: CamuMeal; active: Meal; index: number }) {
   const now = meal.meal.toLowerCase().startsWith(active.slice(0, 4));
   const time = (meal.label || "").replace(meal.meal, "").trim();
-  return <MealCard title={meal.meal || meal.label} time={time} now={now} lines={foodLines(meal.items)} />;
+  return <MealCard title={meal.meal || meal.label} time={time} now={now} lines={foodLines(meal.items)} index={index} />;
 }
 
 /** Paste (or edit) the pass the QR reads out — the manual fallback. */

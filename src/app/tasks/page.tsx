@@ -235,7 +235,8 @@ export default function TasksPage() {
         ))}
       </div>
 
-      <div className="mt-4 pb-4">
+      {/* Room under the last task so the + button never sits on top of it. */}
+      <div className="mt-4 pb-28">
         {tab === "todo" && lmsPending.length > 0 && (
           <section className="mb-5 px-5">
             <h2 className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold text-accent">

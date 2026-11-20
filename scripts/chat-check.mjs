@@ -255,7 +255,41 @@ await step("the scanner opens smoothly and can flip to My QR", async () => {
 await step("your QR is there to be scanned", async () => {
   await page.getByRole("button", { name: "My QR", exact: true }).first().click();
   await page.getByText("SACH1234").waitFor({ timeout: 4000 });
+  await page.waitForTimeout(700);
   await page.screenshot({ path: `${SHOTS}/chat-myqr.png` });
+});
+
+await step("Back closes My QR and stays on Friends (not Today)", async () => {
+  await page.goBack();
+  await page.waitForTimeout(500);
+  if (await page.getByRole("dialog", { name: "My QR" }).count()) throw new Error("My QR still open after Back");
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends: " + page.url());
+  // and again: a sheet, then Back, then the same sheet opens fresh
+  await page.getByRole("button", { name: "My QR", exact: true }).first().click();
+  await page.getByText("SACH1234").waitFor({ timeout: 3000 });
+  await page.getByRole("dialog", { name: "My QR" }).getByLabel("Close").click();
+  await page.waitForTimeout(400);
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("close moved away: " + page.url());
+  await page.getByRole("button", { name: "Add Friend", exact: true }).first().click();
+  await page.getByRole("button", { name: /Show my QR/ }).click();
+  await page.getByText("SACH1234").waitFor({ timeout: 3000 });
+  await page.goBack();
+  await page.waitForTimeout(500);
+  if (await page.getByRole("dialog").count()) throw new Error("a sheet is still open after Back");
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends after sheet→sheet: " + page.url());
+});
+
+await step("Back from a chat returns to the list", async () => {
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva)/ }).first().click();
+  await page.getByRole("dialog", { name: /Chat with/ }).waitFor({ timeout: 3000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `${SHOTS}/chat-bubbles.png` });
+  await page.goBack();
+  await page.waitForTimeout(500);
+  if (await page.getByRole("dialog", { name: /Chat with/ }).count()) throw new Error("chat still open");
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends: " + page.url());
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${SHOTS}/chat-friends-home.png` });
 });
 
 await browser.close();

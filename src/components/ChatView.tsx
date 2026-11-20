@@ -390,7 +390,7 @@ export function ChatView({
       {/* Sections as a frosted pill row floating over the chat. */}
       <div className="absolute inset-x-0 top-[calc(max(0.4rem,env(safe-area-inset-top))+3.6rem)] z-10 px-3">
         {finding ? (
-          <label className="glass-pill flex h-11 items-center gap-2 rounded-2xl px-3.5">
+          <label className="solid-bar flex h-11 items-center gap-2 rounded-2xl px-3.5">
             <Search size={16} className="shrink-0 text-muted" />
             <input
               autoFocus
@@ -405,7 +405,7 @@ export function ChatView({
             </button>
           </label>
         ) : (
-          <nav className="glass-pill flex gap-0.5 rounded-2xl p-1" aria-label="Chat sections">
+          <nav className="solid-bar flex gap-0.5 rounded-2xl p-1" aria-label="Chat sections">
             {(
               [
                 ["chat", "Chat", MessageCircle],
@@ -420,7 +420,7 @@ export function ChatView({
                 aria-current={view === id ? "page" : undefined}
                 className={cx(
                   "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold transition",
-                  view === id ? "bg-ink text-on-ink shadow-sm" : "text-muted",
+                  view === id ? "btn-leather" : "text-muted active:bg-surface-2",
                 )}
               >
                 <Icon size={15} className="shrink-0" />
@@ -440,11 +440,11 @@ export function ChatView({
         {rows.map((r, i) =>
           "day" in r ? (
             <p key={`d-${r.day}-${i}`} className="my-3 text-center">
-              <span className="glass-pill rounded-full px-3 py-1 text-[11.5px] font-bold text-muted">{r.day}</span>
+              <span className="solid-bar rounded-full px-3 py-1 text-[11.5px] font-bold text-muted">{r.day}</span>
             </p>
           ) : "unread" in r ? (
             <p key="unread" className="my-3 text-center">
-              <span className="rounded-full bg-orange/15 px-3 py-1 text-[11.5px] font-extrabold text-mess">Unread messages</span>
+              <span className="rounded-full bg-gradient-to-r from-orange to-[#d9622b] px-3 py-1 text-[11.5px] font-extrabold text-white shadow-sm">Unread messages</span>
             </p>
           ) : (
             <Bubble
@@ -465,6 +465,7 @@ export function ChatView({
               people={people}
               seen={r.msg.author === me && seenAll(r.msg)}
               seenLabel={!isGroup && r.msg.id === lastMine?.id && seenAll(r.msg)}
+              fresh={r.msg.createdAt > openedAt}
               onHold={() => {
                 if (r.msg.pending) return;
                 setHolding(r.msg);
@@ -769,6 +770,14 @@ function ForwardList({ me, current, onPick }: { me: string | null; current: Thre
   );
 }
 
+/** Each person in a group gets their own name colour, like WhatsApp. */
+const NAME_COLORS = ["#c2561c", "#2b8a7e", "#c03d5a", "#3d6fb0", "#8a6d12", "#5f8a2b", "#b0462f", "#1f7a9a"];
+function nameColor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return NAME_COLORS[Math.abs(h) % NAME_COLORS.length];
+}
+
 function Bubble({
   m,
   quoted,
@@ -786,6 +795,7 @@ function Bubble({
   people,
   seen,
   seenLabel,
+  fresh,
   onHold,
   onReply,
   onLike,
@@ -807,6 +817,8 @@ function Bubble({
   people: Map<string, ChatPerson>;
   seen: boolean;
   seenLabel: boolean;
+  /** Arrived (or was sent) while the chat is open: it pops in. */
+  fresh: boolean;
   onHold: () => void;
   onReply: () => void;
   onLike: () => void;
@@ -887,15 +899,19 @@ function Bubble({
           {...handlers}
           className={cx(
             "px-3.5 py-2 text-[15px] leading-snug [overflow-wrap:anywhere] select-none",
-            "shadow-[0_1px_0_rgb(var(--shadow-ink)/0.12),0_4px_12px_-8px_rgb(var(--shadow-ink)/0.35)]",
-            mine
-              ? cx("border border-orange/30 bg-mess-soft", "rounded-[20px]", !first && "rounded-tr-[7px]", !last && "rounded-br-[7px]")
-              : cx("border border-card-edge bg-card", "rounded-[20px]", !first && "rounded-tl-[7px]", !last && "rounded-bl-[7px]"),
+              mine
+              ? cx("bubble-out", "rounded-[20px]", !first && "rounded-tr-[7px]", !last && "rounded-br-[7px]")
+              : cx("bubble-in", "rounded-[20px]", !first && "rounded-tl-[7px]", !last && "rounded-bl-[7px]"),
+            fresh && "anim-bubble",
             card && "w-full",
             m.deleted && "italic opacity-70",
           )}
         >
-          {showName && <p className="mb-0.5 text-[12.5px] font-extrabold text-mess">{name}</p>}
+          {showName && (
+            <p className="mb-0.5 text-[12.5px] font-extrabold" style={{ color: nameColor(m.author) }}>
+              {name}
+            </p>
+          )}
           {quoted && !m.deleted && (
             <div className="mb-1.5 flex gap-2 rounded-xl bg-bg/60 px-2.5 py-1.5">
               <span className="w-[3px] shrink-0 rounded-full bg-orange" />

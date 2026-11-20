@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { pushPastLayer, useBackClose } from "@/lib/backClose";
 import {
   Check,
   BellOff,
@@ -76,7 +77,6 @@ import { ListSkeleton } from "@/components/Skeleton";
 import { ShareForm, ShareRow } from "@/components/ShareParts";
 import { Faces } from "@/components/Reactions";
 import { ChatView } from "@/components/ChatView";
-import { Notebook } from "@/components/Paper";
 import { QrScanner, type Scanned } from "@/components/QrScanner";
 import { clearThreadForMe, directThread, groupThread, markRead, markUnread, otherIn, setThreadPref, usePeople, useThreads, type ThreadId } from "@/lib/chat";
 
@@ -136,6 +136,7 @@ function Circle() {
   const [searching, setSearching] = useState(false);
   const [composing, setComposing] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  useBackClose(friendsOpen, () => setFriendsOpen(false));
   const [bell, setBell] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -152,6 +153,7 @@ function Circle() {
   const [removing, setRemoving] = useState<Friend | null>(null);
   const [blocking, setBlocking] = useState<Friend | null>(null);
   const blocked = useLiveQuery(() => db.blocks.toArray(), []);
+  const myProfile = useLiveQuery(() => getProfile(), []);
   const [showing, setShowing] = useState<Friend | null>(null);
   const [find, setFind] = useState("");
   const [workFilter, setWorkFilter] = useState<"all" | "groups" | "direct" | "mine">("all");
@@ -333,7 +335,7 @@ function Circle() {
     const url = `/circle?chat=${encodeURIComponent(thread)}`;
     // A fresh state object: Next only treats a push as a navigation (and
     // updates useSearchParams) when the state is not its own.
-    window.history.pushState({ dockinChat: true }, "", url);
+    pushPastLayer({ dockinChat: true }, url);
   }
 
   function closeChat() {
@@ -483,6 +485,7 @@ function Circle() {
   }
 
   const unreadBy = new Map((threads ?? []).map((t) => [t.thread, t.unread]));
+  const unreadChats = (threads ?? []).filter((t) => t.unread > 0 && !t.muted).length;
 
   return (
     <div className="page-wash pb-4">
@@ -534,35 +537,57 @@ function Circle() {
 
       {!searching && (
         <>
-          {/* The circle, on a notebook page. */}
-          <Notebook className="mx-4 mt-3 px-4 pt-4 pb-3.5" label="Your college circle">
-            <div className="flex items-center gap-3">
+          {/* The circle: a warm sunset card with who is in it. */}
+          <section className="sunset anim-pop relative mx-4 mt-3 overflow-hidden rounded-[26px] px-4 pt-4 pb-3.5">
+            <span className="blob anim-float -top-8 -right-6 size-28" aria-hidden />
+            <span className="blob anim-float -bottom-10 left-20 size-24 opacity-60" style={{ "--d": "-1.6s" } as React.CSSProperties} aria-hidden />
+            <div className="relative flex items-center gap-3">
               <div className="flex -space-x-3">
                 {(accepted.length ? accepted.slice(0, 3) : [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }]).map((f) => (
-                  <span key={f.id} className="rounded-full ring-2 ring-card">
-                    <Avatar name={f.name} avatar={"avatar" in f ? f.avatar : undefined} size={38} />
+                  <span key={f.id} className="rounded-full ring-[2.5px] ring-[#f5c08a]">
+                    <Avatar name={f.name} avatar={"avatar" in f ? f.avatar : undefined} size={40} />
                   </span>
                 ))}
               </div>
               <div className="min-w-0">
-                <p className="font-display text-[19px] leading-tight font-extrabold italic text-mess">Your College Circle</p>
-                <p className="text-[12.5px] text-muted">Chat · Groups · Files · Polls</p>
+                <p className="font-display text-[20px] leading-tight font-extrabold tracking-tight">Your College Circle</p>
+                <p className="text-[12.5px] font-medium text-[#ffe2c4]">Chats, groups, files and polls in one place</p>
               </div>
             </div>
-          </Notebook>
+            <div className="relative mt-3.5 flex gap-2">
+              {(
+                [
+                  [accepted.length, accepted.length === 1 ? "friend" : "friends"],
+                  [(groups ?? []).length, (groups ?? []).length === 1 ? "group" : "groups"],
+                  [unreadChats, "unread"],
+                ] as const
+              ).map(([n, label]) => (
+                <span key={label} className="flex items-baseline gap-1 rounded-full bg-white/15 px-3 py-1 text-[12.5px] font-semibold ring-1 ring-white/20 backdrop-blur-sm">
+                  <span className="text-[15px] font-extrabold tabular-nums">{n}</span> {label}
+                </span>
+              ))}
+            </div>
+          </section>
 
-          {/* Quick ways in. */}
+          {/* Quick ways in, each in its own colour. */}
           <div className="mt-3 grid grid-cols-4 gap-2 px-4">
             {(
               [
-                ["Add Friend", UserPlus, () => setSheet("add")],
-                ["New Group", Users, () => { setGroupName(""); setProblem(null); setSheet("newGroup"); }],
-                ["My QR", QrIcon, () => setSheet("me")],
-                ["Friends", UserRound, () => setFriendsOpen(true)],
+                ["Add Friend", UserPlus, () => setSheet("add"), "#f2871f", "#d24f1e"],
+                ["New Group", Users, () => { setGroupName(""); setProblem(null); setSheet("newGroup"); }, "#2f9c8c", "#1e7266"],
+                ["My QR", QrIcon, () => setSheet("me"), "#e0566c", "#b23650"],
+                ["Friends", UserRound, () => setFriendsOpen(true), "#4b7fc4", "#2f5c9a"],
               ] as const
-            ).map(([label, Icon, go]) => (
-              <button key={label} onClick={go} className="btn-paper flex flex-col items-center gap-1.5 rounded-2xl px-1 py-3 active:scale-95">
-                <Icon size={21} className="text-mess" />
+            ).map(([label, Icon, go, tint, tint2], i) => (
+              <button
+                key={label}
+                onClick={go}
+                className="tile-tint anim-pop flex flex-col items-center gap-1.5 rounded-2xl px-1 pt-3 pb-2.5 transition-transform active:scale-95"
+                style={{ "--tint": tint, "--tint-2": tint2, "--d": `${80 + i * 55}ms` } as React.CSSProperties}
+              >
+                <span className="tile-icon grid size-10 place-items-center rounded-xl">
+                  <Icon size={20} />
+                </span>
                 <span className="w-full truncate text-center text-[12px] font-bold">{label}</span>
               </button>
             ))}
@@ -574,8 +599,8 @@ function Circle() {
           a ring means they have written to you. Tap to chat. */}
       <div className="no-scrollbar mt-1 flex gap-3.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
         <button onClick={() => setSheet("me")} className="flex w-[66px] shrink-0 flex-col items-center gap-1">
-          <span className="relative grid size-[62px] place-items-center rounded-full border-2 border-dashed border-card-edge bg-card">
-            <QrIcon size={24} className="text-mess" />
+          <span className="relative grid size-[62px] place-items-center rounded-full border-2 border-dashed border-orange/60 bg-gradient-to-br from-[#fff1de] to-[#f8d9b4] dark:from-[#3a2a1c] dark:to-[#2c1f15]">
+            <QrIcon size={24} className="text-[#c2561c] dark:text-orange" />
             <span className="absolute -right-0.5 -bottom-0.5 grid size-5 place-items-center rounded-full bg-orange text-white ring-2 ring-bg">
               <Plus size={13} strokeWidth={3} />
             </span>
@@ -589,7 +614,7 @@ function Circle() {
               <span
                 className={cx(
                   "grid size-[62px] place-items-center rounded-full p-[2.5px]",
-                  unread ? "bg-gradient-to-tr from-orange via-[#e0662b] to-ink" : "bg-card-edge/60",
+                  unread ? "ring-spin" : "bg-gradient-to-tr from-[#f5c590] to-[#e9a56c] dark:from-[#5a3a22] dark:to-[#7a4a28]",
                 )}
               >
                 <span className="grid size-full place-items-center rounded-full bg-bg p-[2px]">
@@ -983,28 +1008,49 @@ function Circle() {
       )}
 
       {/* sheets */}
-      <Sheet open={sheet === "me"} onClose={() => setSheet(null)} title="Add a friend">
-        <div className="rounded-3xl bg-surface-2 p-5 text-center">
-          <p className="font-mono text-[26px] font-semibold tracking-[0.2em] tabular-nums">
-            {code ?? "········"}
-          </p>
-          <p className="mt-1 text-[12.5px] text-muted">
-            Friends add you with this. Nobody can find you any other way.
-          </p>
-          {code && (
-            <div className="mt-4 flex justify-center">
-              <QrCode value={link} size={168} />
-            </div>
-          )}
-          <div className="mt-4 flex gap-2.5">
-            <Button variant="secondary" className="flex-1" size="sm" onClick={copyCode} disabled={!code}>
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-            <Button className="flex-1" size="sm" onClick={shareLink} disabled={!code}>
-              <Share2 size={16} /> Share
-            </Button>
+      <Sheet open={sheet === "me"} onClose={() => setSheet(null)} title="My QR">
+        {/* A pass, not a form: your face, a QR with light running round it, your code. */}
+        <div className="sunset relative overflow-hidden rounded-[28px] px-5 pt-5 pb-5 text-center">
+          <span className="blob anim-float -top-10 -left-8 size-32" aria-hidden />
+          <span className="blob anim-float -right-10 bottom-16 size-28 opacity-70" style={{ "--d": "-2s" } as React.CSSProperties} aria-hidden />
+          <div className="relative flex items-center justify-center gap-2.5">
+            <span className="rounded-full ring-2 ring-[#ffd9ae]">
+              <Avatar name={myProfile?.name || "You"} avatar={myProfile?.avatar} size={40} />
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block truncate text-[16px] leading-tight font-extrabold">{myProfile?.name || "You"}</span>
+              <span className="block text-[12px] font-medium text-[#ffe2c4]">on DockIn</span>
+            </span>
           </div>
+
+          <div className="relative mx-auto mt-4 grid w-fit place-items-center">
+            <span className="anim-halo absolute -inset-5 rounded-[40px] bg-[#ffd08a]/45 blur-2xl" aria-hidden />
+            <div className="ring-spin relative rounded-[26px] p-[3px] shadow-[0_18px_34px_-14px_rgba(60,20,0,0.75)]">
+              <div className="grid min-h-[196px] min-w-[196px] place-items-center rounded-[23px] bg-white">
+                {code ? <QrCode value={link} size={180} /> : <span className="size-[180px] animate-pulse rounded-2xl bg-black/5" />}
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={copyCode}
+            disabled={!code}
+            className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 ring-1 ring-white/25 active:scale-95"
+            aria-label="Copy my code"
+          >
+            <span className="font-mono text-[22px] font-bold tracking-[0.22em] tabular-nums">{code ?? "········"}</span>
+            {copied ? <Check size={17} /> : <Copy size={16} className="opacity-80" />}
+          </button>
+          <p className="relative mt-2 text-[12.5px] text-[#ffe2c4]">Friends scan this or type the code. Nobody finds you any other way.</p>
+        </div>
+
+        <div className="mt-3.5 flex gap-2.5">
+          <Button variant="secondary" className="flex-1" onClick={() => { setSheet(null); setScanning(true); }}>
+            <ScanLine size={17} /> Scan a QR
+          </Button>
+          <Button className="flex-1" onClick={shareLink} disabled={!code}>
+            <Share2 size={17} /> Share link
+          </Button>
         </div>
 
         <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Or add someone by their code</p>
@@ -1573,8 +1619,8 @@ function ChatList({
     toast.show(said);
   }
 
-  const row = (r: (typeof rows)[number]) => (
-    <li key={r.thread} className="px-4">
+  const row = (r: (typeof rows)[number], i: number) => (
+    <li key={r.thread} className="anim-pop px-4" style={{ "--d": `${Math.min(i, 8) * 40}ms` } as React.CSSProperties}>
           <button
             onClick={() => tap(r.thread)}
             onPointerDown={(e) => pressStart(r.thread, e)}
@@ -1614,14 +1660,14 @@ function ChatList({
               </span>
               <span className={cx("mt-0.5 flex min-w-0 text-[13.5px]", r.unread ? "font-semibold text-text" : "text-muted")}>
                 <span className="min-w-0 truncate">{r.preview}</span>
-                {r.when && <span className="shrink-0 text-muted">&nbsp;· {r.when}</span>}
+                {r.when && <span className={cx("shrink-0", r.unread && !r.muted ? "font-bold text-orange" : "text-muted")}>&nbsp;· {r.when}</span>}
               </span>
             </span>
             {r.unread > 0 && (
               <span
                 className={cx(
                   "grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-full px-1.5 text-[11.5px] font-bold text-white",
-                  r.muted ? "bg-muted" : "bg-orange",
+                  r.muted ? "bg-muted" : "bg-gradient-to-br from-orange to-[#d24f1e] shadow-[0_4px_10px_-4px_rgba(210,79,30,0.8)]",
                 )}
               >
                 {r.unread > 99 ? "99+" : r.unread}

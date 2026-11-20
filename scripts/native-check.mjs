@@ -411,7 +411,7 @@ await step("Cafeteria shows Camu's mess menu and draws the pass", async () => {
   await waitFor("Mess pass");
   const t = await text();
   if (!t.includes("Kadai Paneer")) throw new Error("Camu's menu items are missing");
-  if (!t.includes("Breakfast") || !t.includes("07:30 AM")) throw new Error("the meal and its timing are missing");
+  if (!t.includes("Breakfast") || !t.includes("7:30 – 9:30 AM")) throw new Error("the meal and its timing are missing");
   if (/Change pass|Set up this week/.test(t)) throw new Error("the menu or the pass is not coming from Camu");
   // Scroll to the pass and confirm a QR actually drew.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

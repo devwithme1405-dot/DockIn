@@ -10,9 +10,11 @@ import { uploadAvatarPhoto } from "@/lib/avatars";
 import type { Group } from "@/lib/types";
 import { Avatar, ConfirmSheet, cx, useToast } from "./ui";
 import { QrCode } from "./QrCode";
+import { useBackClose } from "@/lib/backClose";
 
 /** A photo, full screen — tap anywhere to close (like WhatsApp's profile view). */
 export function PhotoViewer({ name, avatar, emoji, onClose }: { name: string; avatar?: string | null; emoji?: string | null; onClose: () => void }) {
+  useBackClose(true, onClose);
   return (
     <button
       onClick={onClose}
@@ -62,6 +64,7 @@ export function ChatInfo({
     () => db.messages.where("thread").equals(thread).filter((m) => m.kind === "file" && !m.deleted && !m.hidden).count(),
     [thread],
   );
+  useBackClose(true, onClose);
   const [members, setMembers] = useState<GroupPerson[] | null>(null);
   const [viewing, setViewing] = useState(false);
   const [editing, setEditing] = useState(false);
