@@ -17,7 +17,6 @@ import {
   Files,
   Forward,
   ListChecks,
-  MessageCircle,
   Paperclip,
   Pencil,
   Plus,
@@ -26,6 +25,13 @@ import {
   Trash2,
   X,
   FileCheck,
+  MoreVertical,
+  Star,
+  Palette,
+  Eye,
+  Info,
+  SendHorizontal,
+  Bell,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
@@ -38,6 +44,7 @@ import {
   chatMe,
   directThread,
   downloadChatFile,
+  sendTaskTo,
   useFileCached,
   editMessage,
   forwardMessage,
@@ -47,6 +54,7 @@ import {
   reactMessage,
   retryMessage,
   sendMessage,
+  setThreadPref,
   unsendMessage,
   uploadChatFile,
   useChatMe,
@@ -57,8 +65,7 @@ import {
   votePoll,
 } from "@/lib/chat";
 import { handOver } from "./AssignmentFile";
-import { shareTask, type ShareDraft } from "@/lib/social";
-import { lmsRef } from "@/lib/lmsSubmit";
+import { TaskForm } from "./TaskParts";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Group, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useToast } from "./ui";
@@ -66,6 +73,8 @@ import { getSupabase } from "@/lib/supabase";
 import { addTask } from "@/lib/repo";
 import { ChatInfo, PhotoViewer } from "./ChatInfo";
 import { Bone } from "./Skeleton";
+import { chatVars, useChatLook } from "@/lib/chatLook";
+import { ChatLookSheet } from "./ChatLook";
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const EDIT_WINDOW = 15 * 60_000;
@@ -138,7 +147,6 @@ export function ChatView({
   const seenBy = useSeenBy(thread);
   const pref = useLiveQuery(() => db.chatReads.get(thread), [thread]);
   const isGroup = thread.startsWith("g:");
-  const groupId = group?.id ?? (isGroup ? thread.slice(2) : null);
 
   const [text, setText] = useState("");
   const [view, setView] = useState<"chat" | "files" | "tasks" | "polls">("chat");
@@ -158,6 +166,16 @@ export function ChatView({
   const [atBottom, setAtBottom] = useState(true);
   const [finding, setFinding] = useState(false);
   const [find, setFind] = useState("");
+  const [menu, setMenu] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const [starredOpen, setStarredOpen] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [leftAt, setLeftAt] = useState<number | null>(null);
+  const look = useChatLook();
+  const appDark = typeof document !== "undefined" && document.documentElement.dataset.theme === "dark";
+  const paint = chatVars(look, appDark);
+  const starred = useLiveQuery(() => db.starred.where("thread").equals(thread).toArray(), [thread]);
+  const starSet = useMemo(() => new Set((starred ?? []).map((x) => x.id)), [starred]);
   const docInput = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -215,7 +233,27 @@ export function ChatView({
   function onScroll() {
     const el = scroller.current;
     if (!el) return;
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 120);
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!bottom && atBottom) setLeftAt(Date.now());
+    if (bottom && !atBottom) setLeftAt(null);
+    setAtBottom(bottom);
+  }
+
+  /** Scroll to a message (a reply's original, a starred one) and make it glow. */
+  function jumpTo(id: string) {
+    setView("chat");
+    setFind("");
+    setFinding(false);
+    window.setTimeout(() => {
+      const el = document.getElementById(`msg-${id}`);
+      if (!el) {
+        toast.show("That message isn't loaded here anymore.");
+        return;
+      }
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      setFlash(id);
+      window.setTimeout(() => setFlash((f) => (f === id ? null : f)), 1500);
+    }, 60);
   }
 
   function typed(v: string) {
@@ -274,30 +312,10 @@ export function ChatView({
 
   async function shareMine(t: Task) {
     setPicking(false);
-    const subject = t.subjectId ? await db.subjects.get(t.subjectId) : null;
-    const draft = {
-      title: t.title,
-      notes: t.notes,
-      kind: t.kind,
-      subjectName: subject?.name ?? (t.source === "lms" ? t.notes || null : null),
-      dueDate: t.dueDate,
-      dueTime: t.dueTime,
-      room: t.room,
-      priority: t.priority,
-      file: null,
-      lms: t.source === "lms" ? lmsRef(t.id) : null,
-    } as ShareDraft;
     try {
-      if (groupId) {
-        await shareTask(draft, { groupId });
-      } else if (friendId) {
-        await shareTask(draft, { friendIds: [friendId] });
-        await sendMessage(thread, "", {
-          silent: true,
-          task: { title: t.title, kind: t.kind, dueDate: t.dueDate, dueTime: t.dueTime, subject: draft.subjectName },
-        });
-      }
-      toast.show("Sent — they can add it to their Tasks");
+      const subject = t.subjectId ? (await db.subjects.get(t.subjectId))?.name : null;
+      await sendTaskTo([thread], t, subject ?? (t.source === "lms" ? t.notes || null : null));
+      toast.show(isGroup ? "Sent — it's in everyone's Tasks now" : "Sent — it's in their Tasks now");
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not share that.");
     }
@@ -353,108 +371,129 @@ export function ChatView({
         ? "online"
         : (subtitle ?? "");
 
-  return (
-    <div className="paper-page fixed inset-0 z-50 flex flex-col" role="dialog" aria-label={`Chat with ${title}`}>
-      <header className="glass-bar relative z-10 flex items-center gap-1 px-1.5 pt-[max(0.4rem,env(safe-area-inset-top))] pb-1.5">
-        <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
-          <ArrowLeft size={23} />
-        </button>
-        <button onClick={() => setPhoto(true)} aria-label="View photo" className="shrink-0 rounded-full">
-          {avatar || !isGroup ? (
-            <Avatar name={title} avatar={avatar ?? undefined} size={40} />
-          ) : (
-            <span className="grid size-10 place-items-center rounded-full bg-mess-soft text-[19px]">{emoji ?? "👥"}</span>
-          )}
-        </button>
-        <button onClick={() => setInfo(true)} className="min-w-0 flex-1 px-2 text-left" aria-label={`${title} info`}>
-          <span className="flex items-center gap-1.5">
-            <span className="truncate text-[16.5px] font-extrabold">{title}</span>
-            {pref?.muted && <BellOff size={14} className="shrink-0 text-muted" aria-label="Muted" />}
-          </span>
-          <span className={cx("flex items-center gap-1.5 truncate text-[12px]", typing.length ? "font-bold text-orange" : "text-muted")}>
-            {!typing.length && online > 0 && <span className="size-2 shrink-0 rounded-full bg-safe" aria-hidden />}
-            <span className="truncate">{status || "tap for info"}</span>
-          </span>
-        </button>
-        <button
-          onClick={() => {
-            setFinding((v) => !v);
-            setFind("");
-          }}
-          aria-label="Search in chat"
-          className="grid size-11 place-items-center rounded-full active:bg-surface-2"
-        >
-          <Search size={20} />
-        </button>
-      </header>
+  const missed = leftAt ? (msgs ?? []).filter((m) => m.createdAt > leftAt && m.author !== me).length : 0;
+  // In a group, "@" opens a list of members to mention.
+  const mentionAt = isGroup ? /(?:^|\s)@([\p{L}]*)$/u.exec(text) : null;
+  const mentionList = mentionAt
+    ? [...people.entries()]
+        .filter(([id, p]) => id !== me && p.name.toLowerCase().startsWith(mentionAt[1].toLowerCase()))
+        .slice(0, 5)
+    : [];
+  const TABS = [
+    ["chat", "Chat"],
+    ["files", "Files"],
+    ["tasks", "Tasks"],
+    ["polls", "Polls"],
+  ] as const;
 
-      {/* Sections as a frosted pill row floating over the chat. */}
-      <div className="absolute inset-x-0 top-[calc(max(0.4rem,env(safe-area-inset-top))+3.6rem)] z-10 px-3">
+  return (
+    <div
+      className="chat-root fixed inset-0 z-50 flex flex-col text-text"
+      data-theme={paint.dark ? "dark" : "light"}
+      style={paint.style}
+      role="dialog"
+      aria-label={`Chat with ${title}`}
+    >
+      <header className="chat-head relative z-10 pt-[max(0.4rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-1 px-1.5 pb-1">
+          <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-black/5">
+            <ArrowLeft size={23} />
+          </button>
+          <button onClick={() => setPhoto(true)} aria-label="View photo" className="shrink-0 rounded-full">
+            {avatar || !isGroup ? (
+              <Avatar name={title} avatar={avatar ?? undefined} size={40} />
+            ) : (
+              <span className="grid size-10 place-items-center rounded-full bg-surface-2 text-[19px]">{emoji ?? "👥"}</span>
+            )}
+          </button>
+          <button onClick={() => setInfo(true)} className="min-w-0 flex-1 px-2 text-left" aria-label={`${title} info`}>
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-[16.5px] font-extrabold">{title}</span>
+              {pref?.muted && <BellOff size={14} className="shrink-0 text-muted" aria-label="Muted" />}
+            </span>
+            <span className={cx("flex items-center gap-1.5 truncate text-[12.5px]", typing.length || online > 0 ? "chat-accent font-semibold" : "text-muted")}>
+              {!typing.length && online > 0 && <span className="size-2 shrink-0 rounded-full bg-[var(--chat-accent)]" aria-hidden />}
+              <span className="truncate">{status || "tap for info"}</span>
+            </span>
+          </button>
+          <button
+            onClick={() => {
+              setFinding((v) => !v);
+              setFind("");
+            }}
+            aria-label="Search in chat"
+            className="grid size-11 place-items-center rounded-full active:bg-black/5"
+          >
+            <Search size={20} />
+          </button>
+          <button onClick={() => setMenu(true)} aria-label="Chat menu" className="grid size-11 place-items-center rounded-full active:bg-black/5">
+            <MoreVertical size={20} />
+          </button>
+        </div>
         {finding ? (
-          <label className="solid-bar flex h-11 items-center gap-2 rounded-2xl px-3.5">
-            <Search size={16} className="shrink-0 text-muted" />
-            <input
-              autoFocus
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-              placeholder="Search messages"
-              aria-label="Search messages"
-              className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
-            />
-            <button onClick={() => { setFinding(false); setFind(""); }} aria-label="Close search" className="text-muted">
-              <X size={17} />
-            </button>
-          </label>
+          <div className="px-3 pb-2.5">
+            <label className="chat-input flex h-10 items-center gap-2 rounded-full px-3.5 ring-1 ring-black/10">
+              <Search size={16} className="shrink-0 text-muted" />
+              <input
+                autoFocus
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                placeholder="Search messages"
+                aria-label="Search messages"
+                className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted"
+              />
+              <button onClick={() => { setFinding(false); setFind(""); }} aria-label="Close search" className="text-muted">
+                <X size={17} />
+              </button>
+            </label>
+          </div>
         ) : (
-          <nav className="solid-bar flex gap-0.5 rounded-2xl p-1" aria-label="Chat sections">
-            {(
-              [
-                ["chat", "Chat", MessageCircle],
-                ["files", "Files", Files],
-                ["tasks", "Tasks", ListChecks],
-                ["polls", "Polls", BarChart3],
-              ] as const
-            ).map(([id, label, Icon]) => (
+          <nav className="flex px-2" aria-label="Chat sections">
+            {TABS.map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setView(id)}
                 aria-current={view === id ? "page" : undefined}
-                className={cx(
-                  "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold transition",
-                  view === id ? "btn-leather" : "text-muted active:bg-surface-2",
-                )}
+                className={cx("relative flex-1 pt-1.5 pb-2.5 text-[13.5px] font-bold transition-colors", view === id ? "chat-accent" : "text-muted")}
               >
-                <Icon size={15} className="shrink-0" />
-                <span className="truncate">{label}</span>
+                {label}
+                <span
+                  className={cx(
+                    "absolute inset-x-5 bottom-0 h-[3px] rounded-t-full bg-[var(--chat-accent)] transition-transform duration-200",
+                    view === id ? "scale-x-100" : "scale-x-0",
+                  )}
+                />
               </button>
             ))}
           </nav>
         )}
-      </div>
+      </header>
 
-      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overscroll-contain px-3 pt-16 pb-3">
+      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overscroll-contain px-2.5 pt-2 pb-3">
         {msgs === undefined && (
           <div className="space-y-3 pt-3" role="status" aria-label="Loading messages">
             {[["w-1/2", false], ["w-2/3", true], ["w-2/5", false], ["w-1/2", true], ["w-3/5", false]].map(([w, mine], i) => (
               <div key={i} className={cx("flex", mine ? "justify-end" : "justify-start")}>
-                <Bone className={cx("h-11 rounded-[20px]", w as string)} />
+                <Bone className={cx("h-11 rounded-[18px]", w as string)} />
               </div>
             ))}
           </div>
         )}
         {msgs && rows.length === 0 && (
-          <p className="mx-auto mt-10 max-w-[16rem] text-center text-[13.5px] text-muted">
-            {find ? "No messages match." : view !== "chat" ? `No ${view} here yet. Send one with the + button.` : isGroup ? "Say hi to the group 👋" : `Say hi to ${title} 👋`}
-          </p>
+          <div className="mx-auto mt-10 max-w-[17rem] text-center">
+            <p className="chat-chip inline-block rounded-2xl px-4 py-3 text-[13.5px] leading-snug">
+              {find ? "No messages match." : view !== "chat" ? `No ${view} here yet. Send one with the + button.` : isGroup ? "This is the start of the group. Say hi 👋" : `This is the start of your chat with ${title}. Say hi 👋`}
+            </p>
+          </div>
         )}
         {rows.map((r, i) =>
           "day" in r ? (
             <p key={`d-${r.day}-${i}`} className="my-3 text-center">
-              <span className="solid-bar rounded-full px-3 py-1 text-[11.5px] font-bold text-muted">{r.day}</span>
+              <span className="chat-chip rounded-full px-3 py-1 text-[12px] font-bold">{r.day}</span>
             </p>
           ) : "unread" in r ? (
             <p key="unread" className="my-3 text-center">
-              <span className="rounded-full bg-gradient-to-r from-orange to-[#d9622b] px-3 py-1 text-[11.5px] font-extrabold text-white shadow-sm">Unread messages</span>
+              <span className="chat-chip chat-accent rounded-full px-3 py-1 text-[12px] font-extrabold">Unread messages</span>
             </p>
           ) : (
             <Bubble
@@ -476,6 +515,10 @@ export function ChatView({
               seen={r.msg.author === me && seenAll(r.msg)}
               seenLabel={!isGroup && r.msg.id === lastMine?.id && seenAll(r.msg)}
               fresh={r.msg.createdAt > openedAt}
+              starred={starSet.has(r.msg.id)}
+              flash={flash === r.msg.id}
+              myName={me ? (people.get(me)?.name ?? "") : ""}
+              onJump={jumpTo}
               onHold={() => {
                 if (r.msg.pending) return;
                 setHolding(r.msg);
@@ -493,9 +536,9 @@ export function ChatView({
         )}
         {typing.length > 0 && view === "chat" && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="glass-card flex gap-1 rounded-[18px] px-3.5 py-3" aria-label="Typing">
+            <span className="bubble-in flex gap-1 rounded-[var(--r)] px-3.5 py-3" aria-label="Typing">
               {[0, 1, 2].map((d) => (
-                <span key={d} className="size-1.5 animate-bounce rounded-full bg-mess" style={{ animationDelay: `${d * 150}ms` }} />
+                <span key={d} className="size-1.5 animate-bounce rounded-full bg-[var(--in-meta)]" style={{ animationDelay: `${d * 150}ms` }} />
               ))}
             </span>
           </div>
@@ -507,21 +550,46 @@ export function ChatView({
         <button
           onClick={() => {
             setAtBottom(true);
+            setLeftAt(null);
             end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
           }}
           aria-label="Jump to latest"
-          className="glass-pill absolute right-4 bottom-[calc(5.2rem+env(safe-area-inset-bottom))] z-10 grid size-11 place-items-center rounded-full text-mess"
+          className="chat-chip anim-pop absolute right-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-10 grid size-11 place-items-center rounded-full"
         >
           <ArrowDown size={20} />
+          {missed > 0 && (
+            <span className="chat-accent-bg absolute -top-1.5 -right-1 grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold">
+              {missed > 99 ? "99+" : missed}
+            </span>
+          )}
         </button>
       )}
 
-      <footer className="glass-bar border-t border-b-0 border-card-edge/60 px-3 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))]">
+      <footer className="chat-head px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {mentionList.length > 0 && (
+          <ul className="mb-1.5 overflow-hidden rounded-2xl bg-[var(--chat-input)] ring-1 ring-black/10">
+            {mentionList.map(([id, p]) => (
+              <li key={id}>
+                <button
+                  onClick={() => {
+                    const first = p.name.split(" ")[0];
+                    setText(text.replace(/@([\p{L}]*)$/u, `@${first} `));
+                    field.current?.focus();
+                  }}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left active:bg-black/5"
+                >
+                  <Avatar name={p.name} avatar={p.avatar} size={30} />
+                  <span className="truncate text-[14.5px] font-semibold">{p.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {(replyTo || editing) && (
-          <div className="mb-1.5 flex items-center gap-2.5 rounded-2xl bg-card/80 px-3 py-2">
-            <span className="h-9 w-1 shrink-0 rounded-full bg-orange" />
+          <div className="mb-1.5 flex items-center gap-2.5 rounded-2xl bg-[var(--chat-input)] px-3 py-2 ring-1 ring-black/5">
+            <span className="h-9 w-[3px] shrink-0 rounded-full bg-[var(--chat-accent)]" />
             <span className="min-w-0 flex-1">
-              <span className="block text-[12.5px] font-extrabold text-mess">
+              <span className="chat-accent block text-[12.5px] font-extrabold">
                 {editing ? "Edit message" : replyTo!.author === me ? "Replying to yourself" : `Replying to ${people.get(replyTo!.author)?.name ?? "Someone"}`}
               </span>
               <span className="block truncate text-[13px] text-muted">{gist((editing ?? replyTo)!)}</span>
@@ -551,38 +619,112 @@ export function ChatView({
             e.target.value = "";
           }}
         />
-        <div className="flex items-end gap-1 rounded-[26px] border-[1.5px] border-card-edge bg-card p-1 focus-within:border-orange/70">
+        <div className="flex items-end gap-1.5">
+          <div className="chat-input flex min-h-11 flex-1 items-end rounded-[22px] ring-1 ring-black/10">
+            <button
+              onClick={() => setAdding(true)}
+              aria-label="Add a task, poll or document"
+              disabled={uploading}
+              className="chat-accent grid size-11 shrink-0 place-items-center rounded-full active:scale-90 disabled:opacity-60"
+            >
+              {uploading ? <Clock size={19} className="animate-pulse" /> : <Plus size={23} strokeWidth={2.4} />}
+            </button>
+            <textarea
+              ref={field}
+              rows={1}
+              value={text}
+              onChange={(e) => typed(e.target.value)}
+              placeholder={uploading ? "Sending the file…" : "Message"}
+              aria-label="Message"
+              className="max-h-32 min-h-11 flex-1 resize-none bg-transparent py-[11px] pr-2 text-[16px] leading-snug outline-none placeholder:text-muted"
+            />
+            {!text.trim() && (
+              <button onClick={() => docInput.current?.click()} aria-label="Send a document" className="grid size-11 shrink-0 place-items-center rounded-full text-muted active:scale-90">
+                <Paperclip size={20} />
+              </button>
+            )}
+          </div>
           <button
-            onClick={() => setAdding(true)}
-            aria-label="Add a task, poll or document"
-            disabled={uploading}
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-orange to-[#d9601f] text-white active:scale-95 disabled:opacity-60"
+            onClick={() => void send()}
+            disabled={!text.trim()}
+            aria-label={editing ? "Save" : "Send"}
+            className={cx(
+              "chat-accent-bg grid size-11 shrink-0 place-items-center rounded-full shadow-sm transition-transform active:scale-90 disabled:opacity-40",
+              text.trim() && "anim-pop",
+            )}
           >
-            {uploading ? <Clock size={18} className="animate-pulse" /> : <Plus size={21} strokeWidth={2.5} />}
+            {editing ? <Check size={21} strokeWidth={2.6} /> : <SendHorizontal size={20} />}
           </button>
-          <textarea
-            ref={field}
-            rows={1}
-            value={text}
-            onChange={(e) => typed(e.target.value)}
-            placeholder={uploading ? "Sending the file…" : `Message ${isGroup ? title : ""}`.trim() + "…"}
-            aria-label="Message"
-            className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-[15.5px] leading-snug outline-none placeholder:text-muted"
-          />
-          {text.trim() ? (
-            <button onClick={() => void send()} aria-label="Send" className="h-10 shrink-0 rounded-full px-3.5 text-[15px] font-extrabold text-mess active:scale-95">
-              {editing ? "Save" : "Send"}
-            </button>
-          ) : (
-            <button onClick={() => docInput.current?.click()} aria-label="Send a document" className="grid size-10 shrink-0 place-items-center rounded-full text-muted active:scale-95">
-              <Paperclip size={20} />
-            </button>
-          )}
         </div>
       </footer>
 
-      {/* Hold a message: react, reply, copy, forward, edit, delete. */}
+      {/* The ⋮ menu: everything about this chat in one place. */}
+      <Sheet open={menu} onClose={() => setMenu(false)} title={title}>
+        <div className="overflow-hidden rounded-2xl bg-surface-2">
+          <SheetRow icon={Palette} label="Chat theme & wallpaper" onClick={() => { setMenu(false); setLooking(true); }} />
+          <SheetRow icon={Star} label={`Starred messages${starred?.length ? ` (${starred.length})` : ""}`} onClick={() => { setMenu(false); setStarredOpen(true); }} />
+          <SheetRow icon={Search} label="Search" onClick={() => { setMenu(false); setFinding(true); }} />
+          <SheetRow icon={Files} label="Files" onClick={() => { setMenu(false); setView("files"); }} />
+          <SheetRow
+            icon={pref?.muted ? Bell : BellOff}
+            label={pref?.muted ? "Unmute" : "Mute notifications"}
+            onClick={() => { setMenu(false); void setThreadPref(thread, { muted: !pref?.muted }); }}
+          />
+          <SheetRow icon={Info} label={isGroup ? "Group info" : "Contact info"} onClick={() => { setMenu(false); setInfo(true); }} />
+        </div>
+      </Sheet>
+
+      <ChatLookSheet open={looking} onClose={() => setLooking(false)} appDark={appDark} />
+
+      <Sheet open={starredOpen} onClose={() => setStarredOpen(false)} title="Starred messages">
+        {(starred ?? []).length === 0 ? (
+          <p className="py-6 text-center text-[14px] text-muted">Hold a message and tap Star to keep it here.</p>
+        ) : (
+          <ul className="max-h-[60vh] space-y-1.5 overflow-y-auto pb-2">
+            {[...(starred ?? [])]
+              .sort((a, b) => b.at - a.at)
+              .map((x) => {
+                const m = byId.get(x.id);
+                if (!m) return null;
+                return (
+                  <li key={x.id}>
+                    <button
+                      onClick={() => {
+                        setStarredOpen(false);
+                        jumpTo(x.id);
+                      }}
+                      className="flex w-full items-start gap-3 rounded-2xl bg-surface-2 px-3 py-2.5 text-left active:scale-[0.99]"
+                    >
+                      <Star size={16} className="mt-0.5 shrink-0 fill-current text-[#e0a21b]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px] font-bold text-muted">
+                          {m.author === me ? "You" : (people.get(m.author)?.name ?? "Someone")} · {dayLabel(m.createdAt)}
+                        </span>
+                        <span className="line-clamp-2 block text-[14.5px]">{gist(m)}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </Sheet>
+
+      {/* Hold a message: react, reply, copy, forward, star, edit, delete. */}
       <Sheet open={!!holding} onClose={() => setHolding(null)} title="Message">
+        {holding && isGroup && holding.author === me && !holding.deleted && (
+          <div className="mb-3 rounded-2xl bg-surface-2 px-3.5 py-3">
+            <p className="flex items-center gap-1.5 text-[12.5px] font-extrabold tracking-wide text-muted uppercase">
+              <Eye size={14} /> Seen by
+            </p>
+            <p className="mt-1 text-[14px]">
+              {(() => {
+                const who = [...seenBy].filter(([, at]) => at >= holding.createdAt).map(([id]) => people.get(id)?.name?.split(" ")[0] ?? "Someone");
+                return who.length ? who.join(", ") : "Nobody yet";
+              })()}
+            </p>
+          </div>
+        )}
         {holding && !holding.deleted && (
           <div className="flex justify-between gap-1 pb-3">
             {REACTIONS.map((e) => (
@@ -617,6 +759,19 @@ export function ChatView({
           )}
           {holding && !holding.deleted && (
             <SheetRow icon={Forward} label="Forward" onClick={() => { setForwarding(holding); setHolding(null); }} />
+          )}
+          {holding && !holding.deleted && (
+            <SheetRow
+              icon={Star}
+              label={starSet.has(holding.id) ? "Unstar" : "Star"}
+              onClick={() => {
+                const id = holding.id;
+                setHolding(null);
+                if (starSet.has(id)) void db.starred.delete(id);
+                else void db.starred.put({ id, thread, at: Date.now() });
+                toast.show(starSet.has(id) ? "Removed from Starred" : "Starred");
+              }}
+            />
           )}
           {holding && canEdit && (
             <SheetRow
@@ -806,6 +961,10 @@ function Bubble({
   seen,
   seenLabel,
   fresh,
+  starred,
+  flash,
+  myName,
+  onJump,
   onHold,
   onReply,
   onLike,
@@ -829,6 +988,10 @@ function Bubble({
   seenLabel: boolean;
   /** Arrived (or was sent) while the chat is open: it pops in. */
   fresh: boolean;
+  starred: boolean;
+  flash: boolean;
+  myName: string;
+  onJump: (id: string) => void;
   onHold: () => void;
   onReply: () => void;
   onLike: () => void;
@@ -889,12 +1052,16 @@ function Bubble({
   };
 
   const card = !m.deleted && (m.kind === "poll" || m.kind === "task");
+  const jumbo = !m.deleted && m.kind === "text" && !quoted && isJumbo(m.body);
+  const [more, setMore] = useState(false);
+  const long = m.kind === "text" && m.body.length > 700;
+  const mentionsMe = !mine && !!myName && new RegExp(`@${escapeRe(myName.split(" ")[0])}\\b`, "i").test(m.body);
   const counts = new Map<string, number>();
   for (const r of reacts) counts.set(r.emoji, (counts.get(r.emoji) ?? 0) + 1);
   const mineReact = reacts.find((r) => r.userId === me)?.emoji;
 
   return (
-    <div className={cx("relative flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-3" : "mt-1")}>
+    <div id={`msg-${m.id}`} className={cx("relative flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-2.5" : "mt-[3px]")}>
       {dx > 10 && (
         <span className="absolute top-1/2 left-1 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-orange/15 text-mess" style={{ opacity: Math.min(1, dx / 56) }}>
           <CornerUpLeft size={16} />
@@ -908,11 +1075,14 @@ function Bubble({
         <div
           {...handlers}
           className={cx(
-            "px-3.5 py-2 text-[15px] leading-snug [overflow-wrap:anywhere] select-none",
-              mine
-              ? cx("bubble-out", "rounded-[20px]", !first && "rounded-tr-[7px]", !last && "rounded-br-[7px]")
-              : cx("bubble-in", "rounded-[20px]", !first && "rounded-tl-[7px]", !last && "rounded-bl-[7px]"),
+            "px-3 py-1.5 leading-snug [overflow-wrap:anywhere] select-none",
+            mine
+              ? cx("bubble-out", "rounded-[var(--r)]", !first && "rounded-tr-[6px]", !last && "rounded-br-[6px]")
+              : cx("bubble-in", "rounded-[var(--r)]", !first && "rounded-tl-[6px]", !last && "rounded-bl-[6px]"),
+            jumbo && "!bg-transparent !shadow-none !px-1",
+            mentionsMe && "ring-2 ring-[var(--chat-accent)]/60",
             fresh && "anim-bubble",
+            flash && "flash-hit",
             card && "w-full",
             m.deleted && "italic opacity-70",
           )}
@@ -923,13 +1093,23 @@ function Bubble({
             </p>
           )}
           {quoted && !m.deleted && (
-            <div className="mb-1.5 flex gap-2 rounded-xl bg-bg/60 px-2.5 py-1.5">
-              <span className="w-[3px] shrink-0 rounded-full bg-orange" />
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onJump(quoted.id);
+              }}
+              className="mb-1 flex w-full gap-2 overflow-hidden rounded-lg bg-black/[0.05] py-1 pr-2.5 text-left"
+            >
+              <span className="w-[3px] shrink-0 rounded-full" style={{ background: nameColor(quoted.author) }} />
               <span className="min-w-0">
-                <span className="block text-[12px] font-extrabold text-mess">{quotedName(quoted.author)}</span>
-                <span className="block truncate text-[12.5px] text-muted">{gist(quoted)}</span>
+                <span className="block text-[12.5px] font-extrabold" style={{ color: nameColor(quoted.author) }}>
+                  {quotedName(quoted.author)}
+                </span>
+                <span className="block truncate text-[13px] text-muted">{gist(quoted)}</span>
               </span>
-            </div>
+            </button>
           )}
           {m.deleted ? (
             <span className="flex items-center gap-1.5 text-muted">
@@ -941,11 +1121,29 @@ function Bubble({
             <FileCard f={m.data as ChatFile} />
           ) : m.kind === "task" && m.data ? (
             <TaskCard t={m.data} mine={mine} />
+          ) : jumbo ? (
+            <span className="block text-[44px] leading-tight">{m.body.trim()}</span>
           ) : (
-            <span className="whitespace-pre-wrap">{m.body}</span>
+            <span className="whitespace-pre-wrap">
+              <RichText text={long && !more ? `${m.body.slice(0, 600).trimEnd()}…` : m.body} />
+              {long && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMore((v) => !v);
+                  }}
+                  className="chat-accent ml-1 font-bold"
+                >
+                  {more ? "Show less" : "Read more"}
+                </button>
+              )}
+            </span>
           )}
           {(last || m.pending || m.failed || m.editedAt) && (
-            <span className="mt-0.5 flex items-center justify-end gap-1 text-[10.5px] text-muted">
+            <span className={cx("-mb-0.5 mt-0.5 flex items-center justify-end gap-1 text-[11px] text-muted", jumbo && "chat-chip rounded-full px-2 py-0.5")}>
+              {starred && <Star size={11} className="fill-current" aria-label="Starred" />}
               {m.editedAt && !m.deleted && <span className="italic">edited ·</span>}
               {clock(m.createdAt)}
               {mine &&
@@ -1021,62 +1219,9 @@ function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: bool
   );
 }
 
-const NEW_KINDS: { id: Task["kind"]; label: string }[] = [
-  { id: "assignment", label: "Assignment" },
-  { id: "exam", label: "Exam" },
-  { id: "quiz", label: "Quiz" },
-  { id: "project", label: "Project" },
-  { id: "personal", label: "Other" },
-];
-
-/** A new task, made right here: saved to my Tasks and sent to the chat. */
-function NewTaskForm({ onMade }: { onMade: (t: Task) => void }) {
-  const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<Task["kind"]>("assignment");
-  const [day, setDay] = useState("");
-  const [time, setTime] = useState("");
-  const [busy, setBusy] = useState(false);
-  const input = "h-11 w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-3.5 text-[15px] outline-none focus:border-orange";
-  return (
-    <div className="space-y-2.5 rounded-3xl bg-surface-2 p-3">
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's due? e.g. DBMS lab file" className={input} autoFocus />
-      <div className="flex flex-wrap gap-1.5">
-        {NEW_KINDS.map((k) => (
-          <button
-            key={k.id}
-            type="button"
-            onClick={() => setKind(k.id)}
-            className={cx(
-              "h-8 rounded-full border px-3 text-[13px] font-bold",
-              kind === k.id ? "border-mess bg-mess text-white" : "border-card-edge bg-card text-muted",
-            )}
-          >
-            {k.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label="Due day" className={input} />
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label="Due time" className={cx(input, "w-[8.5rem] shrink-0")} />
-      </div>
-      <button
-        disabled={!title.trim() || busy}
-        onClick={async () => {
-          setBusy(true);
-          const t = await addTask({ title, kind, dueDate: day || null, dueTime: day && time ? time : null });
-          setBusy(false);
-          onMade(t);
-        }}
-        className="btn-leather h-11 w-full rounded-2xl text-[15px] font-bold disabled:opacity-50"
-      >
-        Add to my Tasks &amp; send
-      </button>
-    </div>
-  );
-}
-
 function TaskPicker({ onPick }: { onPick: (t: Task) => void }) {
   const [making, setMaking] = useState(false);
+  const subjects = useLiveQuery(() => db.subjects.filter((x) => !x.deletedAt).toArray(), []);
   const tasks = useLiveQuery(
     () => db.tasks.filter((t) => !t.deletedAt && !t.done).toArray(),
     [],
@@ -1085,7 +1230,7 @@ function TaskPicker({ onPick }: { onPick: (t: Task) => void }) {
   return (
     <div className="max-h-[66vh] space-y-3 overflow-y-auto pb-2">
       {making ? (
-        <NewTaskForm onMade={onPick} />
+        <TaskForm subjects={subjects ?? []} onDone={() => {}} onCreated={onPick} submitLabel="Add to my Tasks & send" />
       ) : (
         <button
           onClick={() => setMaking(true)}
@@ -1306,5 +1451,48 @@ function PollForm({ onSend }: { onSend: (p: { question: string; options: string[
         Send poll
       </button>
     </div>
+  );
+}
+
+/** 1–3 emoji and nothing else: shown big, without a bubble. */
+function isJumbo(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length > 24) return false;
+  if (!/^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\u200d|\ufe0f|\s)+$/u.test(t)) return false;
+  const seg = typeof Intl !== "undefined" && "Segmenter" in Intl ? [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t.replace(/\s/g, ""))].length : t.length / 2;
+  return seg >= 1 && seg <= 3 && /\p{Extended_Pictographic}/u.test(t);
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Links you can tap and @mentions in colour; everything else as typed. */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+|www\.[^\s]+|@[\p{L}]+)/u);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (!p) return null;
+        if (/^(https?:\/\/|www\.)/.test(p)) {
+          const url = p.startsWith("www.") ? `https://${p}` : p;
+          return (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noreferrer noopener"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="chat-accent break-all underline underline-offset-2"
+            >
+              {p}
+            </a>
+          );
+        }
+        if (p.startsWith("@")) return <b key={i} className="chat-accent font-bold">{p}</b>;
+        return <span key={i}>{p}</span>;
+      })}
+    </>
   );
 }

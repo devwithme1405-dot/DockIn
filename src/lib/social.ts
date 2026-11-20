@@ -116,7 +116,8 @@ export async function publishProfile(profile: Profile, shareAttendance: boolean)
   const { error } = await sb
     .from("profiles")
     .update({
-      name: profile.name ?? "",
+      // Never blank out a name: an empty one falls back to the account's own.
+      ...(profile.name?.trim() ? { name: profile.name.trim() } : {}),
       avatar: profile.avatar ?? null,
       branch: profile.branch ?? null,
       year: profile.year ?? null,

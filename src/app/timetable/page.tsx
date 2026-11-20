@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TAB_SHOWN } from "@/lib/tabs";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { CalendarClock, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react";
+import { HeroHeader } from "@/components/PageHeader";
 import { TodaySkeleton } from "@/components/Skeleton";
 import { ConnectCamu } from "@/components/College";
 import { getProfile } from "@/lib/repo";
@@ -156,11 +156,16 @@ export default function TimetablePage() {
 
   if (!profile || (native && !data)) return <TodaySkeleton />;
 
+  const todayCount = tripClassesByDate(today).length;
+  const heroLine = `${new Date(`${today}T12:00:00`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })} · ${
+    todayCount ? `${todayCount} class${todayCount === 1 ? "" : "es"} today` : "no classes today"
+  }`;
+
   const hasManual = (slots?.length ?? 0) > 0;
 
   return (
     <div className="page-wash stagger min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
-      <PageHeader title="Timetable" />
+      <HeroHeader title="Timetable" icon={CalendarClock} subtitle={heroLine} />
 
       <Segmented
         value={view}

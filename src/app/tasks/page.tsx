@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/components/PageHeader";
+import { HeroHeader, PageHeader } from "@/components/PageHeader";
 import { ConnectLms, timeAgo } from "@/components/College";
 import { syncCollege, useCollege } from "@/lib/college";
 import { TasksSkeleton } from "@/components/Skeleton";
-import { ArrowUp, CalendarClock, GraduationCap, MapPin, Plus, RefreshCw, Share2 } from "lucide-react";
+import { ShareTask } from "@/components/ShareTask";
+import { ArrowUp, CalendarClock, ClipboardCheck, GraduationCap, MapPin, Plus, RefreshCw, Share2 } from "lucide-react";
 import { useReactions, useShareState, useShares, useSubjects, useTasks } from "@/lib/hooks";
 import { pullSocial } from "@/lib/social";
 import { useAuth } from "@/lib/auth";
@@ -39,6 +40,7 @@ export default function TasksPage() {
   const today = toDateStr();
   const [tab, setTab] = useState<Tab>("todo");
   const [quick, setQuick] = useState("");
+  const [sharing, setSharing] = useState<Task | null>(null);
   const [adding, setAdding] = useState(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1",
   );
@@ -131,8 +133,9 @@ export default function TasksPage() {
   return (
     <>
     <div className="page-wash stagger">
-      <PageHeader
+      <HeroHeader
         title="Tasks"
+        icon={ClipboardCheck}
         subtitle={
           stats.pending === 0
             ? "Nothing pending. Enjoy it."
@@ -357,8 +360,14 @@ export default function TasksPage() {
       </button>
 
       <Sheet open={adding} onClose={() => setAdding(false)} title="New task">
-        <TaskForm subjects={subjects} defaultKind={tab === "exams" ? "exam" : "assignment"} onDone={() => setAdding(false)} />
+        <TaskForm
+          subjects={subjects}
+          defaultKind={tab === "exams" ? "exam" : "assignment"}
+          onDone={() => setAdding(false)}
+          onCreated={(t) => setSharing(t)}
+        />
       </Sheet>
+      <ShareTask task={sharing} onClose={() => setSharing(null)} />
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing ? KIND_BY_ID[editing.kind].label : "Task"}>
         {editing && <TaskForm key={editing.id} task={editing} subjects={subjects} onDone={() => setEditing(null)} />}
       </Sheet>

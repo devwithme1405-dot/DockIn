@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { db } from "./db";
+import type { Task } from "./types";
 import { getSupabase } from "./supabase";
 import { notifyPush } from "./push";
 import { mimeOf } from "./files";
@@ -46,6 +47,10 @@ export interface ChatTask {
   dueTime: string | null;
   subject?: string | null;
   shareId?: string | null;
+  /** "<sender>:<their task id>" — the same task shared twice is the same origin. */
+  origin?: string | null;
+  notes?: string | null;
+  priority?: string | null;
 }
 
 export interface ChatPoll {
@@ -152,6 +157,81 @@ const toMsg = (r: Row): ChatMessage => ({
 async function putMsgs(list: ChatMessage[]): Promise<void> {
   const prev = await db.messages.bulkGet(list.map((m) => m.id));
   await db.messages.bulkPut(list.map((m, i) => (prev[i]?.hidden ? { ...m, hidden: true } : m)));
+  const fresh = list.filter((m, i) => !prev[i]);
+  // One at a time: the live channel and a pull can deliver the same message
+  // together, and the origin check must see the first one's result.
+  absorbing = absorbing.then(() => absorbSharedTasks(fresh)).catch(() => {});
+  await absorbing;
+}
+let absorbing: Promise<void> = Promise.resolve();
+
+/** The key that makes one shared task land once, however many ways it arrives. */
+export function taskOriginOf(author: string, d: Pick<ChatTask, "origin" | "title" | "dueDate">): string {
+  return d.origin || `${author}:${(d.title ?? "").trim().toLowerCase()}:${d.dueDate ?? ""}`;
+}
+
+/**
+ * A task a friend sends you (directly or in a group you are in) goes straight
+ * into your Tasks — once. Sent twice, or to the group and to you as well, it is
+ * still one task: the origin is remembered, and a task already in your list
+ * with the same title and day counts as having it. Only recent messages are
+ * taken in, so signing in on a new phone doesn't replay months of shares.
+ */
+async function absorbSharedTasks(fresh: ChatMessage[]): Promise<void> {
+  const me = myId;
+  if (!me) return;
+  const recent = Date.now() - 7 * 86400_000;
+  const incoming = fresh.filter((m) => m.kind === "task" && m.author !== me && !m.deleted && m.data?.title && m.createdAt > recent);
+  if (!incoming.length) return;
+  const { addTask } = await import("./repo");
+  for (const m of incoming) {
+    const d = m.data as ChatTask;
+    const key = taskOriginOf(m.author, d);
+    if (await db.taskOrigins.get(key)) continue;
+    const same = await db.tasks
+      .filter((t) => !t.deletedAt && t.title.trim().toLowerCase() === d.title.trim().toLowerCase() && (t.dueDate ?? null) === (d.dueDate ?? null))
+      .first();
+    if (same) {
+      await db.taskOrigins.put({ key, taskId: same.id, at: Date.now() });
+      continue;
+    }
+    const kinds = ["assignment", "exam", "project", "quiz", "personal"];
+    const t = await addTask({
+      title: d.title,
+      kind: (kinds.includes(d.kind) ? d.kind : "assignment") as never,
+      dueDate: d.dueDate ?? null,
+      dueTime: d.dueTime ?? null,
+      notes: [d.subject, d.notes].filter(Boolean).join(" · "),
+      priority: (["low", "med", "high"].includes(d.priority ?? "") ? d.priority : undefined) as never,
+    });
+    await db.taskOrigins.put({ key, taskId: t.id, at: Date.now() });
+  }
+}
+
+/**
+ * Sends one of my tasks to chats (friends and/or groups). Everyone there gets
+ * it added to their Tasks once, however many of these chats they are in.
+ */
+export async function sendTaskTo(threads: ThreadId[], t: Task, subject?: string | null): Promise<void> {
+  if (!(await ensureMe()) || !myId) throw new Error("Sign in to share.");
+  const origin = `${myId}:${t.id}`;
+  await markTaskShared(origin, t.id);
+  const task: ChatTask = {
+    title: t.title,
+    kind: t.kind,
+    dueDate: t.dueDate,
+    dueTime: t.dueTime,
+    subject: subject ?? null,
+    origin,
+    notes: t.notes || null,
+    priority: t.priority,
+  };
+  for (const th of [...new Set(threads)]) await sendMessage(th, "", { task });
+}
+
+/** Remember my own task as shared, so it never comes back to me as a copy. */
+export async function markTaskShared(origin: string, taskId: string): Promise<void> {
+  await db.taskOrigins.put({ key: origin, taskId, at: Date.now() });
 }
 
 const SINCE_KEY = "dockin-chat-since";

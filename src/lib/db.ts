@@ -57,6 +57,11 @@ export class DockinDB extends Dexie {
   seenBy!: Table<{ id: string; thread: string; userId: string; readAt: number }, string>;
   /** Chat documents already downloaded once, so they reopen offline. */
   fileCache!: Table<{ path: string; blob: Blob; at: number }, string>;
+  /** Shared tasks already taken into my list (one per origin), so a task sent
+   *  twice, or to a group and to me directly, lands once. */
+  taskOrigins!: Table<{ key: string; taskId: string; at: number }, string>;
+  /** Messages starred on this phone. */
+  starred!: Table<{ id: string; thread: string; at: number }, string>;
   msgReactions!: Table<{ id: string; messageId: string; userId: string; emoji: string }, string>;
   blocks!: Table<{ id: string; name: string }, string>;
 
@@ -114,6 +119,12 @@ export class DockinDB extends Dexie {
     });
     this.version(14).stores({
       fileCache: "path, at",
+    });
+    this.version(15).stores({
+      taskOrigins: "key",
+    });
+    this.version(16).stores({
+      starred: "id, thread",
     });
   }
 }

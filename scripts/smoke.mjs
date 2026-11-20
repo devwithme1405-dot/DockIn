@@ -308,7 +308,7 @@ async function step(name, fn) {
 
 await step("a task takes a deadline time", async () => {
   await page.goto(`${BASE}/tasks?new=1`, { waitUntil: "networkidle" });
-  await page.getByText("Deadline time").waitFor({ timeout: 3000 });
+  await page.getByLabel("Time").waitFor({ timeout: 3000 });
   await page.locator("button", { hasText: "8:00 PM" }).first().click();
   if ((await page.getByLabel("Time").inputValue()) !== "20:00") throw new Error("8:00 PM chip did not set the time");
   await page.screenshot({ path: `${SHOTS}/task-time.png` });

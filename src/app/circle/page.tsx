@@ -518,21 +518,21 @@ function Circle() {
 
       {!searching && (
         <>
-          {/* The circle: a warm sunset card with who is in it. */}
+          {/* The circle: a soft paper card with who is in it. */}
           <section className="sunset anim-pop relative mx-4 mt-3 overflow-hidden rounded-[26px] px-4 pt-4 pb-3.5">
             <span className="blob anim-float -top-8 -right-6 size-28" aria-hidden />
             <span className="blob anim-float -bottom-10 left-20 size-24 opacity-60" style={{ "--d": "-1.6s" } as React.CSSProperties} aria-hidden />
             <div className="relative flex items-center gap-3">
               <div className="flex -space-x-3">
                 {(accepted.length ? accepted.slice(0, 3) : [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }]).map((f) => (
-                  <span key={f.id} className="rounded-full ring-[2.5px] ring-[#f5c08a]">
+                  <span key={f.id} className="rounded-full ring-[2.5px] ring-surface">
                     <Avatar name={f.name} avatar={"avatar" in f ? f.avatar : undefined} size={40} />
                   </span>
                 ))}
               </div>
               <div className="min-w-0">
                 <p className="font-display text-[20px] leading-tight font-extrabold tracking-tight">Your College Circle</p>
-                <p className="text-[12.5px] font-medium text-[#ffe2c4]">Chats, groups, files and polls in one place</p>
+                <p className="text-[12.5px] font-medium text-muted">Chats, groups, files and polls in one place</p>
               </div>
             </div>
             <div className="relative mt-3.5 flex gap-2">
@@ -543,8 +543,8 @@ function Circle() {
                   [unreadChats, "unread"],
                 ] as const
               ).map(([n, label]) => (
-                <span key={label} className="flex items-baseline gap-1 rounded-full bg-white/15 px-3 py-1 text-[12.5px] font-semibold ring-1 ring-white/20 backdrop-blur-sm">
-                  <span className="text-[15px] font-extrabold tabular-nums">{n}</span> {label}
+                <span key={label} className="flex items-baseline gap-1 rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-muted ring-1 ring-card-edge">
+                  <span className="text-[15px] font-extrabold text-text tabular-nums">{n}</span> {label}
                 </span>
               ))}
             </div>
@@ -576,18 +576,10 @@ function Circle() {
         </>
       )}
 
-      {/* People in a row, like stories: you first (your QR), then friends —
-          a ring means they have written to you. Tap to chat. */}
-      <div className="no-scrollbar mt-1 flex gap-3.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
-        <button onClick={() => setSheet("me")} className="flex w-[66px] shrink-0 flex-col items-center gap-1">
-          <span className="relative grid size-[62px] place-items-center rounded-full border-2 border-dashed border-orange/60 bg-gradient-to-br from-[#fff1de] to-[#f8d9b4] dark:from-[#3a2a1c] dark:to-[#2c1f15]">
-            <QrIcon size={24} className="text-[#c2561c] dark:text-orange" />
-            <span className="absolute -right-0.5 -bottom-0.5 grid size-5 place-items-center rounded-full bg-orange text-white ring-2 ring-bg">
-              <Plus size={13} strokeWidth={3} />
-            </span>
-          </span>
-          <span className="w-full truncate text-center text-[11.5px] text-muted">Your QR</span>
-        </button>
+      {/* Friends in a row, like stories — a ring means they have written to
+          you. Tap to chat. (Your QR has its own button above.) */}
+      {accepted.length > 0 && (
+      <div className="no-scrollbar mt-3 flex gap-3.5 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
         {accepted.map((f) => {
           const unread = me ? (unreadBy.get(directThread(me, f.id)) ?? 0) : 0;
           return (
@@ -609,6 +601,7 @@ function Circle() {
           );
         })}
       </div>
+      )}
 
       <nav className="glass-bar sticky top-0 z-10 mt-2 border-b-0 px-4 py-2" aria-label="Friends sections">
         <div className="glass-pill flex gap-1 rounded-2xl p-1">
@@ -679,7 +672,7 @@ function Circle() {
         <button
           onClick={() => setComposing(true)}
           aria-label="New chat"
-          className="fixed right-4 bottom-[calc(6.4rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-gradient-to-br from-orange to-[#c4532a] text-white shadow-[0_10px_24px_-8px_rgba(196,83,42,0.8)] active:scale-95"
+          className="fixed right-4 bottom-[calc(6.4rem+env(safe-area-inset-bottom))] z-30 grid size-14 place-items-center rounded-full bg-[#d9772b] text-white shadow-[0_10px_24px_-8px_rgba(196,83,42,0.8)] active:scale-95"
         >
           <PenSquare size={23} />
         </button>
@@ -853,17 +846,17 @@ function Circle() {
           <span className="blob anim-float -top-10 -left-8 size-32" aria-hidden />
           <span className="blob anim-float -right-10 bottom-16 size-28 opacity-70" style={{ "--d": "-2s" } as React.CSSProperties} aria-hidden />
           <div className="relative flex items-center justify-center gap-2.5">
-            <span className="rounded-full ring-2 ring-[#ffd9ae]">
+            <span className="rounded-full ring-2 ring-surface">
               <Avatar name={myProfile?.name || "You"} avatar={myProfile?.avatar} size={40} />
             </span>
             <span className="min-w-0 text-left">
               <span className="block truncate text-[16px] leading-tight font-extrabold">{myProfile?.name || "You"}</span>
-              <span className="block text-[12px] font-medium text-[#ffe2c4]">on DockIn</span>
+              <span className="block text-[12px] font-medium text-muted">on DockIn</span>
             </span>
           </div>
 
           <div className="relative mx-auto mt-4 grid w-fit place-items-center">
-            <span className="anim-halo absolute -inset-5 rounded-[40px] bg-[#ffd08a]/45 blur-2xl" aria-hidden />
+            <span className="anim-halo absolute -inset-5 rounded-[40px] bg-[#f3c58f]/30 blur-2xl" aria-hidden />
             <div className="ring-spin relative rounded-[26px] p-[3px] shadow-[0_18px_34px_-14px_rgba(60,20,0,0.75)]">
               <div className="grid min-h-[196px] min-w-[196px] place-items-center rounded-[23px] bg-white">
                 {code ? <QrCode value={link} size={180} /> : <span className="size-[180px] animate-pulse rounded-2xl bg-black/5" />}
@@ -874,13 +867,13 @@ function Circle() {
           <button
             onClick={copyCode}
             disabled={!code}
-            className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 ring-1 ring-white/25 active:scale-95"
+            className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-surface px-4 py-1.5 ring-1 ring-card-edge active:scale-95"
             aria-label="Copy my code"
           >
             <span className="font-mono text-[22px] font-bold tracking-[0.22em] tabular-nums">{code ?? "········"}</span>
             {copied ? <Check size={17} /> : <Copy size={16} className="opacity-80" />}
           </button>
-          <p className="relative mt-2 text-[12.5px] text-[#ffe2c4]">Friends scan this or type the code. Nobody finds you any other way.</p>
+          <p className="relative mt-2 text-[12.5px] text-muted">Friends scan this or type the code. Nobody finds you any other way.</p>
         </div>
 
         <div className="mt-3.5 flex gap-2.5">
@@ -1486,7 +1479,7 @@ function ChatList({
               <span
                 className={cx(
                   "grid h-[22px] min-w-[22px] shrink-0 place-items-center rounded-full px-1.5 text-[11.5px] font-bold text-white",
-                  r.muted ? "bg-muted" : "bg-gradient-to-br from-orange to-[#d24f1e] shadow-[0_4px_10px_-4px_rgba(210,79,30,0.8)]",
+                  r.muted ? "bg-muted" : "bg-[#d9772b] ",
                 )}
               >
                 {r.unread > 99 ? "99+" : r.unread}

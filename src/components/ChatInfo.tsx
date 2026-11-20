@@ -170,7 +170,7 @@ export function ChatInfo({
                   onClick={() => photo.current?.click()}
                   disabled={busy}
                   aria-label="Change group photo"
-                  className="absolute right-0 bottom-0 grid size-10 place-items-center rounded-full bg-gradient-to-br from-orange to-[#c4532a] text-white ring-4 ring-bg disabled:opacity-60"
+                  className="absolute right-0 bottom-0 grid size-10 place-items-center rounded-full bg-[#d9772b] text-white ring-4 ring-bg disabled:opacity-60"
                 >
                   <Camera size={18} />
                 </button>
@@ -225,7 +225,7 @@ export function ChatInfo({
             <p className="px-4 pt-3.5 pb-1 text-[13px] font-bold text-muted">{members?.length ?? group.members} members</p>
             {isOwner && (
               <button onClick={() => setAdding(true)} className={cx(row, "text-mess")}>
-                <span className="grid size-[42px] place-items-center rounded-full bg-gradient-to-br from-orange to-[#d24f1e] text-white">
+                <span className="grid size-[42px] place-items-center rounded-full bg-[#d9772b] text-white">
                   <UserPlus size={19} />
                 </span>
                 <span className="flex-1 font-bold">Add people</span>

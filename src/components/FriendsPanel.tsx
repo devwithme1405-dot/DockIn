@@ -148,7 +148,7 @@ export function FriendsPanel({
           <div className="relative flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[34px] leading-none font-extrabold tabular-nums">{accepted.length}</p>
-              <p className="mt-1 text-[13px] font-semibold text-[#ffe2c4]">
+              <p className="mt-1 text-[13px] font-semibold text-muted">
                 {accepted.length === 1 ? "friend" : "friends"}
                 {requests.length > 0 && ` · ${requests.length} waiting`}
                 {sent.length > 0 && ` · ${sent.length} sent`}
@@ -156,17 +156,17 @@ export function FriendsPanel({
             </div>
             <div className="flex -space-x-3">
               {accepted.slice(0, 4).map((f) => (
-                <span key={f.id} className="rounded-full ring-[2.5px] ring-[#f5c08a]">
+                <span key={f.id} className="rounded-full ring-[2.5px] ring-surface">
                   <Avatar name={f.name} avatar={f.avatar} size={38} />
                 </span>
               ))}
             </div>
           </div>
           <div className="relative mt-3.5 flex gap-2">
-            <button onClick={onAdd} className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-[13.5px] font-bold text-[#a8481a] active:scale-[0.97]">
+            <button onClick={onAdd} className="btn-leather flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13.5px] active:scale-[0.97]">
               <UserPlus size={16} /> Add friend
             </button>
-            <button onClick={onMyQr} className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 text-[13.5px] font-bold ring-1 ring-white/30 active:scale-[0.97]">
+            <button onClick={onMyQr} className="btn-paper flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13.5px] active:scale-[0.97]">
               <QrIcon size={16} /> My QR
             </button>
           </div>

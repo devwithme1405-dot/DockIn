@@ -220,7 +220,7 @@ await step("Task in chat can make a brand-new task", async () => {
   await dlg.getByLabel("Add a task, poll or document").click();
   await page.getByRole("button", { name: "Task", exact: true }).click();
   await page.getByRole("button", { name: "New task" }).click();
-  await page.getByPlaceholder("What's due? e.g. DBMS lab file").fill("OS viva prep");
+  await page.getByPlaceholder("What needs to be done?").fill("OS viva prep");
   await page.getByRole("button", { name: /Add to my Tasks & send/ }).click();
   await dlg.getByText("OS viva prep").waitFor({ timeout: 4000 });
   await dlg.getByText("In your Tasks").first().waitFor({ timeout: 3000 });
@@ -294,6 +294,44 @@ await step("New group: name, photo/emoji, description, then pick people", async 
   await page.getByLabel("Back", { exact: true }).click();
   await page.waitForTimeout(400);
   if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends: " + page.url());
+});
+
+await step("chat themes, jumbo emoji, links and starring", async () => {
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva)/ }).first().click();
+  const chat = page.getByRole("dialog", { name: /Chat with/ });
+  await chat.getByLabel("Message", { exact: true }).fill("😂🔥");
+  await chat.getByLabel("Send", { exact: true }).click();
+  await chat.getByLabel("Message", { exact: true }).fill("notes yaha hai https://example.com/dbms dekh le");
+  await chat.getByLabel("Send", { exact: true }).click();
+  await chat.getByRole("link", { name: /example\.com/ }).waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/chat-mint.png` });
+  await chat.getByLabel("Chat menu").click();
+  await page.getByRole("button", { name: /Chat theme & wallpaper/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Chat theme" });
+  await sheet.getByRole("button", { name: "Night" }).click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/chat-theme-sheet.png` });
+  await sheet.getByLabel("Close").click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/chat-night.png` });
+  // star a message from the hold menu, then find it under Starred
+  const bubble = chat.getByText("Bhai DBMS lab 7 kiya?");
+  const box = await bubble.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 10);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Star", exact: true }).click();
+  await chat.getByLabel("Chat menu").click();
+  await page.getByRole("button", { name: /Starred messages \(1\)/ }).click();
+  await page.getByRole("dialog", { name: "Starred messages" }).getByText("Bhai DBMS lab 7 kiya?").waitFor({ timeout: 2000 });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  // back to the default look for the rest of the run
+  await page.evaluate(() => localStorage.removeItem("dockin-chat-look"));
+  await page.getByLabel("Back", { exact: true }).click();
+  await page.waitForTimeout(400);
 });
 
 await step("the scanner opens smoothly and can flip to My QR", async () => {

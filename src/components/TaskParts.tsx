@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  BookOpen,
+  CalendarDays,
   Check,
   CircleHelp,
   FileText,
+  Flag,
   Flame,
   GraduationCap,
   ListChecks,
@@ -223,12 +226,18 @@ export function TaskForm({
   defaultKind = "assignment",
   defaultDate = null,
   onDone,
+  onCreated,
+  submitLabel,
 }: {
   task?: Task;
   subjects: Subject[];
   defaultKind?: TaskKind;
   defaultDate?: string | null;
   onDone: () => void;
+  /** A new task was saved (e.g. to offer sharing it). */
+  onCreated?: (t: Task) => void;
+  /** Overrides the main button's text for a new task. */
+  submitLabel?: string;
 }) {
   const toast = useToast();
   const today = toDateStr();
@@ -289,6 +298,7 @@ export function TaskForm({
       toast.show(`${KIND_BY_ID[kind].label} added`, () => {
         deleteTask(t.id);
       });
+      onCreated?.(t);
     }
     onDone();
   }
@@ -307,260 +317,223 @@ export function TaskForm({
     onDone();
   }
 
-  const inputBase =
-    "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-[16px] outline-none placeholder:text-muted/70 focus:border-accent";
+  const inputBase = "field h-12 w-full px-3.5 text-[16px]";
 
   return (
-    <div>
+    <div className="space-y-3">
       {task?.source === "lms" && <LmsHandIn task={task} />}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="radiogroup" aria-label="Type">
-        {KINDS.map((k) => {
-          const Icon = KIND_ICON[k.id];
-          const on = kind === k.id;
-          return (
-            <button
-              key={k.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setKind(k.id)}
-              className={cx(
-                "inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition",
-                on ? "bg-text text-bg" : "bg-surface-2",
-              )}
-            >
-              <Icon size={15} />
-              {k.label}
-            </button>
-          );
-        })}
+
+      {/* What: the title, big and on white, with its type right under it. */}
+      <div className="field overflow-hidden focus-within:border-[#d9772b]">
+        <input
+          ref={titleRef}
+          className="h-14 w-full bg-transparent px-4 text-[18px] font-bold outline-none placeholder:font-semibold placeholder:text-muted/70"
+          placeholder={isExam ? "e.g. DBMS mid-sem" : "What needs to be done?"}
+          value={title}
+          maxLength={120}
+          onChange={(e) => setTitle(e.target.value)}
+          aria-label="Title"
+        />
+        <div className="flex gap-1.5 overflow-x-auto border-t border-card-edge/50 px-2.5 py-2.5 [scrollbar-width:none]" role="radiogroup" aria-label="Type">
+          {KINDS.map((k) => {
+            const Icon = KIND_ICON[k.id];
+            return (
+              <button
+                key={k.id}
+                type="button"
+                role="radio"
+                aria-checked={kind === k.id}
+                onClick={() => setKind(k.id)}
+                className="chip inline-flex items-center gap-1.5"
+              >
+                <Icon size={14} />
+                {k.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <input
-        ref={titleRef}
-        className={cx(inputBase, "mt-4")}
-        placeholder={isExam ? "e.g. DBMS mid-sem" : "What needs to be done?"}
-        value={title}
-        maxLength={120}
-        onChange={(e) => setTitle(e.target.value)}
-        aria-label="Title"
-      />
-
-      {subjects.length > 0 && (
-        <>
-          <p className="mt-5 mb-2 text-[13px] font-medium text-muted">Subject</p>
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+      {/* When */}
+      <section className="form-card">
+        <p className="form-label">
+          <CalendarDays size={14} /> {isExam ? "Date & time" : "Due"}
+        </p>
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+          {dateChips(today).map((c) => (
+            <button key={c.label} type="button" aria-pressed={dueDate === c.date} onClick={() => setDueDate(c.date)} className="chip">
+              {c.label}
+            </button>
+          ))}
+          <button type="button" aria-pressed={dueDate === null} onClick={() => setDueDate(null)} className="chip">
+            No date
+          </button>
+        </div>
+        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+          <input
+            type="date"
+            value={dueDate ?? ""}
+            onChange={(e) => setDueDate(e.target.value || null)}
+            aria-label="Date"
+            className={cx(inputBase, "min-w-0 text-[15px]")}
+          />
+          <input
+            type="time"
+            value={dueTime}
+            onChange={(e) => setDueTime(e.target.value)}
+            aria-label="Time"
+            className={cx(inputBase, "w-[8.4rem] text-[15px]")}
+          />
+        </div>
+        <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+          {[null, ...TIME_CHIPS].map((t) => (
             <button
+              key={t ?? "none"}
               type="button"
-              onClick={() => setSubjectId(null)}
-              className={cx(
-                "h-9 shrink-0 rounded-full px-3.5 text-sm font-medium",
-                subjectId === null ? "bg-text text-bg" : "bg-surface-2",
-              )}
+              aria-pressed={(dueTime || null) === t}
+              onClick={() => setDueTime(t ?? "")}
+              className="chip h-8 px-3 text-[12.5px]"
             >
+              {t ? fmtClock(t) : "No time"}
+            </button>
+          ))}
+        </div>
+        {isExam && (
+          <input
+            className={cx(inputBase, "mt-2")}
+            placeholder="Hall / room (optional)"
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
+            aria-label="Room"
+          />
+        )}
+      </section>
+
+      {/* Subject + priority */}
+      {subjects.length > 0 && (
+        <section className="form-card">
+          <p className="form-label">
+            <BookOpen size={14} /> Subject
+          </p>
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
+            <button type="button" aria-pressed={subjectId === null} onClick={() => setSubjectId(null)} className="chip">
               None
             </button>
             {subjects.map((s) => (
               <button
                 key={s.id}
                 type="button"
+                aria-pressed={subjectId === s.id}
                 onClick={() => setSubjectId(s.id)}
-                className={cx(
-                  "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium",
-                  subjectId === s.id ? "text-white" : "bg-surface-2",
-                )}
-                style={subjectId === s.id ? { background: s.color } : undefined}
+                className="chip inline-flex items-center gap-1.5"
               >
+                <span className="size-2 rounded-full" style={{ background: s.color }} />
                 {s.code || s.name}
               </button>
             ))}
           </div>
-        </>
+        </section>
       )}
 
-      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">{isExam ? "Date" : "Due"}</p>
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-        {dateChips(today).map((c) => (
-          <button
-            key={c.label}
-            type="button"
-            onClick={() => setDueDate(c.date)}
-            className={cx(
-              "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium",
-              dueDate === c.date ? "bg-accent text-on-accent" : "bg-surface-2",
-            )}
-          >
-            {c.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setDueDate(null)}
-          className={cx(
-            "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium",
-            dueDate === null ? "bg-accent text-on-accent" : "bg-surface-2",
-          )}
-        >
-          No date
-        </button>
-      </div>
-      <input
-        type="date"
-        value={dueDate ?? ""}
-        onChange={(e) => setDueDate(e.target.value || null)}
-        aria-label="Date"
-        className={cx(inputBase, "mt-2 min-w-0")}
-      />
-
-      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">{isExam ? "Starts at" : "Deadline time"}</p>
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
-        {[null, ...TIME_CHIPS].map((t) => (
-          <button
-            key={t ?? "none"}
-            type="button"
-            onClick={() => setDueTime(t ?? "")}
-            className={cx(
-              "h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-sm font-medium",
-              (dueTime || null) === t ? "bg-ink text-on-ink" : "bg-surface-2",
-            )}
-          >
-            {t ? fmtClock(t) : "No time"}
-          </button>
-        ))}
-      </div>
-      <label className={cx(inputBase, "mt-2 flex min-w-0 items-center justify-between gap-3")}>
-        <span className="text-[14px] text-muted">{dueTime ? "Exact time" : "Pick any time"}</span>
-        <input
-          type="time"
-          value={dueTime}
-          onChange={(e) => setDueTime(e.target.value)}
-          aria-label="Time"
-          className="min-w-0 bg-transparent text-right text-[15px] font-semibold outline-none"
-        />
-      </label>
-      {isExam && (
-        <input
-          className={cx(inputBase, "mt-3")}
-          placeholder="Hall / room (optional)"
-          value={room}
-          onChange={(e) => setRoom(e.target.value)}
-          aria-label="Room"
-        />
-      )}
-
-      <p className="mt-5 mb-2 text-[13px] font-medium text-muted">Priority</p>
-      <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-surface-2 p-1" role="radiogroup" aria-label="Priority">
-        {(["low", "med", "high"] as Priority[]).map((p) => (
-          <button
-            key={p}
-            type="button"
-            role="radio"
-            aria-checked={priority === p}
-            onClick={() => setPriority(p)}
-            className={cx(
-              "h-9 rounded-lg text-sm font-medium transition",
-              priority === p ? "bg-surface shadow-sm" : "text-muted",
-              priority === p && p === "high" && "text-danger",
-            )}
-          >
-            {PRIORITY_LABEL[p]}
-          </button>
-        ))}
-      </div>
-
-      <p className="mt-5 mb-2 flex items-center gap-1.5 text-[13px] font-medium text-muted">
-        <ListChecks size={15} /> {isExam ? "Syllabus topics" : "Checklist"}
-      </p>
-      <ul className="space-y-1.5">
-        {subtasks.map((s) => (
-          <li key={s.id} className="flex items-center gap-2.5 rounded-xl bg-surface-2 px-3 py-2">
+      <section className="form-card">
+        <p className="form-label">
+          <Flag size={14} /> Priority
+        </p>
+        <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Priority">
+          {(["low", "med", "high"] as Priority[]).map((p) => (
             <button
+              key={p}
               type="button"
-              aria-label={s.done ? "Mark not done" : "Mark done"}
-              onClick={() =>
-                setSubtasks((list) => list.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))
+              role="radio"
+              aria-checked={priority === p}
+              onClick={() => setPriority(p)}
+              className="chip inline-flex items-center justify-center gap-1.5"
+            >
+              <span className={cx("size-2 rounded-full", p === "high" ? "bg-danger" : p === "med" ? "bg-warn" : "bg-safe")} />
+              {PRIORITY_LABEL[p]}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="form-card">
+        <p className="form-label">
+          <ListChecks size={14} /> {isExam ? "Syllabus topics" : "Checklist"}
+        </p>
+        {subtasks.length > 0 && (
+          <ul className="mb-2 space-y-1.5">
+            {subtasks.map((s) => (
+              <li key={s.id} className="field flex items-center gap-2.5 px-3 py-2">
+                <button
+                  type="button"
+                  aria-label={s.done ? "Mark not done" : "Mark done"}
+                  onClick={() => setSubtasks((list) => list.map((x) => (x.id === s.id ? { ...x, done: !x.done } : x)))}
+                  className={cx(
+                    "grid size-5 shrink-0 place-items-center rounded-md border-2",
+                    s.done ? "border-safe bg-safe text-white" : "border-line bg-bg text-transparent",
+                  )}
+                >
+                  <Check size={12} strokeWidth={3.5} />
+                </button>
+                <span className={cx("min-w-0 flex-1 text-[15px] [overflow-wrap:anywhere]", s.done && "text-muted line-through")}>{s.text}</span>
+                <button type="button" aria-label="Remove" onClick={() => setSubtasks((list) => list.filter((x) => x.id !== s.id))} className="text-muted">
+                  <X size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex gap-2">
+          <input
+            className={cx(inputBase, "h-11 flex-1")}
+            placeholder={isExam ? "Add a topic, e.g. Normalization" : "Add a step"}
+            value={newSub}
+            maxLength={80}
+            onChange={(e) => setNewSub(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addSub();
               }
-              className={cx(
-                "grid size-5 shrink-0 place-items-center rounded-md border-2",
-                s.done ? "border-safe bg-safe text-white" : "border-line bg-bg text-transparent",
-              )}
-            >
-              <Check size={12} strokeWidth={3.5} />
-            </button>
-            <span className={cx("min-w-0 flex-1 text-[15px] [overflow-wrap:anywhere]", s.done && "text-muted line-through")}>
-              {s.text}
-            </span>
-            <button
-              type="button"
-              aria-label="Remove"
-              onClick={() => setSubtasks((list) => list.filter((x) => x.id !== s.id))}
-              className="text-muted"
-            >
-              <X size={16} />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-2 flex gap-2">
-        <input
-          className={cx(inputBase, "h-11 flex-1")}
-          placeholder={isExam ? "Add a topic, e.g. Normalization" : "Add a step"}
-          value={newSub}
-          maxLength={80}
-          onChange={(e) => setNewSub(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addSub();
-            }
-          }}
-          aria-label="New checklist item"
-        />
-        <button
-          type="button"
-          onClick={addSub}
-          aria-label="Add item"
-          className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2"
-        >
-          <Plus size={18} />
-        </button>
-      </div>
+            }}
+            aria-label="New checklist item"
+          />
+          <button type="button" onClick={addSub} aria-label="Add item" className="btn-paper grid size-11 shrink-0 place-items-center rounded-xl">
+            <Plus size={18} />
+          </button>
+        </div>
+      </section>
 
       <textarea
-        className="mt-4 min-h-20 w-full rounded-xl border border-line bg-bg px-3.5 py-3 text-[16px] outline-none placeholder:text-muted/70 focus:border-accent"
-        placeholder="Notes (optional)"
+        className="field min-h-24 w-full px-4 py-3 text-[16px]"
+        placeholder="Notes (optional) — links, page numbers, who to ask…"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         aria-label="Notes"
       />
 
       {task && (
-        <>
-          <p className="mt-6 mb-2 flex items-center gap-1.5 text-[13px] font-medium text-muted">
-            <Plus size={15} /> Copy to another day
+        <section className="form-card">
+          <p className="form-label">
+            <Plus size={14} /> Copy to another day
           </p>
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]">
             {[
               { label: "Tomorrow", date: addDays(today, 1) },
               { label: "In 3 days", date: addDays(today, 3) },
               { label: dateChips(today)[3].label, date: dateChips(today)[3].date },
               { label: "In a week", date: addDays(today, 7) },
             ].map((c) => (
-              <button
-                key={c.label}
-                type="button"
-                onClick={() => void copyTo(c.date)}
-                className="btn-paper lip-sm h-9 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[13.5px]"
-              >
+              <button key={c.label} type="button" onClick={() => void copyTo(c.date)} className="chip">
                 {c.label}
               </button>
             ))}
           </div>
-        </>
+        </section>
       )}
 
       {confirmDel ? (
-        <div className="mt-5 rounded-2xl border-[1.5px] border-dashed border-danger/40 bg-danger-soft p-3.5">
+        <div className="rounded-2xl border-[1.5px] border-dashed border-danger/40 bg-danger-soft p-3.5">
           <p className="text-[14px] font-bold text-danger">Delete this task?</p>
           <p className="mt-0.5 text-[12.5px] text-muted">This removes it for good (you get a few seconds to undo).</p>
           <div className="mt-3 flex gap-2.5">
@@ -573,14 +546,14 @@ export function TaskForm({
           </div>
         </div>
       ) : (
-        <div className="mt-5 flex gap-3">
+        <div className="sticky bottom-0 -mx-5 flex gap-3 bg-gradient-to-t from-bg via-bg/95 to-transparent px-5 pt-4 pb-1">
           {task && (
             <Button variant="danger" onClick={() => setConfirmDel(true)}>
               Delete
             </Button>
           )}
-          <Button className="flex-1" onClick={save} disabled={!valid || busy}>
-            {task ? "Save changes" : `Add ${KIND_BY_ID[kind].label.toLowerCase()}`}
+          <Button className="h-12 flex-1 text-[15.5px]" onClick={save} disabled={!valid || busy}>
+            {task ? "Save changes" : (submitLabel ?? `Add ${KIND_BY_ID[kind].label.toLowerCase()}`)}
           </Button>
         </div>
       )}

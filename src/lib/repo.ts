@@ -90,6 +90,7 @@ export async function saveProfile(
     createdAt: existing?.createdAt ?? t,
     ...existing,
     ...patch,
+    ...(patch.target !== undefined ? { targetSetAt: t } : {}),
     updatedAt: t,
   };
   await db.profile.put(next);

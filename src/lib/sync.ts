@@ -158,7 +158,16 @@ async function pullAll(remote: Remote, lastPull: string | null): Promise<string 
         mine.forEach((r, i) => {
           const have = local[i];
           if (!have || Number(have.updatedAt ?? 0) < r.updated_at) {
-            toWrite.push({ ...r.data, id: r.id, updatedAt: r.updated_at, deletedAt: r.deleted_at });
+            const row: Record<string, unknown> = { ...r.data, id: r.id, updatedAt: r.updated_at, deletedAt: r.deleted_at };
+            // The attendance target is whatever was picked last, field by field:
+            // a newer profile from another device (or an old cloud copy racing
+            // the first sign-in) must not quietly put 75% back.
+            if (kind === "profile" && have && Number(have.targetSetAt ?? 0) > Number(row.targetSetAt ?? 0)) {
+              row.target = have.target;
+              row.targetSetAt = have.targetSetAt;
+              row.updatedAt = Math.max(Number(r.updated_at) + 1, Date.now()); // so the merge is pushed back up
+            }
+            toWrite.push(row);
           }
         });
         if (toWrite.length) await table(kind).bulkPut(toWrite);

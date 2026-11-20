@@ -48,10 +48,25 @@ export default function CafeteriaPage() {
   const { state, native } = useCollege();
   const today = toDateStr();
   const weekday = new Date().getDay();
+  // The clock, ticking each minute: this tab stays alive in the background, so
+  // "Serving now" must follow the real time, not the moment it first opened.
+  const [minute, setMinute] = useState(() => Math.floor(Date.now() / 60000));
+  useEffect(() => {
+    const id = window.setInterval(() => setMinute(Math.floor(Date.now() / 60000)), 20000);
+    const wake = () => setMinute(Math.floor(Date.now() / 60000));
+    window.addEventListener(TAB_SHOWN, wake);
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener(TAB_SHOWN, wake);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, []);
   const nowHm = (() => {
-    const d = new Date();
+    const d = new Date(minute * 60000);
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   })();
+  const nowMin = Number(nowHm.slice(0, 2)) * 60 + Number(nowHm.slice(3));
   const active = currentMeal(nowHm);
 
   const caf = state.camu?.connected ? state.camu.cafeteria : undefined;
@@ -171,7 +186,7 @@ export default function CafeteriaPage() {
             <p className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
               Cafeteria
             </p>
-            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">{mealLine(nowHm)}</p>
+            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">{fromCamu ? camuLine(camuMeals, nowMin) : mealLine(nowHm)}</p>
           </div>
         </div>
       </div>
@@ -215,7 +230,7 @@ export default function CafeteriaPage() {
         ) : fromCamu ? (
           <ul className="mt-3.5 space-y-3">
             {camuMeals.map((m, i) => (
-              <CamuMealRow key={i} meal={m} active={active} index={i} />
+              <CamuMealRow key={i} meal={m} index={i} status={camuStatus(camuMeals, i, nowMin)} />
             ))}
           </ul>
         ) : hasManual ? (
@@ -226,7 +241,7 @@ export default function CafeteriaPage() {
                 index={i}
                 title={label}
                 time={from}
-                now={key === active}
+                status={key === active && nowHm >= from ? { now: true } : null}
                 lines={todayManual[key] ? [todayManual[key] as string] : []}
               />
             ))}
@@ -379,7 +394,8 @@ function lookOf(title: string) {
  * One meal card: a tinted header with the meal's own colour and time, then each
  * dish as a chip with its little picture. The meal being served now glows.
  */
-function MealCard({ title, time, now, lines, index = 0 }: { title: string; time: string; now: boolean; lines: string[]; index?: number }) {
+function MealCard({ title, time, status, lines, index = 0 }: { title: string; time: string; status: MealStatus; lines: string[]; index?: number }) {
+  const now = !!status && "now" in status;
   const look = lookOf(title);
   const dishes = lines.flatMap((l) => l.split(/\s*,\s*/)).map(dishName).filter(Boolean);
   return (
@@ -396,9 +412,12 @@ function MealCard({ title, time, now, lines, index = 0 }: { title: string; time:
           {time && <span className="block text-[12px] font-semibold text-muted tnum">{tidyTime(time)}</span>}
         </span>
         {now && (
-          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-gradient-to-r from-orange to-[#d24f1e] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-[#d9772b] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
             <span className="anim-pulse size-1.5 rounded-full bg-white" /> Serving now
           </span>
+        )}
+        {status && "soon" in status && (
+          <span className="ml-auto rounded-full border border-card-edge bg-surface px-2.5 py-1 text-[11px] font-bold text-muted">{status.soon}</span>
         )}
       </div>
       {dishes.length > 0 ? (
@@ -420,10 +439,46 @@ function MealCard({ title, time, now, lines, index = 0 }: { title: string; time:
 }
 
 /** One meal straight from Camu: splits its label into the meal and the timing. */
-function CamuMealRow({ meal, active, index }: { meal: CamuMeal; active: Meal; index: number }) {
-  const now = meal.meal.toLowerCase().startsWith(active.slice(0, 4));
+function CamuMealRow({ meal, index, status }: { meal: CamuMeal; index: number; status: MealStatus }) {
   const time = (meal.label || "").replace(meal.meal, "").trim();
-  return <MealCard title={meal.meal || meal.label} time={time} now={now} lines={foodLines(meal.items)} index={index} />;
+  return <MealCard title={meal.meal || meal.label} time={time} status={status} lines={foodLines(meal.items)} index={index} />;
+}
+
+type MealStatus = { now: true } | { soon: string } | null;
+
+/** "12:00 PM - 03:00 PM" → [720, 900] in minutes since midnight. */
+function mealWindow(label: string): [number, number] | null {
+  const m = label.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?\s*[-–]\s*(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return null;
+  const toMin = (h: string, mm: string, ap: string | undefined, fallback?: string) => {
+    let hr = Number(h) % 12;
+    const a = (ap || fallback || "").toUpperCase();
+    if (a === "PM") hr += 12;
+    if (!a && Number(h) === 12) hr = 12;
+    return hr * 60 + Number(mm);
+  };
+  const end = toMin(m[4], m[5], m[6]);
+  const start = toMin(m[1], m[2], m[3], m[6]);
+  return [start, end > start ? end : end + 12 * 60];
+}
+
+/** Serving right now only inside its own timing; "in 25 min" when it is next and close. */
+function camuStatus(meals: CamuMeal[], i: number, nowMin: number): MealStatus {
+  const w = mealWindow(meals[i].label || "");
+  if (!w) return null;
+  if (nowMin >= w[0] && nowMin < w[1]) return { now: true };
+  if (meals.some((x) => {
+    const v = mealWindow(x.label || "");
+    return v && nowMin >= v[0] && nowMin < v[1];
+  })) return null;
+  const next = meals
+    .map((x, j) => ({ j, w: mealWindow(x.label || "") }))
+    .filter((x) => x.w && x.w[0] > nowMin)
+    .sort((a, b) => a.w![0] - b.w![0])[0];
+  if (next?.j !== i) return null;
+  const mins = w[0] - nowMin;
+  if (mins > 120) return null;
+  return { soon: mins < 60 ? `In ${mins} min` : `In ${Math.floor(mins / 60)}h ${mins % 60 ? `${mins % 60}m` : ""}`.trim() };
 }
 
 /** Paste (or edit) the pass the QR reads out — the manual fallback. */
@@ -554,6 +609,20 @@ function fillWeekFrom(menu: Record<number, MessDay>, day: number): Record<number
   const out: Record<number, MessDay> = {};
   for (let i = 0; i < 7; i++) out[i] = { ...src };
   return out;
+}
+
+/** The hero's line from Camu's real timings. */
+function camuLine(meals: CamuMeal[], nowMin: number): string {
+  const timed = meals.map((m) => ({ m, w: mealWindow(m.label || "") })).filter((x) => x.w) as { m: CamuMeal; w: [number, number] }[];
+  const on = timed.find((x) => nowMin >= x.w[0] && nowMin < x.w[1]);
+  if (on) return `${on.m.meal || "Food"} is being served`;
+  const next = timed.filter((x) => x.w[0] > nowMin).sort((a, b) => a.w[0] - b.w[0])[0];
+  if (next) {
+    const h = Math.floor(next.w[0] / 60);
+    const mm = String(next.w[0] % 60).padStart(2, "0");
+    return `${next.m.meal || "Next meal"} at ${h % 12 || 12}:${mm} ${h < 12 ? "AM" : "PM"}`;
+  }
+  return "Mess is shut for the night";
 }
 
 /** The hero's one line: what the mess is doing right now. */

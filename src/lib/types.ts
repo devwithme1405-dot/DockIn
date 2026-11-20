@@ -14,6 +14,8 @@ export interface Profile {
   name: string;
   /** Required attendance, in percent (most colleges ask for 75). */
   target: number;
+  /** When the target was last chosen by hand, so a sync can never undo it. */
+  targetSetAt?: number;
   theme: ThemePref;
   onboarded: boolean;
   /** Monthly spending budget in rupees (0 or missing = not set). */

@@ -24,9 +24,7 @@ export default function OnboardingPage() {
     session?.user.user_metadata?.full_name ??
       session?.user.user_metadata?.name ??
       "",
-  )
-    .trim()
-    .split(" ")[0];
+  ).trim();
   const [nameRaw, setName] = useState<string | null>(null);
   const name = nameRaw ?? metaName;
   const [target, setTarget] = useState(75);

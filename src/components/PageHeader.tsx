@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, type LucideIcon } from "lucide-react";
 import { cx } from "./ui";
 
 /** True once the page has been scrolled a little, so the bar can show its divider. */
@@ -81,6 +81,56 @@ export function PageHeader({
         {right && <div className="flex shrink-0 items-center gap-1">{right}</div>}
       </div>
     </StickyBar>
+  );
+}
+
+/**
+ * A tab's title as a stitched leather plate (like Cafeteria), with a small bar
+ * above it that takes the title once the plate has scrolled away.
+ */
+export function HeroHeader({
+  title,
+  subtitle,
+  icon: Icon,
+  right,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  icon: LucideIcon;
+  right?: ReactNode;
+}) {
+  return (
+    <>
+      <StickyBar className="px-5 pb-1.5">
+        {(scrolled) => (
+          <div className="relative flex h-11 items-center justify-end gap-1">
+            <p
+              aria-hidden={!scrolled}
+              className={cx(
+                "pointer-events-none absolute inset-x-12 truncate text-center text-[16px] font-semibold transition-opacity duration-150",
+                scrolled ? "opacity-100" : "opacity-0",
+              )}
+            >
+              {title}
+            </p>
+            {right}
+          </div>
+        )}
+      </StickyBar>
+      <div className="leather stitched mx-5 mt-1 mb-3 rounded-[26px] p-5">
+        <div className="relative z-[1] flex items-center gap-4">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-black/15 text-on-ink shadow-[inset_0_2px_4px_rgb(40_15_0/45%),0_1px_0_rgb(255_220_180/25%)]">
+            <Icon size={28} strokeWidth={2.1} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
+              {title}
+            </h1>
+            {subtitle != null && <p className="mt-1.5 truncate text-[13.5px] font-semibold text-ink-muted">{subtitle}</p>}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

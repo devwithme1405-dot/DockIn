@@ -9,7 +9,8 @@
  * a deep purple — for the figures that matter. Green, amber and red still say
  * present / careful / absent, always next to words, never colour alone.
  */
-:root {
+:root,
+[data-theme="light"] {
   --bg: #f2e4cb;
   --rule: rgb(150 108 64 / 15%);
   --card: #fcf5e7;
@@ -805,40 +806,62 @@ html[data-navved] .stagger > * {
    transform / opacity (or one small registered angle), so it stays on the GPU.
    --------------------------------------------------------------------------- */
 
-/* Chat bubbles. Sent: warm leather-orange. Received: cream card. The variables
-   are re-pointed inside a sent bubble so cards, quotes and times stay legible. */
+/* Chat screens are painted by the chosen chat theme (lib/chatLook.ts), which
+   sets the --chat-*, --out-* and --in-* variables on the chat's root. */
+.chat-root {
+  background-color: var(--chat-bg);
+  background-image: var(--chat-wall);
+  background-size: var(--chat-wall-size);
+}
+.chat-head {
+  background: var(--chat-head);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.06), 0 6px 16px -14px rgb(0 0 0 / 0.5);
+}
+.chat-chip {
+  background: var(--chat-chip);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.chat-input { background: var(--chat-input); }
+.chat-accent { color: var(--chat-accent); }
+.chat-accent-bg { background: var(--chat-accent); color: #fff; }
+.bubble-out,
+.bubble-in {
+  font-size: var(--chat-fs, 15.5px);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.08);
+}
 .bubble-out {
-  background: linear-gradient(135deg, #ee8a3c 0%, #d0631f 55%, #b24f17 100%);
-  color: #fff8ef;
-  border: 1px solid rgb(255 214 170 / 0.35);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.32),
-    0 8px 18px -10px rgb(170 70 15 / 0.65);
-  --text: #fff8ef;
-  --muted: rgb(255 236 214 / 0.82);
-  --mess: #fff1dc;
-  --orange: #ffe1a6;
-  --safe: #c9f5d2;
-  --card-edge: rgb(255 240 222 / 0.38);
-  --bg: rgb(255 255 255 / 0.2);
-  --card: rgb(255 255 255 / 0.16);
-  --surface-2: rgb(255 255 255 / 0.18);
-  --mess-soft: rgb(255 255 255 / 0.18);
+  background: var(--out-bg);
+  color: var(--out-text);
+  --text: var(--out-text);
+  --muted: var(--out-meta);
+  --mess: var(--out-text);
+  --orange: var(--out-tick);
+  --bg: var(--out-card);
+  --card: var(--out-card);
+  --surface-2: var(--out-card);
+  --mess-soft: var(--out-card);
+  --card-edge: color-mix(in srgb, var(--out-meta) 35%, transparent);
 }
 .bubble-in {
-  background: linear-gradient(180deg, #fffdf9 0%, #fbf0de 100%);
-  border: 1px solid var(--card-edge);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.9),
-    0 6px 16px -12px rgb(var(--shadow-ink) / 0.55);
+  background: var(--in-bg);
+  color: var(--in-text);
+  --text: var(--in-text);
+  --muted: var(--in-meta);
+  --mess: var(--chat-accent);
+  --orange: var(--chat-accent);
+  --bg: var(--in-card);
+  --card: var(--in-card);
+  --surface-2: var(--in-card);
+  --mess-soft: var(--in-card);
+  --card-edge: color-mix(in srgb, var(--in-meta) 30%, transparent);
 }
-[data-theme="dark"] .bubble-in {
-  background: linear-gradient(180deg, #3a2b1f 0%, #30231a 100%);
-  box-shadow: 0 6px 16px -12px rgb(0 0 0 / 0.7);
+/* A message you jumped to (from a reply or Starred) glows for a moment. */
+@keyframes flash-hit {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  30% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--chat-accent) 45%, transparent); }
 }
-[data-theme="dark"] .bubble-out {
-  background: linear-gradient(135deg, #d9772f 0%, #b9561b 55%, #9a4414 100%);
-}
+.flash-hit { animation: flash-hit 1.4s ease-out; }
 @keyframes bubble-in {
   from { opacity: 0; transform: translateY(8px) scale(0.96); }
   to { opacity: 1; transform: none; }
@@ -855,32 +878,33 @@ html[data-navved] .stagger > * {
 
 /* Tinted tiles: set --tint and --tint-2 on the element. */
 .tile-tint {
-  background: linear-gradient(160deg,
-    color-mix(in srgb, var(--tint) 17%, var(--surface)),
-    color-mix(in srgb, var(--tint) 6%, var(--surface)));
-  border: 1px solid color-mix(in srgb, var(--tint) 30%, transparent);
-  box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--tint) 85%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.55);
+  background: color-mix(in srgb, var(--tint) 7%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--tint) 18%, var(--card-edge));
+  box-shadow: 0 6px 14px -12px rgb(var(--shadow-ink) / 0.45), inset 0 1px 0 rgb(255 255 255 / 0.6);
 }
 [data-theme="dark"] .tile-tint { box-shadow: 0 8px 18px -14px rgb(0 0 0 / 0.7); }
 .tile-icon {
-  background: linear-gradient(140deg, var(--tint), var(--tint-2));
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 14px -6px color-mix(in srgb, var(--tint) 80%, transparent);
+  background: color-mix(in srgb, var(--tint) 16%, var(--surface));
+  color: color-mix(in srgb, var(--tint) 80%, #2a1608);
 }
 
-/* The sunset card (Friends hero, My QR pass). */
+/* The soft card (Friends hero, My QR pass): warm paper, a hint of peach. */
 .sunset {
   background:
-    radial-gradient(120% 90% at 100% 0%, rgb(255 196 120 / 0.55), transparent 55%),
-    radial-gradient(90% 80% at 0% 100%, rgb(120 40 10 / 0.6), transparent 60%),
-    linear-gradient(140deg, #e9792c 0%, #c4501f 45%, #7c3d1b 100%);
-  color: #fff6ea;
-  box-shadow: 0 18px 36px -18px rgb(140 55 15 / 0.8), inset 0 1px 0 rgb(255 255 255 / 0.25);
+    radial-gradient(120% 90% at 100% 0%, rgb(255 214 168 / 0.45), transparent 60%),
+    linear-gradient(160deg, #fffaf2 0%, #fbeedb 100%);
+  color: var(--text);
+  border: 1px solid var(--card-edge);
+  box-shadow: 0 12px 26px -18px rgb(var(--shadow-ink) / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.8);
+}
+[data-theme="dark"] .sunset {
+  background: linear-gradient(160deg, #33251a 0%, #2a1e15 100%);
+  box-shadow: 0 12px 26px -18px rgb(0 0 0 / 0.7);
 }
 .blob {
   position: absolute;
   border-radius: 9999px;
-  background: rgb(255 230 190 / 0.22);
+  background: rgb(242 160 80 / 0.1);
   pointer-events: none;
 }
 
@@ -913,7 +937,7 @@ html[data-navved] .stagger > * {
 }
 @keyframes spin-angle { to { --spin: 360deg; } }
 .ring-spin {
-  background: conic-gradient(from var(--spin), #f2871f, #ffd59a, #e0662b, #fff1dc, #f2871f);
+  background: conic-gradient(from var(--spin), #e8c49a, #fff6ea, #d9a066, #fff6ea, #e8c49a);
   animation: spin-angle 4.5s linear infinite;
 }
 @keyframes sweep-down {
@@ -1065,3 +1089,64 @@ html.lite .ring-draw { animation-duration: 0.4s; }
   .fill-grow,
   .ring-draw { animation: none !important; }
 }
+
+/* Writing surfaces: every input sits on clean white (warm dark in dark mode),
+   so it's obvious where to type. */
+.field {
+  background: #fffefb;
+  border: 1.5px solid color-mix(in srgb, var(--card-edge) 85%, transparent);
+  border-radius: 14px;
+  color: var(--text);
+  outline: none;
+  box-shadow: inset 0 1px 2px rgb(var(--shadow-ink) / 0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
+.field:focus,
+.field:focus-within {
+  border-color: #d9772b;
+  box-shadow: 0 0 0 3px rgb(217 119 43 / 0.15);
+}
+[data-theme="dark"] .field { background: #241a13; }
+/* A form section: a soft card with a small label. */
+.form-card {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--card-edge) 70%, transparent);
+  border-radius: 20px;
+  padding: 14px;
+}
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.chip {
+  height: 36px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  border-radius: 9999px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  background: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--card-edge) 80%, transparent);
+  color: var(--text);
+  transition: transform 0.12s, background-color 0.15s, color 0.15s;
+}
+.chip:active { transform: scale(0.95); }
+.chip[aria-pressed="true"],
+.chip[aria-checked="true"],
+.chip.on {
+  background: #3b2416;
+  border-color: #3b2416;
+  color: #fff6ea;
+}
+[data-theme="dark"] .chip[aria-pressed="true"],
+[data-theme="dark"] .chip[aria-checked="true"],
+[data-theme="dark"] .chip.on { background: #f0d2ab; border-color: #f0d2ab; color: #2a1608; }

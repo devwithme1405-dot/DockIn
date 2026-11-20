@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { listenChat, pullChat } from "@/lib/chat";
 import { startPush } from "@/lib/push";
-import { pullSocial } from "@/lib/social";
+import { ensureProfile, publishProfile, pullSocial } from "@/lib/social";
+import { getProfile } from "@/lib/repo";
 import { getSupabase } from "@/lib/supabase";
 import { TAB_SHOWN, goTab, tabOf } from "@/lib/tabs";
 
@@ -20,6 +21,13 @@ export function SocialSync() {
   useEffect(() => {
     if (!uid) return;
     void pullChat();
+    // Your name and photo reach friends right after sign-in, not only once
+    // you open Friends — so a request you send never arrives as "A student".
+    void (async () => {
+      const mine = await ensureProfile();
+      const local = await getProfile();
+      if (local) await publishProfile(local, mine.shareAttendance);
+    })().catch(() => {});
     const stop = listenChat();
     void startPush((path) => {
       const url = new URL(path, window.location.href);

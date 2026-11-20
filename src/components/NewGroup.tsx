@@ -99,7 +99,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
       </header>
       {/* progress */}
       <div className="h-1 bg-surface-2">
-        <div className="h-full origin-left bg-gradient-to-r from-orange to-[#d24f1e] transition-transform duration-300" style={{ transform: `scaleX(${step / 2})` }} />
+        <div className="h-full origin-left bg-[#d9772b] transition-transform duration-300" style={{ transform: `scaleX(${step / 2})` }} />
       </div>
 
       {step === 1 ? (
@@ -116,7 +116,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
               ) : (
                 emoji
               )}
-              <span className="absolute right-0 bottom-0 grid size-8 place-items-center rounded-full bg-gradient-to-br from-orange to-[#d24f1e] text-white ring-2 ring-surface">
+              <span className="absolute right-0 bottom-0 grid size-8 place-items-center rounded-full bg-[#d9772b] text-white ring-2 ring-surface">
                 <Camera size={15} />
               </span>
             </button>
@@ -165,7 +165,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
                 aria-pressed={!photo && emoji === e}
                 className={cx(
                   "grid size-12 shrink-0 place-items-center rounded-2xl text-[22px] transition-transform active:scale-90",
-                  !photo && emoji === e ? "bg-gradient-to-br from-orange to-[#d24f1e] shadow-md" : "bg-surface-2",
+                  !photo && emoji === e ? "bg-[#d9772b] shadow-md" : "bg-surface-2",
                 )}
               >
                 {e}
@@ -243,7 +243,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
                     <span
                       className={cx(
                         "grid size-6 shrink-0 place-items-center rounded-full border-2 transition-colors",
-                        on ? "border-transparent bg-gradient-to-br from-orange to-[#d24f1e] text-white" : "border-card-edge",
+                        on ? "border-transparent bg-[#d9772b] text-white" : "border-card-edge",
                       )}
                     >
                       {on && <Check size={14} strokeWidth={3} />}

@@ -311,8 +311,7 @@ export function Field({
   );
 }
 
-export const inputCls =
-  "h-12 w-full rounded-xl border border-line bg-bg px-3.5 text-text outline-none placeholder:text-muted/70 focus:border-accent";
+export const inputCls = "field h-12 w-full px-3.5 text-[16px]";
 
 /** Profile picture: a gradient tile with the first letter or a chosen emoji. */
 export function Avatar({
