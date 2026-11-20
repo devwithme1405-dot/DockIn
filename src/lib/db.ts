@@ -25,6 +25,17 @@ import type {
  * synced with Supabase; the app code only talks to `repo.ts`, not to the
  * database directly, so that swap stays small.
  */
+export interface PracticeAttempt {
+  id?: number;
+  instance: number;
+  name: string;
+  size: number;
+  at: number;
+  /** submitted / draft: the LMS kept it. failed / refused: nothing was handed in. */
+  status: "submitted" | "draft" | "failed" | "refused";
+  blob?: Blob;
+}
+
 export class DockinDB extends Dexie {
   profile!: Table<Profile, string>;
   subjects!: Table<Subject, string>;
@@ -59,6 +70,8 @@ export class DockinDB extends Dexie {
   fileCache!: Table<{ path: string; blob: Blob; at: number }, string>;
   /** What was handed in to the practice LMS (lib/practiceLms.ts), newest per assignment. */
   practiceSubs!: Table<{ instance: number; name: string; blob: Blob; size: number; at: number; status: "submitted" | "draft" }, number>;
+  /** Every try at the practice LMS, kept or not, newest last. */
+  practiceAttempts!: Table<PracticeAttempt, number>;
   /** Shared tasks already taken into my list (one per origin), so a task sent
    *  twice, or to a group and to me directly, lands once. */
   taskOrigins!: Table<{ key: string; taskId: string; at: number }, string>;
@@ -135,6 +148,9 @@ export class DockinDB extends Dexie {
     });
     this.version(18).stores({
       practiceSubs: "instance",
+    });
+    this.version(19).stores({
+      practiceAttempts: "++id, instance",
     });
   }
 }

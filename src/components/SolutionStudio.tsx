@@ -34,7 +34,7 @@ import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { DraftOnly, WebOnlyLms, submitToLms } from "@/lib/lmsSubmit";
 import { useBackClose } from "@/lib/backClose";
-import { isPractice } from "@/lib/practiceLms";
+import { ensurePracticeFromSolution, isPractice, usePracticeOn } from "@/lib/practiceLms";
 import {
   SOLUTION_MAX,
   SolutionError,
@@ -114,6 +114,11 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
   const saved = useFileCached(f.path);
   const done = !!task?.done;
   const ext = (f.name.split(".").pop() ?? "").toUpperCase();
+  const practiceIsOn = usePracticeOn();
+  // A practice assignment I don't have yet: with Practice LMS on, it joins my Tasks.
+  useEffect(() => {
+    if (!mine && !task && practiceIsOn && isPractice(sol.instance)) void ensurePracticeFromSolution(sol);
+  }, [mine, task, practiceIsOn, sol]);
 
   async function download() {
     setBusy(true);
@@ -903,9 +908,15 @@ export function CopyStudio({
                   </button>
                 )}
                 {fail?.at === "submit" ? (
-                  <a href={task?.url || LMS_HOME} target="_blank" rel="noreferrer" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
-                    Open LMS <ExternalLink size={14} />
-                  </a>
+                  practice ? (
+                    <a href="/practice-lms" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
+                      Open Practice LMS
+                    </a>
+                  ) : (
+                    <a href={task?.url || LMS_HOME} target="_blank" rel="noreferrer" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
+                      Open LMS <ExternalLink size={14} />
+                    </a>
+                  )
                 ) : (
                   <button onClick={onClose} className="btn-paper flex h-11 flex-1 items-center justify-center rounded-2xl text-[13.5px] font-bold">
                     Close
@@ -1233,7 +1244,11 @@ function Done({ title, checked, practice }: { title: string; checked: boolean; p
       <p className="mt-4 rounded-full bg-safe/12 px-3 py-1 text-[12px] font-bold text-safe [animation:rise-quick_400ms_420ms_ease-out_both]">
         {practice ? "Practice — nothing went to the real LMS" : checked ? "The LMS confirmed it's handed in" : "Uploaded and handed in"}
       </p>
-      {practice && <p className="mt-2 max-w-[18rem] text-[12px] text-muted">Open the handed-in file in Settings → Practice LMS to check the name.</p>}
+      {practice && (
+        <a href="/practice-lms" className="mt-4 rounded-full border border-card-edge px-4 py-2 text-[13px] font-bold text-mess [animation:rise-quick_400ms_500ms_ease-out_both]">
+          See it on the Practice LMS →
+        </a>
+      )}
     </div>
   );
 }

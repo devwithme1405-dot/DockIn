@@ -529,13 +529,24 @@ await step("sending a PDF asks: just a file, or a solution for which assignment"
   await page.waitForTimeout(400);
 });
 
-await step("Practice LMS: switch on, submit a friend's solution, see the file", async () => {
+await step("Practice LMS: switch on, add an assignment, submit a friend's solution, see it there", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /Practice LMS/ }).click();
-  const sheet = page.getByRole("dialog", { name: "Practice LMS" });
-  await sheet.getByRole("button", { name: /Practice LMS\s*Off/ }).click();
-  await sheet.getByText("DBMS Assignment 4 (practice)").waitFor({ timeout: 4000 });
-  await page.screenshot({ path: `${SHOTS}/practice-on.png` });
+  await page.waitForURL("**/practice-lms", { timeout: 5000 });
+  await page.getByRole("button", { name: /Turn on Practice LMS/ }).click();
+  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).first().waitFor({ timeout: 4000 });
+  // My own assignment, which must show up in Tasks.
+  await page.getByRole("button", { name: /Add assignment/ }).click();
+  const add = page.getByRole("dialog", { name: "Add an assignment" });
+  await add.getByPlaceholder("e.g. CN Assignment 2").fill("CN Assignment 2");
+  await add.getByPlaceholder("e.g. Computer Networks").fill("Computer Networks");
+  await add.getByRole("button", { name: "Add assignment" }).click();
+  await page.locator("button:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 4000 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/practice-lms.png` });
+  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
+  await page.locator("li:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 5000 });
+
   await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
@@ -550,13 +561,17 @@ await step("Practice LMS: switch on, submit a friend's solution, see the file", 
   await check.getByRole("button", { name: /Submit to Practice LMS/ }).click();
   const done = page.getByRole("dialog", { name: "Submitted" });
   await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });
-  await page.screenshot({ path: `${SHOTS}/practice-done.png` });
   await done.getByRole("button", { name: "Done" }).click();
   await card.getByText("You've submitted this").waitFor({ timeout: 4000 });
-  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /Practice LMS/ }).click();
-  await page.getByRole("dialog", { name: "Practice LMS" }).getByText("Solution_Practice.pdf").waitFor({ timeout: 4000 });
-  await page.screenshot({ path: `${SHOTS}/practice-kept.png` });
+
+  await page.goto(`${BASE}/practice-lms`, { waitUntil: "networkidle" });
+  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Submitted" }).first().click();
+  const view = page.getByRole("dialog", { name: "DBMS Assignment 4 (practice)" });
+  await view.getByText("Submitted for grading").waitFor({ timeout: 4000 });
+  await view.getByText("Solution_Practice.pdf").first().waitFor({ timeout: 2000 });
+  await view.getByText(/early|late/).waitFor({ timeout: 2000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${SHOTS}/practice-assignment.png` });
 });
 
 await browser.close();

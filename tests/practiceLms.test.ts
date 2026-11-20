@@ -23,6 +23,7 @@ describe("practice LMS", () => {
   beforeEach(async () => {
     await db.tasks.clear();
     await db.practiceSubs.clear();
+    await db.practiceAttempts.clear();
     store.clear();
   });
 
@@ -58,6 +59,42 @@ describe("practice LMS", () => {
     expect(P.nextAnswer()).toBe("ok");
     await expect(submitToLms(900102, pdf, "a.pdf")).resolves.toEqual({ checked: true });
   }, 15_000);
+
+  it("logs every try, kept or not, against the right assignment", async () => {
+    await P.startPractice();
+    P.setNextAnswer("fail");
+    await submitToLms(900103, pdf, "try1.pdf").catch(() => {});
+    await submitToLms(900103, pdf, "try2.pdf");
+    const tries = await db.practiceAttempts.where("instance").equals(900103).toArray();
+    expect(tries.map((t) => [t.name, t.status])).toEqual([
+      ["try1.pdf", "failed"],
+      ["try2.pdf", "submitted"],
+    ]);
+    expect(tries[0].blob).toBeUndefined();
+    expect(await db.practiceAttempts.where("instance").equals(900101).count()).toBe(0);
+  }, 15_000);
+
+  it("adds my own assignment to Tasks, and removes it", async () => {
+    const n = await P.addPracticeAssignment({ title: "CN Assignment 2", course: "Computer Networks", dueDate: "2026-11-28", dueTime: "17:00" });
+    expect(P.isPractice(n)).toBe(true);
+    expect(P.practiceOn()).toBe(true);
+    const t = await db.tasks.get(`lms-assign-${n}`);
+    expect(t).toMatchObject({ title: "CN Assignment 2", notes: "Computer Networks", dueDate: "2026-11-28", dueTime: "17:00", source: "lms", done: false });
+    await P.removePracticeAssignment(n);
+    expect((await db.tasks.get(`lms-assign-${n}`))?.deletedAt).toBeTruthy();
+  });
+
+  it("a friend's solution for a practice assignment adds it here — only with practice on", async () => {
+    const sol = { instance: 934567, title: "CN Assignment 2", course: "Computer Networks", dueDate: "2026-11-28", dueTime: "17:00" };
+    expect(await P.ensurePracticeFromSolution(sol)).toBe(false);
+    expect(await db.tasks.get("lms-assign-934567")).toBeUndefined();
+    await P.startPractice();
+    expect(await P.ensurePracticeFromSolution(sol)).toBe(true);
+    expect(await db.tasks.get("lms-assign-934567")).toMatchObject({ title: "CN Assignment 2", done: false });
+    expect(await P.ensurePracticeFromSolution(sol)).toBe(false);
+    // A real assignment id is never touched.
+    expect(await P.ensurePracticeFromSolution({ ...sol, instance: 41 })).toBe(false);
+  });
 
   it("a real LMS sync never ticks the practice assignments off", async () => {
     await P.startPractice();

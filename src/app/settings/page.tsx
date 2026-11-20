@@ -61,7 +61,6 @@ import { ConnectCamu, ConnectLms } from "@/components/College";
 import { disconnect, useAttendanceData, useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { usePracticeOn } from "@/lib/practiceLms";
-import { PracticeLmsPanel } from "@/components/PracticeLms";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { accountName, deleteAccount, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
@@ -84,7 +83,6 @@ type SheetName =
   | "college"
   | "backup"
   | "about"
-  | "practice"
   | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
 
@@ -391,8 +389,8 @@ export default function ProfilePage() {
           <MenuRow
             icon={FlaskConical}
             title="Practice LMS"
-            sub={practiceOn ? "On — test solutions safely" : "Test assignment solutions without the real LMS"}
-            onClick={() => setSheet("practice")}
+            sub={practiceOn ? "On — open to add assignments and see submissions" : "Test assignment solutions without the real LMS"}
+            onClick={() => router.push("/practice-lms")}
           />
           {configured && (
             <MenuRow
@@ -478,10 +476,6 @@ export default function ProfilePage() {
 
       <Sheet open={sheet === "phone"} onClose={closePhone} title="Phone permissions">
         <PhoneSetup bare />
-      </Sheet>
-
-      <Sheet open={sheet === "practice"} onClose={close} title="Practice LMS">
-        <PracticeLmsPanel />
       </Sheet>
 
       <Sheet open={sheet === "college"} onClose={close} title="College accounts">
