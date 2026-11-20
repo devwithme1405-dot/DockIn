@@ -8,15 +8,13 @@ import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { markSetupSeen } from "@/lib/setup";
 import { ConnectCamu, ConnectLms } from "@/components/College";
-import { PhoneSetup, usePhoneStatus } from "@/components/PhoneSetup";
 import { SignIn } from "@/components/SignIn";
 import { cx } from "@/components/ui";
 
 /**
  * Everything DockIn needs from the phone, on one screen, once.
  *
- * Four things, each one tap: back up, Camu, the LMS, and the two switches for
- * * reminders. Each line ticks itself the moment it is done — including the ones
+ * Three things, each one tap: back up, Camu and the LMS. Each line ticks itself the moment it is done — including the ones
  * finished in Android's own Settings — and anything skipped can be done later
  * from Profile.
  */
@@ -24,7 +22,6 @@ export default function SetupPage() {
   const router = useRouter();
   const { session, configured } = useAuth();
   const { state } = useCollege();
-  const { status } = usePhoneStatus();
   const [signing, setSigning] = useState(false);
   const [native] = useState(
     () => typeof window !== "undefined" && isNativeApp(),
@@ -34,11 +31,12 @@ export default function SetupPage() {
     if (!native) router.replace("/");
   }, [native, router]);
 
+  // Notifications are not a step: Android's own dialog asks for them once,
+  // by itself (NotifyAsk), so this screen is only about your accounts.
   const steps = [
     !configured || !!session,
     !!state.camu?.connected && !state.camu.expired,
     !!state.lms?.connected,
-    status?.notifications === "granted",
   ];
   const done = steps.filter(Boolean).length;
   const all = done === steps.length;
@@ -132,9 +130,6 @@ export default function SetupPage() {
           <ConnectLms compact />
         </section>
 
-        <div className="mt-3">
-          <PhoneSetup />
-        </div>
 
         <div className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md bg-gradient-to-t from-bg via-bg to-bg/0 px-5 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button

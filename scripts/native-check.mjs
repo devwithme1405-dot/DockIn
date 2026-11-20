@@ -253,9 +253,12 @@ await step("setup comes up once, straight after opening the app", async () => {
   await page.waitForURL(/\/setup$/, { timeout: 8000 });
   await waitFor("Set up DockIn once");
   const t = await text();
-  for (const want of ["Connect Camu", "Connect the LMS", "Let DockIn notify you"]) {
+  for (const want of ["Connect Camu", "Connect the LMS"]) {
     if (!t.includes(want)) throw new Error(`setup is missing "${want}"`);
   }
+  if (t.includes("Let DockIn notify you")) throw new Error("setup still has a notifications step");
+  // Android's own "Allow notifications?" dialog is asked for by itself, once.
+  await page.waitForFunction(() => window.__phone.get().notifications === "granted", null, { timeout: 6000 });
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}/native-setup-screen.png`, fullPage: true });
   await page.getByRole("button", { name: "Skip the rest for now" }).click();
@@ -265,7 +268,7 @@ await step("setup comes up once, straight after opening the app", async () => {
   if (page.url().endsWith("/setup")) throw new Error("setup was forced a second time");
 });
 
-await step("the phone setup asks only for reminder notifications", async () => {
+await step("Profile shows the phone's notification status (asked automatically)", async () => {
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
   await waitFor("Phone permissions");
   if (!(await text()).includes("College accounts")) throw new Error("Profile has no College accounts row");
@@ -278,7 +281,6 @@ await step("the phone setup asks only for reminder notifications", async () => {
   if (/Catch the moment|payment screens|payment notifications|Reading your payments/i.test(t))
     throw new Error("the phone setup still shows the old payment steps");
   if (!/App 2\.0\.1 · Android 14/.test(t)) throw new Error("does not show the app and Android version");
-  await page.locator("li", { hasText: "Let DockIn notify you" }).getByRole("button", { name: "Allow" }).click();
   await waitFor("Reminders are set up");
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/native-setup.png`, fullPage: true });

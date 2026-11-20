@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { listenChat, pullChat } from "@/lib/chat";
-import { startPush } from "@/lib/push";
+import { startPush, syncPushToken } from "@/lib/push";
 import { ensureProfile, publishProfile, pullSocial } from "@/lib/social";
 import { getProfile } from "@/lib/repo";
 import { getSupabase } from "@/lib/supabase";
@@ -29,11 +29,13 @@ export function SocialSync() {
       if (local) await publishProfile(local, mine.shareAttendance);
     })().catch(() => {});
     const stop = listenChat();
-    void startPush((path) => {
+    const openPath = (path: string) => {
       const url = new URL(path, window.location.href);
       if (tabOf(url.pathname)) goTab(url.pathname + url.search);
       else window.location.assign(path);
-    });
+    };
+    void startPush(openPath);
+    void syncPushToken().catch(() => {});
     // Friends, groups and shared work: pull when something changes on the
     // server (realtime), when the app comes back, and when Friends is opened —
     // coalesced, so a burst of changes is one pull, never a storm.
@@ -60,11 +62,16 @@ export function SocialSync() {
     window.addEventListener(TAB_SHOWN, onTab);
     const onShow = () => {
       if (document.visibilityState !== "visible") return;
+      // A permission switched on in Settings meanwhile gets this phone registered now.
+      void startPush(openPath);
       void pullChat();
       if (Date.now() - last > 15_000) soon(300);
     };
     document.addEventListener("visibilitychange", onShow);
+    const onGranted = () => void startPush(openPath);
+    window.addEventListener("dockin:notifications", onGranted);
     return () => {
+      window.removeEventListener("dockin:notifications", onGranted);
       stop();
       window.clearTimeout(timer);
       window.removeEventListener(TAB_SHOWN, onTab);

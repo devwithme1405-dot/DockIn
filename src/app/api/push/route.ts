@@ -17,6 +17,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 type Event =
+  | { type: "test" }
   | { type: "message"; id: string }
   | { type: "share"; id: string }
   | { type: "friend"; to?: string; code?: string };
@@ -88,7 +89,7 @@ async function groupMembers(sb: SupabaseClient, groupId: string): Promise<string
 }
 
 /** Who to tell and what to say, or null when the caller may not do this. */
-async function plan(sb: SupabaseClient, me: string, e: Event): Promise<{ to: string[]; note: Note } | null> {
+async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "test" }>): Promise<{ to: string[]; note: Note } | null> {
   const who = await nameOf(sb, me);
 
   if (e.type === "message") {
@@ -177,11 +178,15 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ ok: false }, { status: 400 });
   }
   const valid =
-    (event?.type === "message" || event?.type === "share") ? typeof event.id === "string" : event?.type === "friend" && (typeof event.to === "string" || typeof event.code === "string");
+    event?.type === "test" ||
+    ((event?.type === "message" || event?.type === "share") ? typeof event.id === "string" : event?.type === "friend" && (typeof event.to === "string" || typeof event.code === "string"));
   if (!valid) return Response.json({ ok: false }, { status: 400 });
 
   const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
-  const p = await plan(sb, me, event);
+  const p =
+    event.type === "test"
+      ? { to: [me], note: { title: "DockIn notifications work ✓", body: "Messages, shared tasks and requests will show up like this.", path: "/settings", tag: "test" } }
+      : await plan(sb, me, event);
   if (!p || p.to.length === 0) return Response.json({ ok: true, sent: 0 });
   // People who muted this chat are not told about its messages.
   if (event.type === "message" && p.note.tag) {
@@ -193,10 +198,16 @@ export async function POST(req: Request): Promise<Response> {
 
   const { data: rows } = await sb.from("push_tokens").select("token").in("user_id", p.to.slice(0, 200));
   const tokens = (rows ?? []).map((r) => r.token as string);
-  if (!tokens.length) return Response.json({ ok: true, sent: 0 });
+  if (!tokens.length) return Response.json({ ok: true, sent: 0, tokens: 0 });
 
-  const access = await googleToken(fb);
+  let access: string;
+  try {
+    access = await googleToken(fb);
+  } catch (e) {
+    return Response.json({ ok: false, sent: 0, tokens: tokens.length, errors: [`google auth: ${(e as Error).message}`] }, { status: 200 });
+  }
   const dead: string[] = [];
+  const errors: string[] = [];
   let sent = 0;
   await Promise.all(
     tokens.map(async (token) => {
@@ -210,15 +221,31 @@ export async function POST(req: Request): Promise<Response> {
             data: { path: p.note.path },
             android: {
               priority: "high",
-              notification: { channel_id: "social", tag: p.note.tag, icon: "ic_stat_dockin", color: "#7C3D1B" },
+              ttl: "86400s",
+              notification: {
+                channel_id: "social",
+                tag: p.note.tag,
+                icon: "ic_stat_dockin",
+                color: "#7C3D1B",
+                default_sound: true,
+                notification_priority: "PRIORITY_HIGH",
+                visibility: "PRIVATE",
+              },
             },
           },
         }),
       });
-      if (res.ok) sent += 1;
-      else if (res.status === 404 || res.status === 400) dead.push(token);
+      if (res.ok) {
+        sent += 1;
+        return;
+      }
+      const j = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string; details?: { errorCode?: string }[] } } | null;
+      const code = j?.error?.details?.find((d) => d.errorCode)?.errorCode ?? j?.error?.status ?? String(res.status);
+      errors.push(code);
+      // Only tokens FCM says are gone are dropped — a bad payload must never wipe good tokens.
+      if (code === "UNREGISTERED" || res.status === 404 || (code === "INVALID_ARGUMENT" && /registration token/i.test(j?.error?.message ?? ""))) dead.push(token);
     }),
   );
   if (dead.length) await sb.from("push_tokens").delete().in("token", dead);
-  return Response.json({ ok: true, sent });
+  return Response.json({ ok: true, sent, tokens: tokens.length, errors: [...new Set(errors)] });
 }

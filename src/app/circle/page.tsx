@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { pushPastLayer } from "@/lib/backClose";
 import { FriendsPanel } from "@/components/FriendsPanel";
 import { NewGroup } from "@/components/NewGroup";
+import { ComparePanel } from "@/components/ComparePanel";
 import {
   Check,
   BellOff,
@@ -27,6 +28,8 @@ import {
   UserRound,
   PenSquare,
   ChevronDown,
+  ChevronRight,
+  BarChart3,
   UserPlus,
   Users,
   X,
@@ -136,6 +139,7 @@ function Circle() {
   const [composing, setComposing] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [bell, setBell] = useState(false);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -576,6 +580,23 @@ function Circle() {
         </>
       )}
 
+      {!searching && (
+        <button
+          onClick={() => setCompareOpen(true)}
+          className="tile-tint anim-pop mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-3 rounded-3xl p-3.5 text-left active:scale-[0.99]"
+          style={{ "--tint": "#d9772b", "--d": "260ms" } as React.CSSProperties}
+        >
+          <span className="tile-icon grid size-11 shrink-0 place-items-center rounded-2xl">
+            <BarChart3 size={21} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15.5px] font-extrabold">Compare with friends</span>
+            <span className="block truncate text-[12.5px] text-muted">Attendance, who&apos;s done what, trip planner, who&apos;s free</span>
+          </span>
+          <ChevronRight size={19} className="shrink-0 text-muted" />
+        </button>
+      )}
+
       {/* Friends in a row, like stories — a ring means they have written to
           you. Tap to chat. (Your QR has its own button above.) */}
       {accepted.length > 0 && (
@@ -716,6 +737,8 @@ function Circle() {
           )}
         </ul>
       </Sheet>
+
+      {compareOpen && <ComparePanel friends={accepted} onClose={() => setCompareOpen(false)} />}
 
       {newGroupOpen && (
         <NewGroup

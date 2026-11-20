@@ -14,6 +14,7 @@ import { isNativeApp } from "./native";
  */
 
 export type PushEvent =
+  | { type: "test" }
   | { type: "message"; id: string }
   | { type: "share"; id: string }
   | { type: "friend"; to: string }
@@ -39,12 +40,26 @@ export function notifyPush(event: PushEvent): void {
 }
 
 let started = false;
+let listening = false;
+let lastOpen: (path: string) => void = () => {};
+
+/** What the last registration attempt said — shown on the notification test. */
+export function pushDiagnostics(): { token: boolean; error: string | null } {
+  try {
+    return { token: !!localStorage.getItem("dockin-push-token"), error: localStorage.getItem("dockin-push-error") };
+  } catch {
+    return { token: false, error: null };
+  }
+}
 
 /**
  * Registers this phone for push and keeps its token current. Tapping a
- * notification opens the screen it is about (`data.path`).
+ * notification opens the screen it is about (`data.path`). Safe to call again
+ * (on every app resume): it only does work until the phone is registered, so a
+ * permission granted later in Settings still gets this phone its pushes.
  */
 export async function startPush(open: (path: string) => void): Promise<void> {
+  lastOpen = open;
   if (started || !isNativeApp()) return;
   started = true;
   try {
@@ -56,30 +71,100 @@ export async function startPush(open: (path: string) => void): Promise<void> {
       visibility: 1,
     }).catch(() => {});
 
-    await PushNotifications.addListener("registration", async ({ value }) => {
-      const sb = getSupabase();
-      if (!sb) return;
-      const { data } = await sb.auth.getUser();
-      if (!data.user) return;
-      await sb.from("push_tokens").upsert({ token: value, user_id: data.user.id, updated_at: new Date().toISOString() });
-      try {
-        localStorage.setItem("dockin-push-token", value);
-      } catch {
-        /* only used to forget it on logout */
-      }
-    });
-    await PushNotifications.addListener("pushNotificationActionPerformed", ({ notification }) => {
-      const path = (notification.data as { path?: string } | undefined)?.path;
-      if (path && path.startsWith("/")) open(path);
-    });
+    if (!listening) {
+      listening = true;
+      await PushNotifications.addListener("registration", async ({ value }) => {
+        try {
+          localStorage.setItem("dockin-push-token", value);
+          localStorage.removeItem("dockin-push-error");
+        } catch {
+          /* only used to forget it on logout */
+        }
+        const sb = getSupabase();
+        if (!sb) return;
+        const { data } = await sb.auth.getUser();
+        if (!data.user) return;
+        const { error } = await sb.from("push_tokens").upsert({ token: value, user_id: data.user.id, updated_at: new Date().toISOString() });
+        if (error) {
+          try {
+            localStorage.setItem("dockin-push-error", `save: ${error.message}`);
+          } catch {
+            /* fine */
+          }
+        }
+      });
+      await PushNotifications.addListener("registrationError", ({ error }) => {
+        started = false;
+        try {
+          localStorage.setItem("dockin-push-error", `register: ${error}`);
+        } catch {
+          /* fine */
+        }
+      });
+      await PushNotifications.addListener("pushNotificationActionPerformed", ({ notification }) => {
+        const path = (notification.data as { path?: string } | undefined)?.path;
+        if (path && path.startsWith("/")) lastOpen(path);
+      });
+    }
 
-    let perm = await PushNotifications.checkPermissions();
-    if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== "granted") return;
+    // The asking itself happens once, in NotifyAsk — never a second dialog here.
+    const perm = await PushNotifications.checkPermissions();
+    if (perm.receive !== "granted") {
+      // Try again on the next resume — the person may switch it on in Settings.
+      started = false;
+      return;
+    }
     await PushNotifications.register();
-  } catch {
+  } catch (e) {
     // A build without Firebase config throws here; the app works without push.
     started = false;
+    try {
+      localStorage.setItem("dockin-push-error", `start: ${e instanceof Error ? e.message : String(e)}`);
+    } catch {
+      /* fine */
+    }
+  }
+}
+
+/** Makes sure this phone's token is saved for the signed-in account (e.g. it registered before sign-in). */
+export async function syncPushToken(): Promise<void> {
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem("dockin-push-token");
+  } catch {
+    return;
+  }
+  const sb = getSupabase();
+  if (!token || !sb) return;
+  const { data } = await sb.auth.getUser();
+  if (!data.user) return;
+  await sb.from("push_tokens").upsert({ token, user_id: data.user.id, updated_at: new Date().toISOString() });
+}
+
+/** Asks the server to send this phone a test notification; says what happened. */
+export async function testPush(): Promise<string> {
+  const sb = getSupabase();
+  if (!sb) return "Cloud sync is not set up.";
+  const { data } = await sb.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return "Sign in first — notifications are tied to your account.";
+  try {
+    const res = await fetch("/api/push", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ type: "test" }),
+    });
+    const j = (await res.json().catch(() => ({}))) as { sent?: number; tokens?: number; reason?: string; errors?: string[] };
+    if (res.status === 503) return "The server isn't set up for notifications yet (Firebase key missing on Vercel).";
+    if (!res.ok) return `The server said ${res.status}.`;
+    if (!j.tokens) {
+      const d = pushDiagnostics();
+      return d.error ? `This phone isn't registered: ${d.error}` : "This phone isn't registered yet — allow notifications and reopen the app.";
+    }
+    if (!j.sent) return `Couldn't deliver (${(j.errors ?? []).join(", ") || "unknown"}).`;
+    return "Sent! It should pop up in a moment.";
+  } catch {
+    return "No internet right now.";
   }
 }
 

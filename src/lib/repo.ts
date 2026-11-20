@@ -76,6 +76,7 @@ export async function saveProfile(
       | "friends"
       | "messQr"
       | "messMenu"
+      | "shareStats"
     >
   >,
 ): Promise<void> {

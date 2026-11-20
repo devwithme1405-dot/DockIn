@@ -16,6 +16,8 @@ export interface Profile {
   target: number;
   /** When the target was last chosen by hand, so a sync can never undo it. */
   targetSetAt?: number;
+  /** What friends may see on the Compare screen. Everything is off until switched on. */
+  shareStats?: { attendance: boolean; tasks: boolean; schedule: boolean };
   theme: ThemePref;
   onboarded: boolean;
   /** Monthly spending budget in rupees (0 or missing = not set). */

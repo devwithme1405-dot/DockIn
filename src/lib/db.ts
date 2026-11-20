@@ -62,6 +62,8 @@ export class DockinDB extends Dexie {
   taskOrigins!: Table<{ key: string; taskId: string; at: number }, string>;
   /** Messages starred on this phone. */
   starred!: Table<{ id: string; thread: string; at: number }, string>;
+  /** Friends' shared numbers for the Compare screen (see lib/friendStats). */
+  friendStats!: Table<{ userId: string; data: unknown; at: number }, string>;
   msgReactions!: Table<{ id: string; messageId: string; userId: string; emoji: string }, string>;
   blocks!: Table<{ id: string; name: string }, string>;
 
@@ -125,6 +127,9 @@ export class DockinDB extends Dexie {
     });
     this.version(16).stores({
       starred: "id, thread",
+    });
+    this.version(17).stores({
+      friendStats: "userId",
     });
   }
 }

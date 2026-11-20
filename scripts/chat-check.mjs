@@ -56,7 +56,42 @@ const tables = {
   share_reactions: [],
   poll_votes: votes,
   blocks: [],
+  friend_stats: [],
 };
+{
+  const due = new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 10);
+  const day = (n) => new Date(Date.now() + n * 86400_000).toISOString().slice(0, 10);
+  const today = day(0);
+  tables.friend_stats.push({
+    user_id: YASH,
+    updated_at: new Date().toISOString(),
+    data: {
+      v: 1,
+      at: Date.now(),
+      target: 75,
+      attendance: {
+        present: 61,
+        total: 78,
+        subjects: [
+          { key: "a", name: "Database Management Systems", code: "CSET207", present: 20, total: 24 },
+          { key: "b", name: "Operating Systems", code: "CSET209", present: 15, total: 21 },
+          { key: "c", name: "Discrete Maths", code: "MATH201", present: 26, total: 33 },
+        ],
+      },
+      days: { [day(1)]: [0, 1, 2], [day(2)]: [0, 2], [day(3)]: [1, 1, 2] },
+      today: { date: today, classes: [{ from: "00:00", to: "00:30", name: "DBMS" }, { from: "23:00", to: "23:50", name: "OS" }] },
+      tasks: {
+        pending: 3,
+        overdue: 1,
+        dueThisWeek: 2,
+        doneThisWeek: 4,
+        lmsPending: 1,
+        next: { title: "OS assignment 3", due },
+        shared: [{ origin: `${RIYA}:lab 7: joins:${due}`, title: "Lab 7: Joins", due, done: true }],
+      },
+    },
+  });
+}
 const rpcs = {
   my_people: [
     { user_id: YASH, name: "Yash", avatar: null, branch: "CSE", year: 2, section: "E1", bio: null, attendance_state: "safe", friend_status: "accepted", requested_by: ME, requested_at: Date.now() - 3 * 86400_000, since: Date.now() - 2 * 86400_000 },
@@ -332,6 +367,33 @@ await step("chat themes, jumbo emoji, links and starring", async () => {
   await page.evaluate(() => localStorage.removeItem("dockin-chat-look"));
   await page.getByLabel("Back", { exact: true }).click();
   await page.waitForTimeout(400);
+});
+
+await step("Compare: attendance board, shared tasks, trip planner, free now", async () => {
+  await page.getByRole("button", { name: /Compare with friends/ }).click();
+  const panel = page.getByRole("dialog", { name: "Compare" });
+  await panel.getByText("Share your numbers to compare").waitFor({ timeout: 3000 });
+  await panel.getByRole("switch", { name: "Attendance" }).click();
+  await panel.getByRole("switch", { name: "Tasks & deadlines" }).click();
+  await panel.getByRole("switch", { name: "Timetable" }).click();
+  await panel.getByText("78.2%").first().waitFor({ timeout: 3000 });
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${SHOTS}/compare-attendance.png` });
+  await panel.getByRole("button", { name: /Tasks/ }).first().click();
+  await panel.getByText("Lab 7: Joins").first().waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/compare-tasks.png` });
+  await panel.getByRole("button", { name: /Trip/ }).click();
+  await panel.getByRole("button", { name: "Next 3 days" }).click();
+  await panel.getByText(/Misses \d+ class/).first().waitFor({ timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${SHOTS}/compare-trip.png` });
+  await panel.getByRole("button", { name: /Free now/ }).click();
+  await panel.getByText("Everyone free together").waitFor({ timeout: 3000 });
+  await page.screenshot({ path: `${SHOTS}/compare-free.png` });
+  await page.goBack();
+  await page.waitForTimeout(400);
+  if (await page.getByRole("dialog", { name: "Compare" }).count()) throw new Error("Back did not close Compare");
 });
 
 await step("the scanner opens smoothly and can flip to My QR", async () => {

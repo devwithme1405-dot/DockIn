@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Check, Loader2, Radio, Smartphone } from "lucide-react";
 import { DockIn, isNativeApp, onPhone, type PhoneStatus } from "@/lib/native";
+import { testPush } from "@/lib/push";
 import { cx, useToast } from "./ui";
 
 /**
@@ -163,6 +164,11 @@ export function PhoneSetup({ bare = false }: { bare?: boolean }) {
         <p className="min-w-0 text-[12px] text-muted">
           App {status.version || "?"} · Android {androidName(status.sdk)}
         </p>
+        {status.notifications === "granted" && (
+          <ActionButton busy={busy === "test"} onClick={() => run("test", async () => toast.show(await testPush()))}>
+            Send a test
+          </ActionButton>
+        )}
       </div>
     </Card>
   );

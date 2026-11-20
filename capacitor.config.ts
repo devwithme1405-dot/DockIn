@@ -27,6 +27,10 @@ const config: CapacitorConfig = {
     backgroundColor: "#864220",
   },
   plugins: {
+    // Show pushes even while DockIn is open (Android hides them otherwise).
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
+    },
     // Android 15+ forces every app edge-to-edge (we target SDK 36). Capacitor
     // works out the webview's `viewport-fit` on its own, but during that first
     // detection the layout jumps — and the very first screen it paints is the

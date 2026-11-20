@@ -11,6 +11,8 @@ import { db } from "@/lib/db";
 import { toDateStr } from "@/lib/dates";
 import { ToastProvider, cx } from "./ui";
 import { RemindersSync } from "./RemindersSync";
+import { StatsPublisher } from "./StatsPublisher";
+import { NotifyAsk } from "./NotifyAsk";
 import { SocialSync } from "./SocialSync";
 import { AppUpdate } from "./AppUpdate";
 import { useAuth } from "@/lib/auth";
@@ -358,7 +360,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
         {ready && !onboarding && isNativeApp() && <RemindersSync />}
+        {ready && isNativeApp() && pathname !== "/onboarding" && <NotifyAsk />}
         {ready && !onboarding && FRIENDS && <SocialSync />}
+        {ready && !onboarding && FRIENDS && session && <StatsPublisher />}
         {isNativeApp() && <AppUpdate />}
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second
