@@ -120,8 +120,8 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
   const practiceIsOn = usePracticeOn();
   // A practice assignment I don't have yet: with Practice LMS on, it joins my Tasks.
   useEffect(() => {
-    if (!mine && !task && practiceIsOn && isPractice(sol.instance)) void ensurePracticeFromSolution(sol);
-  }, [mine, task, practiceIsOn, sol]);
+    if (!task && practiceIsOn && isPractice(sol.instance)) void ensurePracticeFromSolution(sol);
+  }, [task, practiceIsOn, sol]);
 
   async function download() {
     setBusy(true);
@@ -164,13 +164,12 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
         </span>
       </button>
 
-      {mine ? (
-        <p className="border-t border-card-edge px-3 py-2 text-[12px] text-muted">Friends can put their own name on it and submit to their LMS.</p>
-      ) : (
+      {/* Everyone sees only their own status — the sender too. */}
+      {(
         <div className="border-t border-card-edge px-2.5 pt-2 pb-2.5">
           <p className={cx("mb-2 flex items-center gap-1.5 px-0.5 text-[12px] font-bold", done ? "text-safe" : task ? "text-[#c2621d] dark:text-[#f0a25a]" : "text-muted")}>
-            <span className={cx("size-2 rounded-full", done ? "bg-safe" : task ? "animate-pulse bg-[#e07a2c]" : "bg-muted/50")} />
-            {done ? "You've submitted this" : task ? "You haven't submitted yet" : "Not on your LMS list"}
+            <span className={cx("size-2 shrink-0 rounded-full", done ? "bg-safe" : task ? "animate-pulse bg-[#e07a2c]" : "bg-muted/50")} />
+            {done ? "You've already submitted this on LMS" : task ? "You haven't submitted this on LMS yet" : "Not on your LMS list"}
           </p>
           <div className="flex gap-1.5">
             <button
@@ -203,7 +202,7 @@ export function SolutionCard({ f, mine, from }: { f: ChatFile; mine: boolean; fr
           fileSize={f.size}
           load={() => downloadChatFile(f)}
           solution={sol}
-          from={from}
+          from={mine ? "You" : from}
           onClose={() => setStudio(false)}
         />
       )}
@@ -224,12 +223,11 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
   const tasks = useTasks();
   const profile = useLiveQuery(() => getProfile(), []);
   const { state } = useCollege();
-  const [step, setStep] = useState<"what" | "which" | "who">("what");
-  const [task, setTask] = useState<Task | null>(null);
+  const [step, setStep] = useState<"what" | "which">("what");
+  const [sending, setSending] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
   const [typing, setTyping] = useState(false);
   const [info, setInfo] = useState<DocText | null>(null);
-  const [me, setMe] = useState<{ name: string; roll: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const kind = docKind(file.name, file.type);
   const list = pickableAssignments(tasks ?? []);
@@ -246,14 +244,6 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
     };
   }, [file, kind]);
 
-  const guess = info && profile ? detectAuthor(info.text, file.name, profile) : null;
-  const guessed = guess && info ? theirDetails(info.text, { name: guess.name, roll: guess.roll }, { name: "", roll: "" }) : null;
-  const who = me ?? (guessed ? { name: guessed.name, roll: guessed.roll } : { name: "", roll: "" });
-  // Friends can only get their own name in if what is written here is really in the file.
-  const readable = !!info && !info.scanned;
-  const whoFound = readable ? hits(info!.text, who.name) + hits(info!.text, who.roll) : 0;
-  const nameIdeas = readable ? suggestNames(info!.text, [who.name]).slice(0, 3) : [];
-
   async function sendPlain() {
     setBusy(true);
     try {
@@ -266,33 +256,45 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
     }
   }
 
-  async function sendSolution() {
-    const title = task?.title ?? custom.trim();
+  /**
+   * Sends it straight away: whose name and enrollment are in the file is read
+   * from the file itself (yours, or whoever's it is). Anyone who gets it can
+   * still correct that on their own "Edit & submit" screen.
+   */
+  async function sendSolution(task: Task | null, typed?: string) {
+    const title = task?.title ?? typed?.trim() ?? "";
     if (!title || busy) return;
     setBusy(true);
+    setSending(task?.id ?? "typed");
     try {
+      const read = info ?? (kind ? await readText(file, file.name).catch(() => ({ kind, text: "", scanned: true })) : null);
+      const guess = read && !read.scanned ? detectAuthor(read.text, file.name, profile ?? {}) : null;
+      const who = read && guess ? theirDetails(read.text, { name: guess.name, roll: guess.roll }, { name: "", roll: "" }) : { name: "", roll: "" };
+      const author = {
+        name: read && hits(read.text, who.name) ? who.name : "",
+        roll: read && hits(read.text, who.roll) ? who.roll : "",
+      };
       let body: File = file;
       if (file.size > SOLUTION_MAX) {
         const small = await makeCopy(file, file.name, [], "keep");
         body = new File([small.blob], file.name, { type: small.blob.type || file.type });
       }
       const sol: ChatSolution = task
-        ? solutionFor(task, who)
-        : { instance: null, title: title.slice(0, 140), authorName: who.name.trim(), authorRoll: who.roll.trim() };
-      // Remember my enrollment for next time (and for the other direction).
-      if (who.roll.trim() && !profile?.roll) void saveProfile({ roll: who.roll.trim() });
+        ? solutionFor(task, author)
+        : { instance: null, title: title.slice(0, 140), authorName: author.name, authorRoll: author.roll };
       const up = await uploadChatFile(thread, body);
       await sendMessage(thread, "", { file: { ...up, solution: sol } });
-      toast.show("Solution sent — friends can submit their own copy");
+      toast.show("Solution sent — everyone can put their own name on it and submit");
       onClose();
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not send it.");
       setBusy(false);
+      setSending(null);
     }
   }
 
   const title =
-    step === "what" ? "Send this file" : step === "which" ? "Which assignment?" : "Your details in it";
+    step === "what" ? "Send this file" : "Which assignment?";
 
   return (
     <Sheet open onClose={() => (busy ? undefined : onClose())} title={title}>
@@ -347,18 +349,16 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
               {list.map((t, i) => (
                 <li key={t.id} className="anim-pop" style={{ "--d": `${Math.min(i, 8) * 28}ms` } as CSSProperties}>
                   <button
-                    onClick={() => {
-                      setTask(t);
-                      setStep("who");
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-card-edge bg-card px-3 py-2.5 text-left transition active:scale-[0.98]"
+                    onClick={() => void sendSolution(t)}
+                    disabled={busy}
+                    className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-card-edge bg-card px-3 py-2.5 text-left transition active:scale-[0.98] disabled:opacity-60"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14.5px] font-bold">{t.title}</span>
                       <span className="block truncate text-[12px] text-muted">{[t.notes, dueLabel(t)].filter(Boolean).join(" · ")}</span>
                     </span>
                     {t.done && <span className="shrink-0 rounded-full bg-safe/15 px-2 py-0.5 text-[11px] font-bold text-safe">Submitted</span>}
-                    <ChevronRight size={17} className="shrink-0 text-muted" />
+                    {sending === t.id ? <Loader2 size={17} className="shrink-0 animate-spin text-mess" /> : <Send size={16} className="shrink-0 text-mess" />}
                   </button>
                 </li>
               ))}
@@ -380,15 +380,12 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
                 className="h-12 min-w-0 flex-1 rounded-2xl border-[1.5px] border-card-edge bg-card px-4 text-[15.5px] outline-none focus:border-orange"
               />
               <button
-                onClick={() => {
-                  setTask(null);
-                  setStep("who");
-                }}
-                disabled={!custom.trim()}
+                onClick={() => void sendSolution(null, custom)}
+                disabled={!custom.trim() || busy}
                 className="btn-leather grid size-12 shrink-0 place-items-center rounded-2xl disabled:opacity-50"
-                aria-label="Next"
+                aria-label="Send"
               >
-                <ArrowRight size={19} />
+                {sending === "typed" ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
           ) : (
@@ -402,129 +399,7 @@ export function SendDocSheet({ file, thread, onClose }: { file: File; thread: st
         </div>
       )}
 
-      {step === "who" && (
-        <div key="who" className="anim-pop">
-          <p className="mb-3 rounded-2xl bg-surface-2 px-3.5 py-2.5 text-[13px]">
-            <span className="text-muted">Solution for </span>
-            <b>{task?.title ?? custom.trim()}</b>
-          </p>
-          {!info ? (
-            <p className="flex items-center gap-2 py-4 text-[13.5px] text-muted">
-              <Loader2 size={16} className="animate-spin" /> Reading the file…
-            </p>
-          ) : info.scanned ? (
-            <p className="flex gap-2 rounded-2xl bg-orange/10 px-3.5 py-3 text-[13px] leading-snug">
-              <ScanLine size={16} className="mt-0.5 shrink-0 text-mess" />
-              <span>This PDF is a scan, so its name can&apos;t be changed. Friends can still download it and submit it as it is.</span>
-            </p>
-          ) : (
-            <>
-              <p className="mb-2.5 text-[12.5px] leading-snug text-muted">
-                Exactly as written in the file — friends&apos; copies get their own in these places.
-              </p>
-              <DetailInput
-                label="Your name"
-                value={who.name}
-                onChange={(v) => setMe({ ...who, name: v })}
-                found={hits(info.text, who.name)}
-                placeholder="Vaibhav Sharma"
-              />
-              {hits(info.text, who.name) === 0 && nameIdeas.length > 0 && (
-                <div className="-mt-1.5 mb-2.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[12px] text-muted">The file says:</span>
-                  {nameIdeas.map((n) => (
-                    <button key={n} onClick={() => setMe({ ...who, name: n })} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-bold">
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <DetailInput
-                label="Your enrollment no."
-                value={who.roll}
-                onChange={(v) => setMe({ ...who, roll: v })}
-                found={hits(info.text, who.roll)}
-                placeholder="S25CSEU0155"
-                mono
-              />
-              {guess && guess.otherRolls.filter((r) => r.toLowerCase() !== who.roll.toLowerCase()).length > 0 && (
-                <div className="-mt-1 mb-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[12px] text-muted">In the file:</span>
-                  {guess.otherRolls
-                    .filter((r) => r.toLowerCase() !== who.roll.toLowerCase())
-                    .slice(0, 3)
-                    .map((r) => (
-                      <button key={r} onClick={() => setMe({ ...who, roll: r })} className="rounded-full bg-surface-2 px-2.5 py-1 font-mono text-[12px] font-bold">
-                        {r}
-                      </button>
-                    ))}
-                </div>
-              )}
-            </>
-          )}
-          {file.size > SOLUTION_MAX && (
-            <p className="mt-2 text-[12px] text-muted">Over 5 MB — it&apos;ll be compressed before sending.</p>
-          )}
-          {readable && whoFound === 0 && (
-            <p className="mt-1 flex gap-2 rounded-2xl bg-orange/10 px-3.5 py-2.5 text-[12.5px] leading-snug">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-mess" />
-              <span>Type your name or enrollment exactly as it&apos;s written in the file — otherwise friends&apos; copies keep your name.</span>
-            </p>
-          )}
-          <button
-            onClick={() => void sendSolution()}
-            disabled={busy || !info || (readable && whoFound === 0)}
-            className="btn-leather mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15.5px] disabled:opacity-60"
-          >
-            {busy ? <Loader2 size={18} className="animate-spin" /> : <Send size={17} />} {busy ? "Sending…" : "Send solution"}
-          </button>
-          <button onClick={() => setStep("which")} disabled={busy} className="mt-2 flex items-center gap-1 text-[13px] font-bold text-muted">
-            <ArrowLeft size={14} /> Back
-          </button>
-        </div>
-      )}
     </Sheet>
-  );
-}
-
-function DetailInput({
-  label,
-  value,
-  onChange,
-  found,
-  placeholder,
-  mono,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  found: number;
-  placeholder: string;
-  mono?: boolean;
-}) {
-  return (
-    <label className="mb-3 block">
-      <span className="mb-1 flex items-center justify-between text-[12.5px] font-bold">
-        {label}
-        {value.trim().length > 1 &&
-          (found > 0 ? (
-            <span className="flex items-center gap-1 text-safe">
-              <Check size={13} strokeWidth={3} /> found {found}×
-            </span>
-          ) : (
-            <span className="text-warn">not in the file</span>
-          ))}
-      </span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value.slice(0, 80))}
-        placeholder={placeholder}
-        className={cx(
-          "h-12 w-full rounded-2xl border-[1.5px] border-card-edge bg-card px-4 text-[15.5px] font-semibold outline-none focus:border-orange",
-          mono && "font-mono tracking-wide uppercase",
-        )}
-      />
-    </label>
   );
 }
 
@@ -612,12 +487,22 @@ export function CopyStudio({
   const instance = task ? assignInstance(task.id) : null;
   const me = mine ?? { name: profile?.name?.trim() ?? "", roll: profile?.roll?.trim() ?? "" };
   const info = src?.info ?? null;
-  const swapping = !own && !!info && !info.scanned;
+  const readable = !!info && !info.scanned;
+  // My own upload can still carry someone else's name (a friend who isn't on
+  // DockIn sent it): offer the same swap when the file names someone not me.
+  const ownOther = (() => {
+    if (!own || !readable) return { name: "", roll: "" };
+    const d = theirDetails(info!.text, { name: "", roll: "" }, me);
+    const mineWords = new Set(me.name.toLowerCase().split(/\s+/).filter((w) => w.length > 2));
+    const isMe = d.name.toLowerCase().split(/\s+/).some((w) => mineWords.has(w));
+    return { name: isMe ? "" : d.name, roll: d.roll };
+  })();
+  const swapping = readable && (!own || !!theirEdit || hits(info!.text, ownOther.name) + hits(info!.text, ownOther.roll) > 0);
   // Whose details come out: what the sender said — or, when the file says
   // otherwise, what is actually written in it. Editable either way.
   const their =
     theirEdit ??
-    (swapping && solution ? theirDetails(info!.text, { name: solution.authorName, roll: solution.authorRoll }, me) : { name: "", roll: "" });
+    (swapping ? (solution ? theirDetails(info!.text, { name: solution.authorName, roll: solution.authorRoll }, me) : ownOther) : { name: "", roll: "" });
   const nameHits = swapping ? hits(info!.text, their.name) : 0;
   const rollHits = swapping ? hits(info!.text, their.roll) : 0;
   const swaps = swapping
@@ -779,8 +664,8 @@ export function CopyStudio({
               </p>
             )}
 
-            {swapping && solution && (
-              <Section label="Names in the file">
+            {swapping && (
+              <Section label={own ? "Someone else's name is in this file — put yours in?" : "Names in the file"}>
                 <div className="rounded-2xl border-[1.5px] border-card-edge bg-card p-3">
                   <SwapRow
                     label="Name"
@@ -848,9 +733,9 @@ export function CopyStudio({
 
         {phase === "working" && (
           <Working
-            from={swapping ? solution?.authorName ?? "" : ""}
+            from={swapping ? their.name : ""}
             to={swapping ? me.name : ""}
-            fromRoll={swapping ? solution?.authorRoll ?? "" : ""}
+            fromRoll={swapping ? their.roll : ""}
             toRoll={swapping ? me.roll : ""}
             steps={steps}
             convert={format === "pdf" && info?.kind === "docx"}

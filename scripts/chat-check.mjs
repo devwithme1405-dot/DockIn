@@ -494,7 +494,7 @@ await step("a friend's solution: card, my name in, animation, check", async () =
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
   await chat.getByText("Assignment solution").first().waitFor({ timeout: 4000 });
-  await chat.getByText("You haven't submitted yet").first().waitFor({ timeout: 3000 });
+  await chat.getByText("You haven't submitted this on LMS yet").first().waitFor({ timeout: 3000 });
   await page.waitForTimeout(400);
   await page.screenshot({ path: `${SHOTS}/solution-card.png` });
   await chat.getByRole("button", { name: /Edit & submit/ }).first().click();
@@ -527,24 +527,38 @@ await step("a friend's solution: card, my name in, animation, check", async () =
   if (await page.getByRole("dialog", { name: "Make my copy" }).count()) throw new Error("Back did not close the studio");
 });
 
-await step("sending a PDF asks: just a file, or a solution for which assignment", async () => {
+await step("sending a PDF: pick the assignment and it goes — names read from the file", async () => {
   const chat = page.getByRole("dialog").first();
   await chat.locator('input[type="file"]').first().setInputFiles({ name: "OS_Lab3_Sachin.pdf", mimeType: "application/pdf", buffer: readFileSync(new URL("../tests/fixtures/solution-chrome.pdf", import.meta.url)) });
   const ask = page.getByRole("dialog", { name: "Send this file" });
   await ask.getByText("Solution for an LMS assignment").click();
-  await page.getByRole("dialog", { name: "Which assignment?" }).getByText("DBMS Assignment 4").click();
-  const who = page.getByRole("dialog", { name: "Your details in it" });
-  await who.getByText("found 1×").first().waitFor({ timeout: 8000 }).catch(() => {});
-  await who.getByLabel("Your name").fill("Vaibhav Sharma");
-  await who.getByText(/found \d+×/).first().waitFor({ timeout: 3000 });
   await page.screenshot({ path: `${SHOTS}/solution-send.png` });
-  await who.getByRole("button", { name: /Send solution/ }).click();
-  await chat.getByText("Friends can put their own name on it", { exact: false }).waitFor({ timeout: 6000 });
+  await page.getByRole("dialog", { name: "Which assignment?" }).getByText("DBMS Assignment 4").click();
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Which assignment?"]'), null, { timeout: 8000 });
   const sent = messages.find((m) => m.data?.solution && m.author === ME);
-  if (!sent || sent.data.solution.instance !== 41 || sent.data.solution.authorName !== "Vaibhav Sharma") throw new Error("solution data not sent: " + JSON.stringify(sent?.data));
+  if (!sent || sent.data.solution.instance !== 41) throw new Error("solution not sent: " + JSON.stringify(sent?.data));
+  // My profile says "Sachin", the file says Vaibhav: whose name it really is was read from the file.
+  if (sent.data.solution.authorName !== "Vaibhav Sharma" || sent.data.solution.authorRoll !== "S25CSEU0155") throw new Error("author not read from the file: " + JSON.stringify(sent.data.solution));
+  // The sender gets the same choices and their own status.
+  const mineCard = chat.locator("div", { hasText: "OS_Lab3_Sachin.pdf" }).filter({ hasText: "Edit & submit" }).last();
+  await mineCard.getByText("You haven't submitted this on LMS yet").waitFor({ timeout: 6000 });
   await page.screenshot({ path: `${SHOTS}/solution-sent.png` });
   await page.goBack();
   await page.waitForTimeout(400);
+});
+
+await step("Tasks: my upload with someone else's name offers to put mine in", async () => {
+  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
+  await page.locator("li:visible", { hasText: "DBMS Assignment 4" }).filter({ hasNotText: "practice" }).first().locator("button").nth(1).click();
+  await page.getByRole("button", { name: /Upload my file to LMS/ }).first().click({ trial: true });
+  await page.locator('input[type="file"]:not([accept])').first().setInputFiles({ name: "Manya_Assignment.pdf", mimeType: "application/pdf", buffer: readFileSync(new URL("../tests/fixtures/solution-chrome.pdf", import.meta.url)) });
+  const studio = page.getByRole("dialog", { name: "Hand in to LMS" });
+  await studio.getByText("Someone else's name is in this file", { exact: false }).waitFor({ timeout: 10000 });
+  if ((await studio.getByLabel("Name in the file now").inputValue()) !== "Vaibhav Sharma") throw new Error("their name not found in my upload");
+  await page.screenshot({ path: `${SHOTS}/solution-own-swap.png` });
+  await studio.getByLabel("Close").click();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
 });
 
 await step("Practice LMS for a group: turn on, add an assignment, submit, watch it land", async () => {
@@ -572,7 +586,7 @@ await step("Practice LMS for a group: turn on, add an assignment, submit, watch 
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();
   const card = chat.locator("div", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Edit & submit" }).last();
-  await card.getByText("You haven't submitted yet").waitFor({ timeout: 6000 });
+  await card.getByText("You haven't submitted this on LMS yet").waitFor({ timeout: 6000 });
   await card.getByRole("button", { name: /Edit & submit/ }).click();
   const studio = page.getByRole("dialog", { name: "Make my copy" });
   await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
@@ -586,7 +600,7 @@ await step("Practice LMS for a group: turn on, add an assignment, submit, watch 
   const done = page.getByRole("dialog", { name: "Submitted" });
   await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });
   await done.getByRole("button", { name: "Done" }).click();
-  await card.getByText("You've submitted this").waitFor({ timeout: 4000 });
+  await card.getByText("You've already submitted this on LMS").waitFor({ timeout: 4000 });
   const sub = tables.practice_submissions.find((r) => r.instance === dbms.instance);
   if (!sub || sub.status !== "submitted" || !String(sub.path).startsWith(`g_${G}/practice/`)) throw new Error("submission not on the server: " + JSON.stringify(sub));
 
