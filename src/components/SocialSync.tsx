@@ -8,6 +8,7 @@ import { ensureProfile, publishProfile, pullSocial } from "@/lib/social";
 import { getProfile } from "@/lib/repo";
 import { getSupabase } from "@/lib/supabase";
 import { TAB_SHOWN, goTab, tabOf } from "@/lib/tabs";
+import { whileVisible } from "@/lib/visible";
 
 /**
  * Keeps chat live and push registered while someone is signed in: a pull on
@@ -28,7 +29,6 @@ export function SocialSync() {
       const local = await getProfile();
       if (local) await publishProfile(local, mine.shareAttendance);
     })().catch(() => {});
-    const stop = listenChat();
     const openPath = (path: string) => {
       const url = new URL(path, window.location.href);
       if (tabOf(url.pathname)) goTab(url.pathname + url.search);
@@ -48,14 +48,20 @@ export function SocialSync() {
         void pullSocial().catch(() => {});
       }, wait);
     };
+    // Live channels only while the app is on screen (see whileVisible): one
+    // websocket per phone in use, not per phone that has DockIn installed.
     const sb = getSupabase();
-    const ch = sb
-      ?.channel("dockin-social")
-      .on("postgres_changes", { event: "*", schema: "public", table: "friends" }, () => soon())
-      .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => soon())
-      .on("postgres_changes", { event: "*", schema: "public", table: "shares" }, () => soon())
-      .on("postgres_changes", { event: "*", schema: "public", table: "share_progress" }, () => soon(1500))
-      .subscribe();
+    const live = whileVisible(() => {
+      const stopChat = listenChat();
+      const ch = sb
+        ?.channel("dockin-social")
+        .on("postgres_changes", { event: "*", schema: "public", table: "friends" }, () => soon())
+        .on("postgres_changes", { event: "*", schema: "public", table: "group_members" }, () => soon())
+        .on("postgres_changes", { event: "*", schema: "public", table: "shares" }, () => soon())
+        .on("postgres_changes", { event: "*", schema: "public", table: "share_progress" }, () => soon(1500))
+        .subscribe();
+      return () => Promise.all([stopChat(), sb && ch ? sb.removeChannel(ch) : undefined]);
+    });
     const onTab = (e: Event) => {
       if ((e as CustomEvent<string>).detail === "/circle" && Date.now() - last > 15_000) soon(0);
     };
@@ -72,10 +78,9 @@ export function SocialSync() {
     window.addEventListener("dockin:notifications", onGranted);
     return () => {
       window.removeEventListener("dockin:notifications", onGranted);
-      stop();
+      live();
       window.clearTimeout(timer);
       window.removeEventListener(TAB_SHOWN, onTab);
-      if (sb && ch) void sb.removeChannel(ch);
       document.removeEventListener("visibilitychange", onShow);
     };
   }, [uid]);

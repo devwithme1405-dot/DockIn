@@ -76,6 +76,21 @@ async function googleToken(a: ServiceAccount): Promise<string> {
   return j.access_token;
 }
 
+/** Happened just now. Some stamps come from the phone's own clock, which can drift, hence the slack. */
+const fresh = (ms: number, windowMs = 10 * 60_000) => Number.isFinite(ms) && Math.abs(Date.now() - ms) < windowMs;
+
+// A light per-person cap on this instance: plenty for real chatting, useless for
+// a script trying to flood people. (Each server instance keeps its own count.)
+const recent = new Map<string, number[]>();
+function overLimit(me: string, perMinute = 40): boolean {
+  const now = Date.now();
+  const list = (recent.get(me) ?? []).filter((t) => now - t < 60_000);
+  list.push(now);
+  recent.set(me, list);
+  if (recent.size > 5000) for (const [k, v] of recent) if (!v.length || now - v[v.length - 1] > 60_000) recent.delete(k);
+  return list.length > perMinute;
+}
+
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 async function nameOf(sb: SupabaseClient, id: string): Promise<string> {
@@ -93,8 +108,10 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
   const who = await nameOf(sb, me);
 
   if (e.type === "message") {
-    const { data: m } = await sb.from("messages").select("thread,author,body,kind,data").eq("id", e.id).maybeSingle();
+    const { data: m } = await sb.from("messages").select("thread,author,body,kind,data,created_at").eq("id", e.id).maybeSingle();
     if (!m || m.author !== me) return null;
+    // Only a message just sent: replaying an old id must not ring everyone again.
+    if (!fresh(Date.parse(String(m.created_at)), 3 * 60_000)) return null;
     const thread = m.thread as string;
     const d = (m.data ?? {}) as { title?: string; question?: string; name?: string; solution?: { title?: string } };
     const sol = m.kind === "file" && d.solution?.title ? String(d.solution.title).slice(0, 80) : null;
@@ -122,8 +139,9 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
   }
 
   if (e.type === "share") {
-    const { data: s } = await sb.from("shares").select("author,group_id,data").eq("id", e.id).maybeSingle();
+    const { data: s } = await sb.from("shares").select("author,group_id,data,created_at").eq("id", e.id).maybeSingle();
     if (!s || s.author !== me) return null;
+    if (!fresh(Number(s.created_at))) return null;
     const d = (s.data ?? {}) as { title?: string; kind?: string; dueDate?: string | null };
     let to: string[] = [];
     let where = "";
@@ -150,8 +168,9 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
   }
   if (!to || to === me) return null;
   const [x, y] = [me, to].sort();
-  const { data: f } = await sb.from("friends").select("status,requested_by").eq("a", x).eq("b", y).maybeSingle();
+  const { data: f } = await sb.from("friends").select("status,requested_by,updated_at").eq("a", x).eq("b", y).maybeSingle();
   if (!f) return null;
+  if (!fresh(Number(f.updated_at))) return null;
   const accepted = f.status === "accepted";
   if (!accepted && f.requested_by !== me) return null;
   return {
@@ -183,6 +202,7 @@ export async function POST(req: Request): Promise<Response> {
     event?.type === "test" ||
     ((event?.type === "message" || event?.type === "share") ? typeof event.id === "string" : event?.type === "friend" && (typeof event.to === "string" || typeof event.code === "string"));
   if (!valid) return Response.json({ ok: false }, { status: 400 });
+  if (overLimit(me)) return Response.json({ ok: false, reason: "slow down" }, { status: 429 });
 
   const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
   const p =

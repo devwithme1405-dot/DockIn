@@ -50,6 +50,7 @@ function readable(message: string): string {
   }
   if (/not_reachable/.test(message)) return "You can only add friends of your friends from here.";
   if (/no_such_user/.test(message)) return "That person isn't on DockIn any more.";
+  if (/slow_down/.test(message)) return "Too many wrong codes — wait a few minutes and try again.";
   if (/too_many_groups/.test(message)) return "You are in too many groups already.";
   if (/cannot use DockIn/.test(message)) return "This account cannot use DockIn.";
   if (/Failed to fetch|NetworkError/i.test(message)) return "No internet right now.";
@@ -296,7 +297,9 @@ export async function createGroup(name: string, emoji: string | null): Promise<G
     emoji: string | null;
     code: string;
     owner: string;
-  };
+  } | null;
+  // A wrong code comes back empty (the server counts misses, see migration 0024).
+  if (!r?.id) throw new SocialError("No group has that code.");
   const group: Group = { ...r, members: 1, updatedAt: now() };
   await db.groups.put(group);
   return group;
@@ -322,7 +325,9 @@ export async function joinGroup(code: string): Promise<Group> {
     emoji: string | null;
     code: string;
     owner: string;
-  };
+  } | null;
+  // A wrong code comes back empty (the server counts misses, see migration 0024).
+  if (!r?.id) throw new SocialError("No group has that code.");
   const group: Group = { ...r, members: 1, updatedAt: now() };
   await db.groups.put(group);
   return group;

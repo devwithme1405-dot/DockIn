@@ -318,7 +318,7 @@ export async function pullChat(): Promise<void> {
 let channel: RealtimeChannel | null = null;
 
 /** Live updates while the app is open. Safe to call repeatedly. */
-export function listenChat(): () => void {
+export function listenChat(): () => Promise<unknown> | void {
   const sb = getSupabase();
   if (!sb || channel) return () => {};
   channel = sb
@@ -348,8 +348,9 @@ export function listenChat(): () => void {
     })
     .subscribe();
   return () => {
-    if (channel) void sb.removeChannel(channel);
+    const ch = channel;
     channel = null;
+    return ch ? sb.removeChannel(ch) : undefined;
   };
 }
 

@@ -72,6 +72,7 @@ import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Group, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useToast } from "./ui";
 import { getSupabase } from "@/lib/supabase";
+import { whileVisible } from "@/lib/visible";
 import { addTask } from "@/lib/repo";
 import { ChatInfo, PhotoViewer } from "./ChatInfo";
 import { Bone } from "./Skeleton";
@@ -199,29 +200,37 @@ export function ChatView({
   useEffect(() => {
     const sb = getSupabase();
     if (!sb || !me) return;
-    const ch = sb.channel(`here:${thread}`, { config: { presence: { key: me } } });
-    channel.current = ch;
     const timers = new Map<string, number>();
-    ch.on("presence", { event: "sync" }, () => {
-      setOnline(Object.keys(ch.presenceState()).filter((k) => k !== me).length);
-    })
-      .on("broadcast", { event: "typing" }, ({ payload }) => {
-        const who = (payload as { user?: string })?.user;
-        if (!who || who === me) return;
-        setTyping((t) => (t.includes(who) ? t : [...t, who]));
-        window.clearTimeout(timers.get(who));
-        timers.set(
-          who,
-          window.setTimeout(() => setTyping((t) => t.filter((x) => x !== who)), 3500),
-        );
+    // Only while the chat is on screen — in the background you show as away.
+    const live = whileVisible(() => {
+      const ch = sb.channel(`here:${thread}`, { config: { presence: { key: me } } });
+      channel.current = ch;
+      ch.on("presence", { event: "sync" }, () => {
+        setOnline(Object.keys(ch.presenceState()).filter((k) => k !== me).length);
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") void ch.track({ at: Date.now() });
-      });
+        .on("broadcast", { event: "typing" }, ({ payload }) => {
+          const who = (payload as { user?: string })?.user;
+          if (!who || who === me) return;
+          setTyping((t) => (t.includes(who) ? t : [...t, who]));
+          window.clearTimeout(timers.get(who));
+          timers.set(
+            who,
+            window.setTimeout(() => setTyping((t) => t.filter((x) => x !== who)), 3500),
+          );
+        })
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") void ch.track({ at: Date.now() });
+        });
+      return () => {
+        if (channel.current === ch) channel.current = null;
+        setOnline(0);
+        setTyping([]);
+        return sb.removeChannel(ch);
+      };
+    }, 10_000);
     return () => {
       timers.forEach((t) => window.clearTimeout(t));
-      channel.current = null;
-      void sb.removeChannel(ch);
+      live();
     };
   }, [thread, me]);
 

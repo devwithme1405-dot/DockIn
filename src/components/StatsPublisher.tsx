@@ -9,6 +9,7 @@ import { LAST_TEACHING_DAY } from "@/lib/academic";
 import { addDays, toDateStr, weekdayOf } from "@/lib/dates";
 import { publishStats, pullFriendStats, type FriendStatsData } from "@/lib/friendStats";
 import { getSupabase } from "@/lib/supabase";
+import { whileVisible } from "@/lib/visible";
 
 /**
  * Keeps my Compare snapshot current — only the parts I chose to share, and
@@ -34,13 +35,16 @@ export function StatsPublisher() {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void pullFriendStats().catch(() => {}), 800);
     };
-    const ch = sb?.channel("dockin-friend-stats").on("postgres_changes", { event: "*", schema: "public", table: "friend_stats" }, soon).subscribe();
+    const live = whileVisible(() => {
+      const ch = sb?.channel("dockin-friend-stats").on("postgres_changes", { event: "*", schema: "public", table: "friend_stats" }, soon).subscribe();
+      return () => (ch && sb ? sb.removeChannel(ch) : undefined);
+    });
     const onShow = () => document.visibilityState === "visible" && soon();
     document.addEventListener("visibilitychange", onShow);
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onShow);
-      if (ch && sb) void sb.removeChannel(ch);
+      live();
     };
   }, []);
 
