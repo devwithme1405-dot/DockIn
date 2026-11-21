@@ -94,6 +94,27 @@ export function resetSyncStatus() {
   listeners.forEach((l) => l());
 }
 
+/**
+ * Resolves once the first sync after sign-in has finished (or after
+ * `timeoutMs`, so nothing waits forever offline). Anything that creates tasks
+ * by itself — LMS assignments, tasks friends share — waits for this, so a task
+ * deleted or finished on another login is known before it could be re-made.
+ */
+export function afterFirstSync(timeoutMs = 20_000): Promise<void> {
+  if (status.ready) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(t);
+      off();
+      resolve();
+    };
+    const t = setTimeout(done, timeoutMs);
+    const off = subscribeSync(() => {
+      if (status.ready) done();
+    });
+  });
+}
+
 // ---------- the sync itself ----------
 
 let applyingRemote = false;

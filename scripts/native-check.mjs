@@ -276,6 +276,12 @@ await step("Profile shows the phone's notification status (asked automatically)"
   await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
   await waitFor("Phone permissions");
   if (!(await text()).includes("College accounts")) throw new Error("Profile has no College accounts row");
+  {
+    const t = await text();
+    if (/\bSection\b/.test(t)) throw new Error("Profile still shows Section");
+    if (/Tasks done/.test(t)) throw new Error("Profile still shows Tasks done");
+    if (/Practice LMS/.test(t)) throw new Error("Profile still shows Practice LMS");
+  }
   await page.getByRole("button", { name: /College accounts/ }).click();
   await waitFor("Connect Camu");
   await page.getByRole("button", { name: "Close" }).click();
@@ -416,7 +422,7 @@ await step("the LMS refuses a wrong password, then fills Tasks", async () => {
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${SHOTS}/native-lms-submit.png` });
   const sent = await page.evaluate(() => window.__phone.get().submitted ?? null);
-  if (!sent || sent.name !== "Lab7_Sachin.pdf" || typeof sent.instance !== "number") throw new Error("the phone was not asked to submit: " + JSON.stringify(sent));
+  if (!sent || sent.name !== "Lab7_Sachin.pdf" || sent.instance !== 7) throw new Error("the phone was not asked to submit: " + JSON.stringify(sent));
   await page.getByRole("dialog", { name: "Submitted" }).getByRole("button", { name: "Done" }).click();
   await page.waitForTimeout(300);
   await page.keyboard.press("Escape");

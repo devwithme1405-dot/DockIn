@@ -31,6 +31,12 @@ describe("matching a friend's solution to my LMS", () => {
   it("falls back to the name (spacing and case don't matter)", () => {
     expect(findMyAssignment({ instance: 999, title: "dbms  assignment-4", course: null }, mine)?.id).toBe("lms-assign-41");
   });
+  it("never matches by name across subjects, or when two could fit", () => {
+    expect(findMyAssignment({ instance: 999, title: "OS Lab 3", course: "Computer Networks" }, mine)).toBeNull();
+    expect(findMyAssignment({ instance: 999, title: "OS Lab 3", course: "Operating Systems" }, mine)?.id).toBe("lms-assign-77");
+    const twins = [...mine, task("lms-assign-90", "DBMS Assignment 4", { notes: "" })];
+    expect(findMyAssignment({ instance: 999, title: "DBMS Assignment 4", course: null }, twins)).toBeNull();
+  });
   it("never matches a quiz or a missing one", () => {
     expect(findMyAssignment({ instance: 5, title: "DBMS Quiz", course: null }, mine)).toBeNull();
     expect(findMyAssignment({ instance: null, title: "Maths 2", course: null }, mine)).toBeNull();

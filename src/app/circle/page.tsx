@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { pushPastLayer } from "@/lib/backClose";
+import { FriendsOf } from "@/components/FriendsOf";
 import { FriendsPanel } from "@/components/FriendsPanel";
 import { NewGroup } from "@/components/NewGroup";
 import { ComparePanel } from "@/components/ComparePanel";
@@ -1078,6 +1079,8 @@ function Circle() {
                 )}
               />
             </dl>
+
+            {showing.status === "accepted" && <FriendsOf key={showing.id} userId={showing.id} name={showing.name} className="mt-4 border border-card-edge/60" />}
 
             <Button
               className="mt-5 w-full"

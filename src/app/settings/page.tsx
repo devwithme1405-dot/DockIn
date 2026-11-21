@@ -4,14 +4,12 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  Building2,
   Check,
   ChevronRight,
   Cloud,
   Download,
   Eye,
   EyeOff,
-  FlaskConical,
   GraduationCap,
   IdCard,
   Info,
@@ -41,8 +39,6 @@ import {
 } from "@/lib/repo";
 import { cropPhoto } from "@/components/PhotoCropper";
 import { AVATAR_EMOJIS, PALETTES, formatAvatar, gradientOf, parseAvatar, uploadAvatarPhoto } from "@/lib/avatars";
-import { useTasks } from "@/lib/hooks";
-import { fmtPct } from "@/lib/attendance";
 import { toDateStr } from "@/lib/dates";
 import type { ThemePref } from "@/lib/types";
 import {
@@ -50,7 +46,6 @@ import {
   Button,
   ConfirmSheet,
   Field,
-  STATE_TEXT,
   Sheet,
   cx,
   inputCls,
@@ -58,9 +53,8 @@ import {
 import { BackHeader } from "@/components/PageHeader";
 import { PhoneSetup, phoneChecklist, usePhoneStatus } from "@/components/PhoneSetup";
 import { ConnectCamu, ConnectLms } from "@/components/College";
-import { disconnect, useAttendanceData, useCollege } from "@/lib/college";
+import { disconnect, useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
-import { usePracticeOn } from "@/lib/practiceLms";
 import { ProfileSkeleton } from "@/components/Skeleton";
 import { SignIn } from "@/components/SignIn";
 import { accountName, deleteAccount, signOutCloud, updatePassword, useAuth } from "@/lib/auth";
@@ -97,11 +91,8 @@ export default function ProfilePage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { session, configured } = useAuth();
   const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
-  const { data } = useAttendanceData(profile?.target ?? 75);
-  const tasks = useTasks();
 
   const [sheet, setSheet] = useState<SheetName>(null);
-  const practiceOn = usePracticeOn();
   const phone = usePhoneStatus();
   const checks = phone.status ? phoneChecklist(phone.status) : [];
   const phoneOff = checks.filter((c) => !c.on).length;
@@ -142,8 +133,6 @@ export default function ProfilePage() {
       }
     });
   }, [configured, signedInNow]);
-
-  const tasksDone = tasks ? tasks.filter((t) => t.done).length : null;
 
   if (!profile)
     return (
@@ -286,7 +275,6 @@ export default function ProfilePage() {
 
   // ---------- derived ----------
 
-  const overall = data?.overall;
   const since = new Date(profile.createdAt).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
   const signedIn = !!session;
   const syncLine =
@@ -350,21 +338,10 @@ export default function ProfilePage() {
         <section className="notebook rings px-4 pb-1">
           <ul>
             <DetailRow icon={IdCard} label="Roll No." value={profile.roll} onAdd={openDetails} />
-            <DetailRow icon={Building2} label="Section" value={profile.section} onAdd={openDetails} />
             <DetailRow icon={GraduationCap} label="Year" value={profile.year ? `${ordinal(profile.year)} year` : undefined} onAdd={openDetails} />
             {signedIn && <DetailRow icon={Mail} label="Email" value={accountName(session.user.email)} />}
           </ul>
           {profile.bio && <p className="border-t border-line py-3 text-[14px] text-muted">{profile.bio}</p>}
-        </section>
-
-        {/* real numbers */}
-        <section className="grid grid-cols-3 gap-2.5" aria-label="Your numbers">
-          <Stat
-            label="Attendance"
-            value={overall ? fmtPct(overall.pct) : "--"}
-            ink={overall ? STATE_TEXT[overall.state] : "text-muted"}
-          />
-          <Stat label="Tasks done" value={tasksDone === null ? "--" : String(tasksDone)} ink="text-safe" />
         </section>
 
         {/* everything else, one row per kind, each opening its own sheet */}
@@ -387,12 +364,6 @@ export default function ProfilePage() {
           {phone.native && (
             <MenuRow icon={School} title="College accounts" sub="Camu and the LMS" onClick={() => setSheet("college")} />
           )}
-          <MenuRow
-            icon={FlaskConical}
-            title="Practice LMS"
-            sub={practiceOn ? "On — open to add assignments and see submissions" : "Test assignment solutions without the real LMS"}
-            onClick={() => router.push("/practice-lms")}
-          />
           {configured && (
             <MenuRow
               icon={Cloud}
@@ -545,7 +516,7 @@ export default function ProfilePage() {
                 placeholder="BTech CSE"
               />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div>
               <Field label="Year">
                 <select
                   className={inputCls}
@@ -559,14 +530,6 @@ export default function ProfilePage() {
                     </option>
                   ))}
                 </select>
-              </Field>
-              <Field label="Section">
-                <input
-                  className={inputCls}
-                  value={details.section}
-                  onChange={(e) => setDetails({ ...details, section: e.target.value })}
-                  placeholder="E1"
-                />
               </Field>
             </div>
             <Field label="Enrolment number">
@@ -762,15 +725,6 @@ function SetPassword({ onDone }: { onDone: () => void }) {
           {error}
         </p>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, ink }: { label: string; value: string; ink: string }) {
-  return (
-    <div className="lift min-w-0 rounded-2xl px-3 py-3">
-      <p className={cx("font-display truncate text-[20px] font-extrabold leading-tight tabular-nums", ink)}>{value}</p>
-      <p className="mt-0.5 text-[12px] leading-tight font-semibold text-muted">{label}</p>
     </div>
   );
 }

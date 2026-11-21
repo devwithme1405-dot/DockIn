@@ -105,10 +105,16 @@ const rpcs = {
     { user_id: YASH, name: "Yash", avatar: null, branch: null, year: 2, role: "member" },
     { user_id: RIYA, name: "Riya Sharma", avatar: null, branch: null, year: 2, role: "member" },
   ],
+  friends_of: [
+    { user_id: ME, name: "Sachin", avatar: null, branch: "CSE", year: 2, relation: "me" },
+    { user_id: RIYA, name: "Riya Sharma", avatar: null, branch: "CSE", year: 2, relation: null },
+    { user_id: "00000000-0000-4000-8000-000000000009", name: "Kabir Singh", avatar: null, branch: "ECE", year: 2, relation: null },
+  ],
   ensure_profile: [{ user_id: ME, code: "SACH1234", name: "Sachin", avatar: null, branch: null, year: 2, section: "E1", bio: null, attendance_state: null, share_attendance: false }],
 };
 
 const problems = [];
+const requested = [];
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
@@ -138,6 +144,11 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
     const b = JSON.parse(req.postData() || "{}");
     for (const p of b.people) tables.group_members.push({ group_id: b.gid, user_id: p });
     return json(b.people.length);
+  }
+  if (isRpc && name === "request_friend") {
+    const b = JSON.parse(req.postData() || "{}");
+    requested.push(b.them);
+    return json({ status: "pending" });
   }
   if (isRpc) return json(rpcs[name] ?? []);
   if (req.method() === "POST" && name === "messages") {
@@ -478,6 +489,27 @@ await step("Back closes My QR and stays on Friends (not Today)", async () => {
   if (new URL(page.url()).pathname !== "/circle") throw new Error("left Friends after sheet→sheet: " + page.url());
 });
 
+await step("a friend's profile shows who they're friends with, and Add sends a request", async () => {
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /^Yash/ }).first().click();
+  const dlg = page.getByRole("dialog").first();
+  await dlg.getByText("Bhai DBMS lab 7 kiya?").waitFor({ timeout: 6000 });
+  await dlg.getByLabel("Yash info").click();
+  const list = page.getByRole("region", { name: "Yash's friends" });
+  await list.getByText("Kabir Singh").waitFor({ timeout: 6000 });
+  if (await list.getByText("Sachin").count()) throw new Error("my own name is listed as their friend");
+  await list.getByRole("button", { name: "Add Kabir Singh" }).click();
+  await list.getByText("Requested").first().waitFor({ timeout: 4000 });
+  if (!requested.includes("00000000-0000-4000-8000-000000000009")) throw new Error("request_friend was not called for Kabir: " + JSON.stringify(requested));
+  await page.screenshot({ path: `${SHOTS}/friends-of.png` });
+  // back out to the list the way a person would: info → chat → list
+  await page.goBack();
+  await page.waitForTimeout(300);
+  await page.goBack();
+  await page.waitForTimeout(300);
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+});
+
 await step("Back from a chat returns to the list", async () => {
   await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva)/ }).first().click();
   await page.getByRole("dialog", { name: /Chat with/ }).waitFor({ timeout: 3000 });
@@ -562,58 +594,23 @@ await step("Tasks: my upload with someone else's name offers to put mine in", as
   await page.waitForTimeout(300);
 });
 
-await step("Practice LMS for a group: turn on, add an assignment, submit, watch it land", async () => {
-  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /Practice LMS/ }).click();
-  await page.waitForURL("**/practice-lms", { timeout: 5000 });
-  await page.getByRole("button", { name: /CSE E1.*Use this/ }).click();
-  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).first().waitFor({ timeout: 6000 });
-  if (tables.practice_assignments.length !== 3) throw new Error(`expected 3 starters on the server, got ${tables.practice_assignments.length}`);
-  await page.getByRole("button", { name: /Add assignment/ }).click();
-  const add = page.getByRole("dialog", { name: "Add an assignment" });
-  await add.getByPlaceholder("e.g. CN Assignment 2").fill("CN Assignment 2");
-  await add.getByPlaceholder("e.g. Computer Networks").fill("Computer Networks");
-  await add.getByRole("button", { name: "Add assignment" }).click();
-  await page.locator("button:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 5000 });
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/practice-lms.png` });
-  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
-  await page.locator("li:visible", { hasText: "CN Assignment 2" }).first().waitFor({ timeout: 5000 });
-
-  // Yash sends his solution for the group's DBMS practice assignment.
-  const dbms = tables.practice_assignments.find((r) => r.title === "DBMS Assignment 4 (practice)");
-  messages.push({ id: "m9", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Solution_Practice.pdf", size: 61000, type: "application/pdf", path: "g/sol/Solution_Practice.pdf", solution: { instance: dbms.instance, title: dbms.title, course: dbms.course, dueDate: null, dueTime: null, authorName: "Yash", authorRoll: "" } }, reply_to: null, created_at: new Date().toISOString(), deleted_at: null });
+await step("a new group starts with no emoji picked", async () => {
   await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /CSE E1/ }).first().click();
-  const chat = page.getByRole("dialog").first();
-  const card = chat.locator("div", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "Edit & submit" }).last();
-  await card.getByText("You haven't submitted this on LMS yet").waitFor({ timeout: 6000 });
-  await card.getByRole("button", { name: /Edit & submit/ }).click();
-  const studio = page.getByRole("dialog", { name: "Make my copy" });
-  await studio.getByText("Names in the file").waitFor({ timeout: 10000 });
-  await studio.getByRole("button", { name: /Make my copy/ }).click();
-  const check = page.getByRole("dialog", { name: "Check your copy" });
-  await check.getByText("Practice LMS — this stays on your phone").waitFor({ timeout: 15000 });
-  // Even with the sender's details wrong, the file's own name and roll were found and swapped.
-  await check.getByText(/[1-9]\d* places changed/).waitFor({ timeout: 3000 });
-  await check.getByText("Their name is gone").waitFor({ timeout: 2000 });
-  await check.getByRole("button", { name: /Submit to Practice LMS/ }).click();
-  const done = page.getByRole("dialog", { name: "Submitted" });
-  await done.getByText("Submitted to Practice LMS").waitFor({ timeout: 10000 });
-  await done.getByRole("button", { name: "Done" }).click();
-  await card.getByText("You've already submitted this on LMS").waitFor({ timeout: 4000 });
-  const sub = tables.practice_submissions.find((r) => r.instance === dbms.instance);
-  if (!sub || sub.status !== "submitted" || !String(sub.path).startsWith(`g_${G}/practice/`)) throw new Error("submission not on the server: " + JSON.stringify(sub));
+  await page.getByRole("button", { name: "New Group" }).first().click();
+  const ng = page.getByRole("dialog", { name: "New group" });
+  await ng.getByText("Group photo").waitFor({ timeout: 5000 });
+  const pressed = await ng.locator('[aria-pressed="true"]').count();
+  if (pressed) throw new Error(`${pressed} emoji already picked`);
+  await ng.getByLabel("Back").click();
+  await page.waitForTimeout(300);
+});
 
-  // The laptop view: the group's page shows it, under the right assignment.
+await step("the Practice LMS is gone: no Settings row, old link lands on Tasks, pretend tasks cleared", async () => {
+  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
+  await page.getByText("College accounts").first().waitFor({ timeout: 6000 }).catch(() => {});
+  if (await page.getByRole("button", { name: /Practice LMS/ }).count()) throw new Error("Settings still shows Practice LMS");
   await page.goto(`${BASE}/practice-lms`, { waitUntil: "networkidle" });
-  await page.locator("button:visible", { hasText: "DBMS Assignment 4 (practice)" }).filter({ hasText: "1/3 submitted" }).first().click();
-  const view = page.getByRole("dialog", { name: "DBMS Assignment 4 (practice)" });
-  await view.getByText("Submitted for grading").waitFor({ timeout: 4000 });
-  await view.getByText("Everyone in the group").waitFor({ timeout: 2000 });
-  await view.getByText("Riya Sharma").waitFor({ timeout: 2000 });
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${SHOTS}/practice-assignment.png` });
+  await page.waitForURL("**/tasks", { timeout: 6000 });
 });
 
 await browser.close();

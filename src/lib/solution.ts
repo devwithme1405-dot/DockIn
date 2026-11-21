@@ -70,12 +70,14 @@ export function findMyAssignment(sol: Pick<ChatSolution, "instance" | "title" | 
     const hit = live.find((t) => assignInstance(t.id) === sol.instance);
     if (hit) return hit;
   }
+  // By name only when it can't be someone else's subject: same title, and the
+  // same course when both are known. Two or more that fit — never guess which;
+  // the person picks the assignment themselves before anything is submitted.
   const title = norm(sol.title);
   if (!title) return null;
-  const same = live.filter((t) => norm(t.title) === title);
-  if (same.length <= 1) return same[0] ?? null;
   const course = norm(sol.course ?? "");
-  return same.find((t) => course && norm(t.notes) === course) ?? same[0];
+  const same = live.filter((t) => norm(t.title) === title && (!course || !norm(t.notes) || norm(t.notes) === course));
+  return same.length === 1 ? same[0] : null;
 }
 
 export function solutionFor(t: Task, author: { name: string; roll: string }): ChatSolution {

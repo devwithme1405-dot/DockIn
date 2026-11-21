@@ -256,10 +256,14 @@ export default function TimetablePage() {
 
       {rows.length === 0 ? (
         <div className="mt-3">
-          <EmptyState
-            title="No classes"
-            body={camu ? "Nothing on Camu's timetable for this day." : hasManual ? "A free day." : "Connect Camu or add your classes to see them here."}
-          />
+          {camu && projectsFrom && date > projectsFrom ? (
+            <EmptyState title="Not on MyCamu yet" body="MyCamu hasn't posted this day's timetable yet. It shows up here as soon as it does." />
+          ) : (
+            <EmptyState
+              title="No classes"
+              body={camu ? "Nothing on Camu's timetable for this day." : hasManual ? "A free day." : "Connect Camu or add your classes to see them here."}
+            />
+          )}
         </div>
       ) : (
         <ul className="mt-3 space-y-3 px-5">

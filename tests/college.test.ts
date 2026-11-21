@@ -97,18 +97,15 @@ describe("the day's classes", () => {
     expect(classesOn(CAMU, "2026-11-09")).toEqual([]);
   });
 
-  it("fills an unpublished day from the same weekday of the last published week", () => {
-    // 11 Nov is a Wednesday, like 4 Nov
-    const wed = classesOn(CAMU, "2026-11-11");
-    expect(wed.map((p) => p.from)).toEqual(["08:20", "09:25"]);
-    expect(wed.every((p) => p.usual && p.date === "2026-11-11")).toBe(true);
-    // a fortnight past the last published day is a guess too far
+  it("never writes a day MyCamu hasn't published", () => {
+    // 11 Nov is a Wednesday like 4 Nov, but Camu hasn't posted it: it stays empty
+    expect(classesOn(CAMU, "2026-11-11")).toEqual([]);
     expect(classesOn(CAMU, "2026-11-25")).toEqual([]);
   });
 
-  it("finds the next class across the holiday", () => {
-    expect(nextClass(CAMU, "2026-11-07", "10:00")).toMatchObject({ date: "2026-11-11", from: "08:20" });
+  it("finds the next published class, and nothing past what Camu posted", () => {
     expect(nextClass(CAMU, "2026-11-05", "08:00")).toMatchObject({ date: "2026-11-05", from: "08:20" });
+    expect(nextClass(CAMU, "2026-11-07", "10:00")).toBeNull();
   });
 });
 
@@ -119,8 +116,8 @@ describe("projecting the timetable to the last teaching day", () => {
     expect(lastPublishedDate(CAMU)).toBe("2026-11-05");
   });
 
-  it("projects a future Wednesday past the fortnight classesOn gives up at", () => {
-    // 25 Nov is a Wednesday like 4 Nov; classesOn stops guessing after ~19 Nov.
+  it("projects a future Wednesday for the trip maths only", () => {
+    // 25 Nov is a Wednesday like 4 Nov; the timetable itself shows nothing there.
     expect(classesOn(CAMU, "2026-11-25")).toEqual([]);
     const wed = projectedClassesOn(CAMU, "2026-11-25", SEM_END);
     expect(wed.map((p) => p.from).sort()).toEqual(["08:20", "09:25"]);
@@ -152,8 +149,8 @@ describe("Camu as attendance", () => {
     const dbms = v.sessions.filter((s) => s.subjectId === "camu:s-dbms");
     expect(dbms.find((s) => s.date === "2026-11-04")).toMatchObject({ status: "present", room: "P-LA-203", camu: true });
     expect(dbms.find((s) => s.date === "2026-11-05")).toMatchObject({ status: "absent" });
-    // next week's Wednesday is on the timetable but not yet marked
-    expect(dbms.find((s) => s.date === "2026-11-11")).toMatchObject({ status: "unmarked", usual: true });
+    // next week's Wednesday isn't published on Camu, so it isn't on the timetable either
+    expect(dbms.find((s) => s.date === "2026-11-11")).toBeUndefined();
     // every session is unique
     expect(new Set(v.sessions.map((s) => s.id)).size).toBe(v.sessions.length);
   });
@@ -197,7 +194,9 @@ describe("LMS deadlines as tasks", () => {
     const one = await db.tasks.get(lmsTaskId({ module: "assign", instance: 1 }));
     const two = await db.tasks.get(lmsTaskId({ module: "assign", instance: 2 }));
     expect(one?.done).toBe(false);
-    expect(one?.updatedAt).toBe(NOW);
+    expect(one?.dueDate).not.toBe(null);
+    // still untouched by me, so it stays the LMS's (never outranks a cloud copy)
+    expect(one?.updatedAt).toBe(0);
     expect(two?.done).toBe(true);
   });
 

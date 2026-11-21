@@ -12,7 +12,6 @@ import {
   Download,
   ExternalLink,
   Eye,
-  FlaskConical,
   FileText,
   GraduationCap,
   Loader2,
@@ -35,7 +34,6 @@ import { isNativeApp } from "@/lib/native";
 import { DraftOnly, WebOnlyLms, submitToLms } from "@/lib/lmsSubmit";
 import { useBackClose } from "@/lib/backClose";
 import { guessRolls } from "@/lib/docx";
-import { ensurePracticeFromSolution, isPractice, usePracticeOn } from "@/lib/practiceLms";
 import {
   SOLUTION_MAX,
   SolutionError,
@@ -119,7 +117,6 @@ export function SolutionCard({ f, mine, from, sentAt }: { f: ChatFile; mine: boo
   const saved = useFileCached(f.path);
   const done = !!task?.done;
   const ext = (f.name.split(".").pop() ?? "").toUpperCase();
-  const practiceIsOn = usePracticeOn();
   // Still to hand in: fetch the file and read it in the background, so
   // "Edit & submit" opens straight away. Only for recent solutions, once.
   useEffect(() => {
@@ -132,10 +129,6 @@ export function SolutionCard({ f, mine, from, sentAt }: { f: ChatFile; mine: boo
     }, 900);
     return () => window.clearTimeout(t);
   }, [done, task, sentAt, f]);
-  // A practice assignment I don't have yet: with Practice LMS on, it joins my Tasks.
-  useEffect(() => {
-    if (!task && practiceIsOn && isPractice(sol.instance)) void ensurePracticeFromSolution(sol);
-  }, [task, practiceIsOn, sol]);
 
   async function download() {
     setBusy(true);
@@ -536,8 +529,7 @@ export function CopyStudio({
   const needRoll = swapping && rollHits > 0 && me.roll.trim().length < 2;
   const nameIdeas = swapping ? suggestNames(info!.text, [me.name, their.name]).slice(0, 3) : [];
   const rollIdeas = swapping ? guessRolls(info!.text).filter((r) => ![me.roll, their.roll].some((x) => x.trim().toLowerCase() === r.toLowerCase())).slice(0, 3) : [];
-  const practice = isPractice(instance);
-  const canSubmit = instance !== null && (practice || (isNativeApp() && !!state.lms?.connected));
+  const canSubmit = instance !== null && isNativeApp() && !!state.lms?.connected;
 
   async function make() {
     if (!src || needName || needRoll) return;
@@ -778,7 +770,7 @@ export function CopyStudio({
 
         {phase === "sending" && <Sending title={task?.title ?? ""} />}
 
-        {phase === "done" && <Done title={task?.title ?? ""} checked={checked} practice={practice} />}
+        {phase === "done" && <Done title={task?.title ?? ""} checked={checked} />}
 
         {phase === "failed" && fail && (
           <div className="anim-pop pt-8 text-center">
@@ -810,13 +802,8 @@ export function CopyStudio({
             <div className="space-y-2">
               {canSubmit ? (
                 <>
-                  {practice && (
-                    <p className="flex items-center justify-center gap-1.5 text-[12px] font-bold text-mess">
-                      <FlaskConical size={13} /> Practice LMS — this stays on your phone
-                    </p>
-                  )}
                   <button onClick={() => void submit()} className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px]">
-                    <Send size={18} /> {practice ? "Submit to Practice LMS" : "Submit to LMS"}
+                    <Send size={18} /> Submit to LMS
                   </button>
                 </>
               ) : (
@@ -857,15 +844,9 @@ export function CopyStudio({
                   </button>
                 )}
                 {fail?.at === "submit" ? (
-                  practice ? (
-                    <a href="/practice-lms" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
-                      Open Practice LMS
-                    </a>
-                  ) : (
-                    <a href={task?.url || LMS_HOME} target="_blank" rel="noreferrer" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
-                      Open LMS <ExternalLink size={14} />
-                    </a>
-                  )
+                  <a href={task?.url || LMS_HOME} target="_blank" rel="noreferrer" className="btn-paper flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl text-[13.5px] font-bold">
+                    Open LMS <ExternalLink size={14} />
+                  </a>
                 ) : (
                   <button onClick={onClose} className="btn-paper flex h-11 flex-1 items-center justify-center rounded-2xl text-[13.5px] font-bold">
                     Close
@@ -1209,7 +1190,7 @@ function Sending({ title }: { title: string }) {
   );
 }
 
-function Done({ title, checked, practice }: { title: string; checked: boolean; practice: boolean }) {
+function Done({ title, checked }: { title: string; checked: boolean }) {
   return (
     <div className="flex flex-col items-center pt-14 text-center">
       <div className="relative">
@@ -1221,16 +1202,11 @@ function Done({ title, checked, practice }: { title: string; checked: boolean; p
           <span key={k} className="studio-burst absolute top-1/2 left-1/2 size-2 rounded-full" style={{ "--a": `${k * 60}deg`, background: k % 2 ? "#e07a2c" : "#2fa36b" } as CSSProperties} />
         ))}
       </div>
-      <p className="mt-7 text-[24px] font-extrabold [animation:rise-quick_400ms_200ms_ease-out_both]">{practice ? "Submitted to Practice LMS" : "Submitted to LMS"}</p>
+      <p className="mt-7 text-[24px] font-extrabold [animation:rise-quick_400ms_200ms_ease-out_both]">Submitted to LMS</p>
       <p className="mt-1.5 max-w-[19rem] text-[14px] text-muted [animation:rise-quick_400ms_300ms_ease-out_both]">{title}</p>
       <p className="mt-4 rounded-full bg-safe/12 px-3 py-1 text-[12px] font-bold text-safe [animation:rise-quick_400ms_420ms_ease-out_both]">
-        {practice ? "Practice — nothing went to the real LMS" : checked ? "The LMS confirmed it's handed in" : "Uploaded and handed in"}
+        {checked ? "The LMS confirmed it's handed in" : "Uploaded and handed in"}
       </p>
-      {practice && (
-        <a href="/practice-lms" className="mt-4 rounded-full border border-card-edge px-4 py-2 text-[13px] font-bold text-mess [animation:rise-quick_400ms_500ms_ease-out_both]">
-          See it on the Practice LMS →
-        </a>
-      )}
     </div>
   );
 }

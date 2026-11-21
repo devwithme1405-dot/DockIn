@@ -95,7 +95,7 @@ await page.evaluate(async () => {
 
 for (const [path, name, must] of [
   // Friends are switched off (src/lib/features.ts); their screens are not checked.
-  ["/settings", "signed-profile", ["payments from your phone", "Payments are read by the Android app"]],
+  ["/settings", "signed-profile", ["Backup & Sync", "Appearance"]],
 ]) {
   await page.goto(BASE + path, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);

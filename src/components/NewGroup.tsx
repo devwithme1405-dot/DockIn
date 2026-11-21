@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowLeft, ArrowRight, Camera, Check, Search, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Search, Users, X } from "lucide-react";
 import type { Friend } from "@/lib/types";
 import { Avatar, cx, useToast } from "./ui";
 import { useBackClose } from "@/lib/backClose";
@@ -23,7 +23,8 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
   const toast = useToast();
   const [name, setName] = useState("");
   const [about, setAbout] = useState("");
-  const [emoji, setEmoji] = useState(EMOJIS[0]);
+  // Nothing picked to start with: a photo or an emoji is the person's own choice.
+  const [emoji, setEmoji] = useState<string | null>(null);
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [q, setQ] = useState("");
@@ -114,8 +115,10 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
               {photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={photo.url} alt="" className="size-full object-cover" />
-              ) : (
+              ) : emoji ? (
                 emoji
+              ) : (
+                <Users size={40} strokeWidth={1.8} className="text-[#b8743a]" />
               )}
               <span className="absolute right-0 bottom-0 grid size-8 place-items-center rounded-full bg-[#d9772b] text-white ring-2 ring-surface">
                 <Camera size={15} />
@@ -158,7 +161,7 @@ export function NewGroup({ friends, onDone, onClose }: { friends: Friend[]; onDo
               <button
                 key={e}
                 onClick={() => {
-                  setEmoji(e);
+                  setEmoji((cur) => (cur === e && !photo ? null : e));
                   if (photo) {
                     URL.revokeObjectURL(photo.url);
                     setPhoto(null);

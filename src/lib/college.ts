@@ -17,6 +17,8 @@ import { addDays, toDateStr, weekdayOf } from "./dates";
 import { summarize } from "./attendance";
 import { DockIn, isNativeApp, onPhone, type CamuClass, type CamuPeriod, type CamuState, type CamuSubject, type CollegeState, type LmsItem } from "./native";
 import { useAttendanceStats } from "./hooks";
+import { getSupabase } from "./supabase";
+import { afterFirstSync } from "./sync";
 import type { AttendanceSummary, Session, Subject, Task } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -88,33 +90,22 @@ export interface DayClass extends CamuPeriod {
 }
 
 /**
- * The classes on a date, in order. Camu only publishes the timetable a week
- * or so ahead; past that, the same weekday from the most recent published week
- * stands in, marked as `usual`, so tomorrow is never just "no timetable".
+ * The classes on a date, in order — only what MyCamu has actually published.
+ * A day Camu hasn't posted yet stays empty (never guessed from last week), so
+ * the timetable, Today and the reminders only ever show real classes.
  */
 export function classesOn(state: CamuState | undefined, date: string): DayClass[] {
-  const periods = state?.periods ?? [];
-  const exact = periods.filter((p) => p.date === date);
-  if (exact.length) return dedupeSort(exact).map((p) => ({ ...p, usual: false }));
-  if (holidayOn(state, date)) return [];
-  const last = periods.reduce((m, p) => (p.date > m ? p.date : m), "");
-  // Past a fortnight of silence the semester has probably moved on (exams,
-  // a break); guessing classes then would be worse than showing none.
-  if (!last || date <= last || addDays(last, 14) < date) return [];
-  const wd = weekdayOf(date);
-  const sameDay = periods
-    .filter((p) => weekdayOf(p.date) === wd)
-    .reduce((m, p) => (p.date > m ? p.date : m), "");
-  if (!sameDay) return [];
-  return dedupeSort(periods.filter((p) => p.date === sameDay)).map((p) => ({ ...p, date, usual: true }));
+  const exact = (state?.periods ?? []).filter((p) => p.date === date);
+  if (!exact.length || holidayOn(state, date)) return [];
+  return dedupeSort(exact).map((p) => ({ ...p, usual: false }));
 }
 
 /**
  * Classes on a date for the trip calculator, projected all the way to the last
  * teaching day.
  *
- * `classesOn` stops guessing a fortnight past Camu's last published day, which is
- * right for the live timetable but wrong here: Camu often doesn't post even next
+ * `classesOn` shows only what Camu has published, which is right for the live
+ * timetable but wrong here: Camu often doesn't post even next
  * week, yet the week itself barely changes. So for any working day Camu hasn't
  * published — up to `semEnd` — this stands in the same weekday from the most
  * recent published week and marks it `usual` (a guess). Past `semEnd`, exams have
@@ -565,12 +556,24 @@ let lastImported = "";
  * deadline moves, and one that drops off the LMS's to-do list (submitted) is
  * ticked off. A task ticked by hand stays ticked.
  */
+async function signedIn(): Promise<boolean> {
+  try {
+    return !!(await getSupabase()?.auth.getSession())?.data.session;
+  } catch {
+    return false;
+  }
+}
+
 export async function importLms(state: CollegeState, nowMs = Date.now()): Promise<void> {
   const lms = state.lms;
   if (!lms?.connected || !lms.items || !lms.syncedAt) return;
   const stamp = `${lms.syncedAt}:${lms.items.length}`;
   if (stamp === lastImported) return;
   lastImported = stamp;
+
+  // Signed in: let the cloud copy land first, so an assignment deleted or
+  // ticked off before a logout is known and is not made again.
+  if (await signedIn()) await afterFirstSync();
 
   const t = nowMs;
   const live = new Set(lms.items.map(lmsTaskId));
@@ -579,6 +582,9 @@ export async function importLms(state: CollegeState, nowMs = Date.now()): Promis
     const want = lmsTask(item);
     const have = await db.tasks.get(id);
     if (!have) {
+      // updatedAt 0: an untouched LMS task is the LMS's, not a change of mine.
+      // Any copy in the cloud (deleted, done, edited) is newer and wins; it
+      // only syncs up once I actually do something with it.
       await db.tasks.put({
         id,
         ...want,
@@ -589,7 +595,7 @@ export async function importLms(state: CollegeState, nowMs = Date.now()): Promis
         doneAt: null,
         subtasks: [],
         createdAt: t,
-        updatedAt: t,
+        updatedAt: 0,
         deletedAt: null,
       });
       continue;
@@ -597,7 +603,7 @@ export async function importLms(state: CollegeState, nowMs = Date.now()): Promis
     if (have.deletedAt) continue;
     const changed =
       have.title !== want.title || have.dueDate !== want.dueDate || have.dueTime !== want.dueTime || have.notes !== want.notes;
-    if (changed) await db.tasks.update(id, { ...want, updatedAt: t });
+    if (changed) await db.tasks.update(id, { ...want, updatedAt: have.updatedAt ? t : 0 });
   }
 
   // Gone from the to-do list while its deadline is still inside the window the
@@ -609,7 +615,7 @@ export async function importLms(state: CollegeState, nowMs = Date.now()): Promis
     if (live.has(task.id)) continue;
     const due = task.dueDate ? new Date(`${task.dueDate}T${task.dueTime ?? "23:59"}`).getTime() : 0;
     if (due && due < window) continue;
-    await db.tasks.update(task.id, { done: true, doneAt: t, updatedAt: t });
+    await db.tasks.update(task.id, { done: true, doneAt: t, updatedAt: task.updatedAt ? t : 0 });
   }
 }
 

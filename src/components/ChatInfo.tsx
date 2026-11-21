@@ -13,6 +13,7 @@ import { Bone } from "./Skeleton";
 import { QrCode } from "./QrCode";
 import { useBackClose } from "@/lib/backClose";
 import { cropPhoto } from "./PhotoCropper";
+import { FriendsOf } from "./FriendsOf";
 
 /** A photo, full screen — tap anywhere to close (like WhatsApp's profile view). */
 export function PhotoViewer({ name, avatar, emoji, onClose }: { name: string; avatar?: string | null; emoji?: string | null; onClose: () => void }) {
@@ -222,6 +223,8 @@ export function ChatInfo({
             <Toggle on={!!pref?.pinned} />
           </button>
         </section>
+
+        {!group && friendId && <FriendsOf key={friendId} userId={friendId} name={title} className="mx-4 mt-4" />}
 
         {group && (
           <section className="glass-card mx-4 mt-4 overflow-hidden rounded-3xl">

@@ -45,6 +45,11 @@ function readable(message: string): string {
   if (/add_group_members/.test(message) && /does not exist|schema cache/i.test(message)) {
     return "Adding people needs a server update (migration 0019).";
   }
+  if (/(friends_of|request_friend)/.test(message) && /does not exist|schema cache/i.test(message)) {
+    return "This needs a server update (migration 0023).";
+  }
+  if (/not_reachable/.test(message)) return "You can only add friends of your friends from here.";
+  if (/no_such_user/.test(message)) return "That person isn't on DockIn any more.";
   if (/too_many_groups/.test(message)) return "You are in too many groups already.";
   if (/cannot use DockIn/.test(message)) return "This account cannot use DockIn.";
   if (/Failed to fetch|NetworkError/i.test(message)) return "No internet right now.";
@@ -185,6 +190,43 @@ export async function addFriend(code: string): Promise<"pending" | "accepted"> {
   );
   const r = Array.isArray(row) ? row[0] : row;
   notifyPush({ type: "friend", code: cleanCode(code) });
+  return r?.status ?? "pending";
+}
+
+/** Someone on a friend's list, and where I stand with them. */
+export interface FriendOfFriend {
+  userId: string;
+  name: string;
+  avatar?: string;
+  branch?: string;
+  year?: number;
+  relation: "me" | "friend" | "sent" | "received" | null;
+}
+
+/** Who a friend of mine is friends with (only friends can see this). */
+export async function friendsOf(userId: string): Promise<FriendOfFriend[]> {
+  const rows = await rpc<
+    { user_id: string; name: string | null; avatar: string | null; branch: string | null; year: number | null; relation: FriendOfFriend["relation"] }[]
+  >("friends_of", { target: userId });
+  const order = { received: 0, null: 1, sent: 2, friend: 3, me: 4 } as Record<string, number>;
+  return (rows ?? [])
+    .map((r) => ({
+      userId: r.user_id,
+      name: r.name || "A student",
+      avatar: r.avatar ?? undefined,
+      branch: r.branch ?? undefined,
+      year: r.year ?? undefined,
+      relation: r.relation ?? null,
+    }))
+    .sort((a, b) => order[String(a.relation)] - order[String(b.relation)] || a.name.localeCompare(b.name));
+}
+
+/** A friend request to someone on a friend's list (or accepts theirs). */
+export async function requestFriend(userId: string): Promise<"pending" | "accepted"> {
+  const row = await rpc<{ status: "pending" | "accepted" } | { status: "pending" | "accepted" }[]>("request_friend", { them: userId });
+  const r = Array.isArray(row) ? row[0] : row;
+  notifyPush({ type: "friend", to: userId });
+  void pullSocial().catch(() => {});
   return r?.status ?? "pending";
 }
 

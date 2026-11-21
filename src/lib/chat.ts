@@ -186,13 +186,18 @@ async function absorbSharedTasks(fresh: ChatMessage[]): Promise<void> {
   const recent = Date.now() - 7 * 86400_000;
   const incoming = fresh.filter((m) => m.kind === "task" && m.author !== me && !m.deleted && m.data?.title && m.createdAt > recent);
   if (!incoming.length) return;
+  // Let this login's tasks arrive from the cloud first: a shared task deleted or
+  // finished before a logout must not come back as a new one.
+  const { afterFirstSync } = await import("./sync");
+  await afterFirstSync();
   const { addTask } = await import("./repo");
   for (const m of incoming) {
     const d = m.data as ChatTask;
     const key = taskOriginOf(m.author, d);
     if (await db.taskOrigins.get(key)) continue;
+    // Deleted ones count too: deleting a shared task means "I don't want it".
     const same = await db.tasks
-      .filter((t) => !t.deletedAt && t.title.trim().toLowerCase() === d.title.trim().toLowerCase() && (t.dueDate ?? null) === (d.dueDate ?? null))
+      .filter((t) => t.title.trim().toLowerCase() === d.title.trim().toLowerCase() && (t.dueDate ?? null) === (d.dueDate ?? null))
       .first();
     if (same) {
       await db.taskOrigins.put({ key, taskId: same.id, at: Date.now() });

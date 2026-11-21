@@ -204,3 +204,42 @@ describe("background sync spacing", () => {
     expect(nextDelay(300_000, 0.999)).toBeLessThan(360_000);
   });
 });
+
+describe("tasks that make themselves (LMS) after a logout", () => {
+  const item = { id: 70, instance: 7, module: "assign", name: "Lab 7: Joins", course: "DBMS (CSET200)", due: Math.floor(Date.now() / 1000) + 3 * 86400, url: "", overdue: false, action: "" };
+
+  it("a deleted or finished LMS task stays deleted/finished on the next login, even if the LMS answers first", async () => {
+    const { importLms, resetImportMemo } = await import("@/lib/college");
+    const remote = new FakeRemote();
+    // Phone 1: the LMS adds it, I delete one and tick one off, it syncs.
+    resetImportMemo();
+    await importLms({ lms: { connected: true, syncedAt: 1, items: [item, { ...item, id: 71, instance: 8, name: "Quiz 2" }] } });
+    await deleteTask("lms-assign-7");
+    await updateTask("lms-assign-8", { done: true, doneAt: Date.now() });
+    await syncOnce(remote, "u1");
+
+    // Logout wipes the phone; on login the LMS answers BEFORE the cloud pull.
+    await restore(emptyPhone());
+    clearSyncState();
+    resetSyncStatus();
+    resetImportMemo();
+    await importLms({ lms: { connected: true, syncedAt: 2, items: [item, { ...item, id: 71, instance: 8, name: "Quiz 2" }] } });
+    await syncOnce(remote, "u1");
+
+    const a = await db.tasks.get("lms-assign-7");
+    const b = await db.tasks.get("lms-assign-8");
+    expect(a?.deletedAt).toBeTruthy();
+    expect(b?.done).toBe(true);
+    // and the cloud still says so
+    expect(remote.rows.get("tasks/lms-assign-7")?.deleted_at).toBeTruthy();
+  });
+
+  it("an untouched LMS task is not uploaded as if I had changed it", async () => {
+    const { importLms, resetImportMemo } = await import("@/lib/college");
+    resetImportMemo();
+    await importLms({ lms: { connected: true, syncedAt: 3, items: [item] } });
+    const remote = new FakeRemote();
+    await syncOnce(remote, "u1");
+    expect(remote.rows.has("tasks/lms-assign-7")).toBe(false);
+  });
+});

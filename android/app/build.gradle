@@ -12,6 +12,12 @@ def keystorePath = System.getenv("DOCKIN_KEYSTORE")
 
 android {
     namespace = "com.dockin.student"
+    // USE_EXACT_ALARM is for the class and deadline reminders. DockIn installs
+    // from its own APK, not the Play Store, so Play's alarm-clock-app rule that
+    // this lint check enforces does not apply.
+    lint {
+        disable 'ExactAlarm'
+    }
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         // The same identity and signing key as the app already on the phone,

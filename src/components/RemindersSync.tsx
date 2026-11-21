@@ -12,7 +12,7 @@ import { toDateStr } from "@/lib/dates";
 import { getSupabase } from "@/lib/supabase";
 import type { ChatFile } from "@/lib/chat";
 import { findMyAssignment } from "@/lib/solution";
-import { practiceOn, pullPractice } from "@/lib/practiceLms";
+import { retirePractice } from "@/lib/practiceLms";
 
 /**
  * Keeps the phone's reminders in step with the data: whenever the timetable,
@@ -42,13 +42,9 @@ export function RemindersSync() {
       }));
   }, []);
 
-  // The group's Practice LMS (when on): its assignments in Tasks, kept fresh.
+  // The Practice LMS was removed: clear its pretend assignments from Tasks, once.
   useEffect(() => {
-    const pull = () => {
-      if (practiceOn()) void pullPractice().catch(() => {});
-    };
-    pull();
-    return onPhone("resume", pull);
+    void retirePractice().catch(() => {});
   }, []);
 
   // Solutions friends sent for assignments still open on my LMS.
