@@ -60,6 +60,17 @@ public class DockInPlugin extends Plugin {
         live = new WeakReference<>(this);
         // An update or a reboot can drop the hourly check; putting it back is free.
         CollegeJob.schedule(getContext());
+        UpdateJob.schedule(getContext());
+    }
+
+    /** Where an in-app update is (downloading, confirm, done, failed), for the open app. */
+    static void updateState(String state, String message) {
+        DockInPlugin p = live.get();
+        if (p == null) return;
+        JSObject o = new JSObject();
+        o.put("state", state);
+        if (message != null) o.put("message", message);
+        p.notifyListeners("updateState", o);
     }
 
     /** Called by the listener. Does nothing when the app is closed; the inbox has it. */
@@ -438,13 +449,13 @@ public class DockInPlugin extends Plugin {
             @Override
             public void run() {
                 try {
-                    PackageInfo info = c.getPackageManager().getPackageInfo(c.getPackageName(), 0);
-                    long current = Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : (long) info.versionCode;
-                    org.json.JSONObject v = Updater.latest();
+                    Updater.Release r = Updater.latest();
                     JSObject out = new JSObject();
-                    out.put("current", current);
-                    out.put("latest", v.optLong("versionCode", 0));
-                    out.put("name", v.optString("versionName", ""));
+                    out.put("current", Updater.current(c));
+                    out.put("latest", r.code);
+                    out.put("name", r.name);
+                    out.put("ready", r.code > Updater.current(c) && Updater.ready(c, r));
+                    out.put("canInstall", Updater.canInstall(c));
                     call.resolve(out);
                 } catch (Exception e) {
                     call.reject("Could not check for updates.");
@@ -453,15 +464,28 @@ public class DockInPlugin extends Plugin {
         }, "dockin-update-check").start();
     }
 
+    /** What this build's updater can do, so the web knows it is talking to it (older builds lack this). */
+    @PluginMethod
+    public void updateInfo(PluginCall call) {
+        JSObject out = new JSObject();
+        out.put("v", 2);
+        out.put("canInstall", Updater.canInstall(getContext()));
+        call.resolve(out);
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean updating = new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /**
-     * Downloads the newest APK and opens Android's installer. Reports progress
-     * as "updateProgress" events. Rejects "ALLOW_INSTALL" (after opening the
-     * setting) when DockIn may not install apps yet.
+     * Downloads the newest APK (resuming, checked end to end) and hands it to
+     * Android's installer. Reports "updateProgress" {percent} and "updateState"
+     * {state: downloading | verifying | installing | confirm | done | failed}.
+     * Rejects "ALLOW_INSTALL" (after opening the setting) when DockIn may not
+     * install apps yet.
      */
     @PluginMethod
     public void installUpdate(final PluginCall call) {
         final Context c = getContext();
-        if (Build.VERSION.SDK_INT >= 26 && !c.getPackageManager().canRequestPackageInstalls()) {
+        if (!Updater.canInstall(c)) {
             try {
                 Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()));
                 getActivity().startActivity(i);
@@ -471,11 +495,21 @@ public class DockInPlugin extends Plugin {
             call.reject("ALLOW_INSTALL");
             return;
         }
+        if (!updating.compareAndSet(false, true)) {
+            call.reject("BUSY");
+            return;
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    java.io.File apk = Updater.download(c, new Updater.Progress() {
+                    Updater.Release r = Updater.latest();
+                    if (r.code <= Updater.current(c)) {
+                        call.reject("You already have the newest DockIn.");
+                        return;
+                    }
+                    updateState("downloading", null);
+                    java.io.File apk = Updater.download(Updater.dir(c), r, Updater.BASE + "DockIn.apk", new Updater.Progress() {
                         @Override
                         public void at(int percent) {
                             JSObject p = new JSObject();
@@ -483,15 +517,16 @@ public class DockInPlugin extends Plugin {
                             notifyListeners("updateProgress", p);
                         }
                     });
-                    Uri uri = androidx.core.content.FileProvider.getUriForFile(c, c.getPackageName() + ".fileprovider", apk);
-                    Intent install = new Intent(Intent.ACTION_VIEW);
-                    install.setDataAndType(uri, "application/vnd.android.package-archive");
-                    install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    c.startActivity(install);
+                    updateState("verifying", null);
+                    Updater.verify(c, apk);
+                    updateState("installing", null);
+                    Updater.install(c, apk);
                     call.resolve();
                 } catch (Exception e) {
-                    call.reject("The download did not finish. Try again on a better connection.");
+                    String m = e.getMessage();
+                    call.reject(m != null && !m.isEmpty() && !m.startsWith("GitHub") ? m : "The download did not finish. Try again on a better connection.");
+                } finally {
+                    updating.set(false);
                 }
             }
         }, "dockin-update").start();

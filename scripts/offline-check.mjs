@@ -1,8 +1,9 @@
 /**
  * Offline mode, end to end in a real browser: the whole app is saved for
  * offline, no internet shows the Offline mode strip (never a "No internet /
- * Try again" wall), every tab and the mess pass work, the "Network is back"
- * popup comes when it should, and a line too weak to use counts as offline.
+ * Try again" wall), every tab and the mess pass work, it goes back online by
+ * itself, a dead line counts as offline, and a line that keeps being weak gets
+ * the "Low network detected multiple times" prompt.
  *
  *   node scripts/offline-check.mjs        # against a production build on :3000
  */
@@ -265,32 +266,52 @@ await step("Profile opens offline", async () => {
 await page.locator('nav[aria-label="Main"] a', { hasText: "Today" }).first().click().catch(() => {});
 
 await ctx.setOffline(false);
-await step("network back: popup within seconds, strip turns green", async () => {
-  await page.getByRole("alertdialog", { name: "Network is back" }).waitFor({ timeout: 15000 });
-  await page.locator(".offline-pill-back").waitFor({ timeout: 2000 });
-});
-await page.screenshot({ path: SHOTS + "/4-back.png" });
-await step("Go online: strip and popup go away", async () => {
-  await page.getByRole("alertdialog").getByRole("button", { name: "Go online" }).click();
-  await page.locator(".offline-strip").waitFor({ state: "detached", timeout: 2000 });
+await step("network back: online again by itself — 'Back online' flashes, then the strip goes", async () => {
+  await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 15000 });
+  await page.screenshot({ path: SHOTS + "/4-back.png" });
+  await page.locator(".offline-strip").waitFor({ state: "detached", timeout: 6000 });
+  if (await page.getByRole("alertdialog").count()) throw new Error("a popup asked for a tap");
 });
 
-// A line that is "connected" but too weak to carry anything.
+// A line that is "connected" but too weak to use: every answer takes 3 s.
+await ctx.route("**/api/ping**", async (r) => {
+  await new Promise((res) => setTimeout(res, 3000));
+  await r.continue().catch(() => {});
+});
+await step("weak line several times: 'Low network detected multiple times' asks to switch", async () => {
+  const prompt = page.getByRole("alertdialog", { name: "Low network" });
+  for (let i = 0; i < 6 && !(await prompt.count()); i++) {
+    // Coming back to the app is one of the moments it re-checks the line.
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(21000);
+  }
+  await prompt.getByText("Low network detected multiple times").waitFor({ timeout: 2000 });
+  await page.screenshot({ path: SHOTS + "/5-weak.png" });
+});
+await step("'Switch to offline' turns offline mode on", async () => {
+  await page.getByRole("alertdialog").getByRole("button", { name: "Switch to offline" }).click();
+  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 2000 });
+});
+await step("still weak: stays offline (a slow answer doesn't count as back)", async () => {
+  await page.waitForTimeout(12000);
+  if (!(await page.locator(".offline-strip", { hasText: "Offline mode" }).count())) throw new Error("left offline on a weak line");
+});
+await ctx.unroute("**/api/ping**");
+await step("line good again: back online by itself", async () => {
+  await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 20000 });
+  await page.locator(".offline-strip").waitFor({ state: "detached", timeout: 6000 });
+});
+
+// A line that answers nothing at all (connected, but dead).
 await ctx.route("**/api/ping**", () => new Promise(() => {}));
-await step("very weak network (requests hang): offline mode by itself", async () => {
+await step("dead line (requests hang): offline mode by itself after a reload", async () => {
   await page.reload({ waitUntil: "load" });
   await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 20000 });
   await noWall();
 });
 await ctx.unroute("**/api/ping**");
-await step("weak line recovers: popup again", async () => {
-  await page.getByRole("alertdialog", { name: "Network is back" }).waitFor({ timeout: 15000 });
-});
-await step("Not now keeps offline mode, strip offers Go online", async () => {
-  await page.getByRole("alertdialog").getByRole("button", { name: "Not now" }).click();
-  await page.locator(".offline-pill-back").waitFor({ timeout: 2000 });
-  await page.locator(".offline-pill-back").click();
-  await page.locator(".offline-strip").waitFor({ state: "detached", timeout: 2000 });
+await step("…and back online by itself", async () => {
+  await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 20000 });
 });
 console.log(`\n${ok} ok, ${fail.length} failed`, fail, bad.length ? bad : "");
 await browser.close();

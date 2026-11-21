@@ -1,25 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { check, getNet, goOffline, goOnline, poll, resetNet, TIMING } from "@/lib/net";
+import { acceptWeak, check, dismissWeak, getNet, goOffline, poll, resetNet, TIMING } from "@/lib/net";
 
-// The node test environment has no DOM: a tiny document and navigator will do.
+// The node test environment has no DOM: a tiny document and window will do.
 const doc = Object.assign(new EventTarget(), { visibilityState: "visible", documentElement: { classList: { toggle: () => {} } } });
 
-/** The server answers like this: true = 204 in time, false = no answer. */
-let answer = true;
+/** How the server answers: "ok" at once, "slow" after a while, "none" never. */
+let answer: "ok" | "slow" | "none" = "ok";
 
 beforeEach(() => {
   vi.useFakeTimers();
   resetNet();
-  answer = true;
+  answer = "ok";
   vi.stubGlobal("document", doc);
   vi.stubGlobal("window", Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
   vi.stubGlobal("navigator", { onLine: true });
   vi.stubGlobal(
     "fetch",
-    vi.fn((_url: string, init?: RequestInit) =>
-      answer
-        ? Promise.resolve(new Response(null, { status: 204 }))
-        : new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("t", "AbortError")))),
+    vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise((resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("t", "AbortError")));
+          if (answer === "ok") resolve(new Response(null, { status: 204 }));
+          if (answer === "slow") setTimeout(() => resolve(new Response(null, { status: 204 })), TIMING.weak + 500);
+        }),
     ),
   );
 });
@@ -28,67 +31,93 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** Runs a check while time moves on, as it would on a phone. */
+async function run(p: Promise<void>, ms = TIMING.probe * 2 + TIMING.recheck + 200) {
+  await vi.advanceTimersByTimeAsync(ms);
+  await p;
+}
+
 describe("offline mode", () => {
   it("a working line stays online", async () => {
-    await check(true);
-    expect(getNet().offline).toBe(false);
+    await run(check(true), 50);
+    expect(getNet()).toMatchObject({ offline: false, weak: false });
   });
 
-  it("a line too weak to answer twice goes offline", async () => {
-    answer = false;
-    const done = check(true);
-    await vi.advanceTimersByTimeAsync(TIMING.probe * 2 + TIMING.recheck + 100);
-    await done;
+  it("a line too weak to answer twice goes offline by itself", async () => {
+    answer = "none";
+    await run(check(true));
     expect(getNet().offline).toBe(true);
+    expect(getNet().chosen).toBe(false);
   });
 
-  it("one bad moment is not enough", async () => {
-    answer = false;
-    const done = check(true);
+  it("one bad moment is not enough to go offline", async () => {
+    answer = "none";
+    const p = check(true);
     await vi.advanceTimersByTimeAsync(TIMING.probe + 10);
-    answer = true;
-    await vi.advanceTimersByTimeAsync(TIMING.recheck + 10);
-    await done;
+    answer = "ok";
+    await run(p, TIMING.recheck + 50);
     expect(getNet().offline).toBe(false);
   });
 
   it("the phone saying it is offline is believed at once, without asking", async () => {
     (navigator as { onLine: boolean }).onLine = false;
-    const done = check(true);
-    await vi.advanceTimersByTimeAsync(TIMING.recheck + 10);
-    await done;
+    await run(check(true), TIMING.recheck + 50);
     expect(getNet().offline).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("network back: two good answers show the popup; Go online leaves offline mode", async () => {
+  it("network back: online again by itself, shows 'Back online', and asks the app to refresh", async () => {
     goOffline();
-    answer = false;
-    const first = poll();
-    await vi.advanceTimersByTimeAsync(TIMING.probe + 10);
-    await first;
-    expect(getNet()).toMatchObject({ offline: true, back: false, popup: false });
+    const refresh = vi.fn();
+    window.addEventListener("dockin:back-online", refresh);
+    answer = "none";
+    await run(poll(), TIMING.probe + 10);
+    expect(getNet().offline).toBe(true);
 
-    answer = true;
-    await vi.advanceTimersByTimeAsync(TIMING.poll + 10); // first good answer
+    answer = "ok";
+    await vi.advanceTimersByTimeAsync(TIMING.poll + 10); // one quick answer
+    expect(getNet().offline).toBe(true);
+    await vi.advanceTimersByTimeAsync(2100); // and another: back
+    expect(getNet()).toMatchObject({ offline: false, back: true });
+    expect(refresh).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(TIMING.backFor + 10);
     expect(getNet().back).toBe(false);
-    await vi.advanceTimersByTimeAsync(2100); // second, sooner
-    expect(getNet()).toMatchObject({ offline: true, back: true, popup: true });
-
-    const heard = vi.fn();
-    window.addEventListener("dockin:back-online", heard);
-    goOnline();
-    expect(getNet()).toMatchObject({ offline: false, back: false, popup: false });
-    expect(heard).toHaveBeenCalledOnce();
   });
 
-  it("losing the network again while the popup is up takes the popup away", async () => {
+  it("a slow line does not count as back", async () => {
     goOffline();
-    await poll();
+    answer = "slow";
+    await vi.advanceTimersByTimeAsync(TIMING.poll * 6);
+    expect(getNet().offline).toBe(true);
+  });
+
+  it("weak moments several times → 'low network detected multiple times'", async () => {
+    answer = "slow";
+    for (let i = 0; i < TIMING.weakCount; i++) {
+      expect(getNet().weak).toBe(false);
+      await run(check(true), TIMING.weak + 600);
+    }
+    expect(getNet()).toMatchObject({ weak: true, offline: false });
+  });
+
+  it("'Switch to offline' goes offline; it still comes back by itself on a clearly good line", async () => {
+    answer = "slow";
+    for (let i = 0; i < TIMING.weakCount; i++) await run(check(true), TIMING.weak + 600);
+    acceptWeak();
+    expect(getNet()).toMatchObject({ offline: true, chosen: true, weak: false });
+    answer = "ok";
+    await vi.advanceTimersByTimeAsync(TIMING.poll + 2100 + 10);
+    expect(getNet().offline).toBe(true); // two quick answers aren't enough after it kept dropping
     await vi.advanceTimersByTimeAsync(2100);
-    expect(getNet().popup).toBe(true);
-    answer = false;
-    await vi.advanceTimersByTimeAsync(TIMING.poll + TIMING.probe + 20);
-    expect(getNet()).toMatchObject({ offline: true, back: false, popup: false });
+    expect(getNet().offline).toBe(false);
+  });
+
+  it("'Stay online' hides the prompt and doesn't nag again right away", async () => {
+    answer = "slow";
+    for (let i = 0; i < TIMING.weakCount; i++) await run(check(true), TIMING.weak + 600);
+    dismissWeak();
+    expect(getNet().weak).toBe(false);
+    for (let i = 0; i < TIMING.weakCount; i++) await run(check(true), TIMING.weak + 600);
+    expect(getNet().weak).toBe(false);
   });
 });

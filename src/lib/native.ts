@@ -145,10 +145,12 @@ interface DockInPlugin {
   /** Hand a file in to this student's own LMS assignment (base64 data). Rejects "WEB_ONLY" when the LMS login cannot upload. */
   /** Live site (service worker) or the APK's own copy opens screens. */
   setLive(options: { on: boolean }): Promise<void>;
-  /** Newer APK on GitHub? */
-  checkUpdate(): Promise<{ current: number; latest: number; name: string }>;
-  /** Download the newest APK and open the installer (rejects "ALLOW_INSTALL" if not permitted yet). */
+  /** Newer APK on GitHub? `ready`/`canInstall` come from builds with the v2 updater. */
+  checkUpdate(): Promise<{ current: number; latest: number; name: string; ready?: boolean; canInstall?: boolean }>;
+  /** Download the newest APK and open the installer (rejects "ALLOW_INSTALL" if not permitted yet, "BUSY" if already at it). */
   installUpdate(): Promise<void>;
+  /** The v2 updater (resume, checks, PackageInstaller, progress states). Missing on older builds. */
+  updateInfo(): Promise<{ v: number; canInstall: boolean }>;
   /** Open a document (base64) in the phone's own viewer app. */
   openFile(options: { name: string; mime: string; data: string }): Promise<void>;
   /** status: what the LMS says afterwards ("submitted", "draft", "new"…); missing on older app builds. */
@@ -170,7 +172,11 @@ interface DockInPlugin {
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
   addListener(event: "updateProgress", fn: (p: { percent: number }) => void): Promise<PluginListenerHandle>;
+  addListener(event: "updateState", fn: (p: { state: UpdateState; message?: string }) => void): Promise<PluginListenerHandle>;
 }
+
+/** Where an in-app update is, as the v2 updater reports it. */
+export type UpdateState = "downloading" | "verifying" | "installing" | "confirm" | "done" | "failed";
 
 /** A reminder for the phone to fire at `at` (epoch ms): class, task, attendance. */
 export interface ReminderItem {

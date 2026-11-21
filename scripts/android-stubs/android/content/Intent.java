@@ -25,6 +25,9 @@ public class Intent {
   public static final String ACTION_BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED";
   public static final String ACTION_MY_PACKAGE_REPLACED = "android.intent.action.MY_PACKAGE_REPLACED";
   public String getAction() { return null; }
+  public static final String EXTRA_INTENT = "android.intent.extra.INTENT";
+  public <T> T getParcelableExtra(String k) { return null; }
+  public <T> T getParcelableExtra(String k, Class<T> c) { return null; }
   public android.net.Uri getData() { return null; }
   public Intent setData(android.net.Uri u) { return this; }
   public Intent setClassName(String p, String c) { return this; }

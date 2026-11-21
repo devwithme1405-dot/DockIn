@@ -11,4 +11,6 @@
     <string name="channel_payments_about">Asks where the money went, right after you pay.</string>
     <string name="channel_college">Classes and assignments</string>
     <string name="channel_college_about">New LMS assignments, deadlines within a day, and absences Camu records.</string>
+    <string name="channel_updates">App updates</string>
+    <string name="channel_updates_about">When a new version of DockIn is ready to install.</string>
 </resources>

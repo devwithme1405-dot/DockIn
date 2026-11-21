@@ -6,6 +6,7 @@ public class JobInfo {
     public Builder(int id, ComponentName c) {}
     public Builder setRequiredNetworkType(int t) { return this; }
     public Builder setPeriodic(long ms) { return this; }
+    public Builder setPeriodic(long ms, long flexMs) { return this; }
     public Builder setPersisted(boolean b) { return this; }
     public JobInfo build() { return null; }
   }

@@ -5,4 +5,6 @@ public class BridgeActivity extends AppCompatActivity {
   protected Bridge bridge;
   @Override protected void onCreate(Bundle savedInstanceState) {}
   public void registerPlugin(Class<? extends Plugin> plugin) {}
+  public void onResume() {}
+  public void onPause() {}
 }

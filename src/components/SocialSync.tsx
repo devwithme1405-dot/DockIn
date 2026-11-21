@@ -31,6 +31,8 @@ export function SocialSync() {
       if (local) await publishProfile(local, mine.shareAttendance);
     })().catch(() => {});
     const openPath = (path: string) => {
+      // Same signal a DockIn notification gives (e.g. "update ready" opens the update popup).
+      window.dispatchEvent(new CustomEvent("dockin-open", { detail: path }));
       const url = new URL(path, window.location.href);
       if (tabOf(url.pathname)) goTab(url.pathname + url.search);
       else window.location.assign(path);

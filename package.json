@@ -9,8 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs && node scripts/native-check.mjs && node scripts/offline-check.mjs",
-    "android:check": "bash scripts/android-compile.sh",
+    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs && node scripts/native-check.mjs && node scripts/offline-check.mjs && node scripts/update-check.mjs",
+    "android:check": "bash scripts/android-compile.sh && bash scripts/android-updater-test.sh",
     "verify": "npm run typecheck && npm run lint && npm test && npm run android:check && npm run build"
   },
   "dependencies": {

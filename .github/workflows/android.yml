@@ -59,7 +59,7 @@ jobs:
           packages: "platforms;android-36 build-tools;35.0.0"
 
       - name: Check the Java against stubs and the payment rules
-        run: bash scripts/android-compile.sh
+        run: bash scripts/android-compile.sh && bash scripts/android-updater-test.sh
 
       - name: Restore signing key
         env:
@@ -105,10 +105,26 @@ jobs:
           LINE=$("$BT/aapt2" dump badging DockIn.apk | head -1)
           CODE=$(echo "$LINE" | sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p")
           NAME=$(echo "$LINE" | sed -nE "s/.*versionName='([^']+)'.*/\1/p")
-          printf '{"versionCode":%s,"versionName":"%s","sha":"%s"}\n' "$CODE" "$NAME" "${GITHUB_SHA::7}" > version.json
+          # Size and SHA-256 let the app prove the download is whole before installing it.
+          SHA256=$(sha256sum DockIn.apk | cut -d' ' -f1)
+          SIZE=$(stat -c%s DockIn.apk)
+          printf '{"versionCode":%s,"versionName":"%s","sha":"%s","sha256":"%s","size":%s}\n' "$CODE" "$NAME" "${GITHUB_SHA::7}" "$SHA256" "$SIZE" > version.json
           cat version.json
           gh release delete apk-latest --cleanup-tag -y || true
           gh release create apk-latest DockIn.apk version.json \
             --title "DockIn for Android" \
             --notes "Signed Android app (Capacitor). Install DockIn.apk over the old one. It opens dock-in.vercel.app, so screen updates arrive without a new APK; this file changes only when the phone-side part does." \
             --latest
+
+      # Everyone with notifications on hears about it right away (the app's own
+      # background check is the safety net). Needs the DOCKIN_RELEASE_KEY secret,
+      # the same value as RELEASE_PUSH_KEY on Vercel; without it this is skipped.
+      - name: Tell everyone the update is out
+        env:
+          RELEASE_KEY: ${{ secrets.DOCKIN_RELEASE_KEY }}
+        run: |
+          if [ -z "$RELEASE_KEY" ]; then echo "DOCKIN_RELEASE_KEY not set: no push this time"; exit 0; fi
+          sleep 20  # let GitHub's download links settle before phones come asking
+          curl -sS --retry 3 --retry-delay 5 --max-time 90 -X POST https://dock-in.vercel.app/api/release \
+            -H "x-release-key: $RELEASE_KEY" -H "content-type: application/json" --data @version.json || echo "push failed (the in-app check still finds the update)"
+

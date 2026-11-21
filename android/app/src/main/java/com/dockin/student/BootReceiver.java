@@ -18,7 +18,9 @@ public class BootReceiver extends BroadcastReceiver {
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(a)) {
             CollegeJob.schedule(context);
+            UpdateJob.schedule(context);
             Reminders.restore(context);
         }
+        if (Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) Updater.afterUpdate(context);
     }
 }

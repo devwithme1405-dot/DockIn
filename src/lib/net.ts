@@ -3,43 +3,48 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Offline mode.
+ * Offline mode — fully automatic, both ways.
  *
  * DockIn keeps everything on the phone, so with no internet (or internet so weak
- * it might as well be none) the app should simply carry on — clearly saying it
- * is offline, never showing a "No internet / Try again" wall.
+ * it might as well be none) the app simply carries on in offline mode, and when
+ * a good connection is back it switches itself online and refreshes everything.
+ * Nobody has to tap anything, and there is never a "No internet / Try again" wall.
  *
  * How it decides:
  * - The phone says it is offline (`navigator.onLine === false`): offline at once.
- * - Otherwise, whenever there is a reason to doubt the line — at launch, on
- *   coming back to the app, a request that failed or hung — it asks DockIn's own
- *   server a tiny question (`/api/ping`). Two misses in a row, each allowed a
- *   few seconds, means the network is too weak to use: offline mode.
- * - In offline mode it keeps asking quietly every few seconds. Two good answers
- *   in a row and the "Network is back" popup comes up; the person chooses when
- *   to go online. (Data never waits for that tap: the sync engine retries on
- *   its own the moment the line works.)
+ * - Whenever there is a reason to doubt the line — launch, coming back to the
+ *   app, a request that hung — it asks DockIn's own server a tiny question
+ *   (`/api/ping`). Two misses in a row: offline mode.
+ * - An answer that comes, but slowly, is a "weak network" moment. Several of
+ *   those within a few minutes and DockIn suggests switching to offline mode
+ *   ("Low network detected multiple times").
+ * - In offline mode it quietly asks every few seconds. A couple of quick answers
+ *   in a row and it is back online: the strip flashes "Back online", data
+ *   syncs, chats and friends refresh.
  */
 
 export type NetState = {
   /** In offline mode. */
   offline: boolean;
-  /** In offline mode, but the network works again. */
+  /** Offline because the person chose it after a "low network" prompt. */
+  chosen: boolean;
+  /** Just came back online: the strip shows "Back online" for a moment. */
   back: boolean;
-  /** The "Network is back" popup is showing. */
-  popup: boolean;
+  /** "Low network detected multiple times" — suggest offline mode. */
+  weak: boolean;
 };
 
-const START: NetState = { offline: false, back: false, popup: false };
+const START: NetState = { offline: false, chosen: false, back: false, weak: false };
 let state: NetState = START;
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<NetState>) {
   const next = { ...state, ...patch };
-  if (next.offline === state.offline && next.back === state.back && next.popup === state.popup) return;
+  if (next.offline === state.offline && next.chosen === state.chosen && next.back === state.back && next.weak === state.weak) return;
   state = next;
   try {
-    document.documentElement.classList.toggle("offline", state.offline);
+    // Headers leave room for the strip while it shows (offline, or "back online").
+    document.documentElement.classList.toggle("offline", state.offline || state.back);
   } catch {
     /* no document (tests) */
   }
@@ -56,7 +61,7 @@ export function useNet(): NetState {
   return useSyncExternalStore(subscribeNet, getNet, () => START);
 }
 
-/** Sent when the person taps "Go online": time to sync and refresh everything. */
+/** Sent when DockIn is back online: time to sync and refresh everything. */
 export const BACK_ONLINE = "dockin:back-online";
 
 export const TIMING = {
@@ -70,21 +75,34 @@ export const TIMING = {
   poll: 5000,
   /** A request still hanging after this long is a sign of a weak line. */
   slow: 10_000,
+  /** An answer slower than this is a "weak network" moment. */
+  weak: 2500,
+  /** An answer faster than this counts towards "good enough to go online". */
+  strong: 2000,
+  /** This many weak moments… */
+  weakCount: 3,
+  /** …within this long suggests offline mode. */
+  weakWindow: 3 * 60_000,
+  /** After "Stay online", don't suggest again for this long. */
+  snooze: 10 * 60_000,
+  /** How long "Back online" shows. */
+  backFor: 2600,
 };
 
 let rawFetch: typeof fetch | null = null;
 
-/** One tiny request to DockIn's own server: true if it answered in time. */
-export async function probe(): Promise<boolean> {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+/** One tiny request to DockIn's own server: did it answer, and how fast. */
+export async function probe(): Promise<{ ok: boolean; ms: number }> {
+  const t0 = Date.now();
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, ms: 0 };
   const f = rawFetch ?? fetch;
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), TIMING.probe);
   try {
     const r = await f(`/api/ping?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
-    return r.ok;
+    return { ok: r.ok, ms: Date.now() - t0 };
   } catch {
-    return false;
+    return { ok: false, ms: Date.now() - t0 };
   } finally {
     clearTimeout(t);
   }
@@ -92,27 +110,51 @@ export async function probe(): Promise<boolean> {
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// ---------------------------------------------------------------------------
+// Online: is the line actually usable?
+
 let checking = false;
 let lastCheck = 0;
+let weakTimes: number[] = [];
+let snoozedUntil = 0;
 
-/** While online: is the line actually usable? Two misses → offline mode. */
+function weakMoment() {
+  if (state.offline) return;
+  const now = Date.now();
+  weakTimes = [...weakTimes.filter((t) => now - t < TIMING.weakWindow), now];
+  if (weakTimes.length >= TIMING.weakCount && now >= snoozedUntil && !state.weak) set({ weak: true });
+}
+
+/** Two misses → offline mode. A slow answer, or a miss then an answer → a weak moment. */
 export async function check(force = false): Promise<void> {
   if (state.offline || checking) return;
   if (!force && Date.now() - lastCheck < TIMING.gap) return;
   checking = true;
   lastCheck = Date.now();
   try {
-    if (await probe()) return;
+    const first = await probe();
+    if (first.ok) {
+      if (first.ms > TIMING.weak) weakMoment();
+      return;
+    }
     await wait(TIMING.recheck);
     if (state.offline) return;
-    if (await probe()) return;
+    const second = await probe();
+    if (second.ok) {
+      weakMoment();
+      return;
+    }
     goOffline();
   } finally {
     checking = false;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Offline: has a good connection come back?
+
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
+let backTimer: ReturnType<typeof setTimeout> | undefined;
 let good = 0;
 
 function schedulePoll(ms = TIMING.poll) {
@@ -120,36 +162,39 @@ function schedulePoll(ms = TIMING.poll) {
   if (state.offline) pollTimer = setTimeout(() => void poll(), ms);
 }
 
-/** While offline: has the network come back? */
 export async function poll(): Promise<void> {
   clearTimeout(pollTimer);
   if (!state.offline) return;
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return; // resumes on return
-  const ok = await probe();
+  const r = await probe();
   if (!state.offline) return;
-  if (ok) {
-    good += 1;
-    if (good >= 2 && !state.back) set({ back: true, popup: true });
-  } else {
-    good = 0;
-    if (state.back) set({ back: false, popup: false });
+  const strong = r.ok && r.ms < TIMING.strong;
+  good = strong ? good + 1 : 0;
+  // Chosen offline because the line kept dropping: wait for it to be clearly good.
+  if (good >= (state.chosen ? 3 : 2)) {
+    backOnline();
+    return;
   }
-  schedulePoll(ok && good < 2 ? 2000 : TIMING.poll);
+  schedulePoll(strong ? 2000 : TIMING.poll);
 }
 
-export function goOffline(): void {
+export function goOffline(chosen = false): void {
   if (state.offline) return;
   good = 0;
-  set({ offline: true, back: false, popup: false });
+  clearTimeout(backTimer);
+  set({ offline: true, chosen, back: false, weak: false });
   schedulePoll();
 }
 
-/** The person chose to go online (the popup, or the banner once it is back). */
-export function goOnline(): void {
+/** Back online by itself: show it for a moment, then refresh everything. */
+function backOnline(): void {
   clearTimeout(pollTimer);
   good = 0;
   lastCheck = Date.now();
-  set({ offline: false, back: false, popup: false });
+  weakTimes = [];
+  set({ offline: false, chosen: false, back: true, weak: false });
+  clearTimeout(backTimer);
+  backTimer = setTimeout(() => set({ back: false }), TIMING.backFor);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(BACK_ONLINE));
     // The sync engine and chat already catch up on the browser's own "online".
@@ -157,11 +202,25 @@ export function goOnline(): void {
   }
 }
 
-export function dismissPopup(): void {
-  set({ popup: false });
+/** "Check now" in the offline sheet. */
+export function retryNow(): void {
+  if (state.offline) void poll();
 }
 
-/** Something hinted the line is bad (a failed or hanging request). */
+/** The "low network" prompt: switch to offline mode. */
+export function acceptWeak(): void {
+  weakTimes = [];
+  goOffline(true);
+}
+
+/** The "low network" prompt: stay online (and don't ask again for a while). */
+export function dismissWeak(): void {
+  weakTimes = [];
+  snoozedUntil = Date.now() + TIMING.snooze;
+  set({ weak: false });
+}
+
+/** Something hinted the line is bad (a request that failed or hung). */
 export function trouble(): void {
   if (!state.offline) void check();
 }
@@ -193,7 +252,7 @@ export function startNet(): void {
     /* fetch can't be wrapped: the other signals still work */
   }
 
-  window.addEventListener("offline", goOffline);
+  window.addEventListener("offline", () => goOffline());
   window.addEventListener("online", () => {
     if (state.offline) void poll();
   });
@@ -204,7 +263,8 @@ export function startNet(): void {
   });
   const conn = (navigator as Navigator & { connection?: EventTarget & { effectiveType?: string } }).connection;
   conn?.addEventListener?.("change", () => {
-    if (conn.effectiveType === "slow-2g" || conn.effectiveType === "2g") void check(true);
+    if (state.offline) void poll();
+    else if (conn.effectiveType === "slow-2g" || conn.effectiveType === "2g") void check(true);
   });
 
   if (navigator.onLine === false) goOffline();
@@ -214,8 +274,11 @@ export function startNet(): void {
 /** Tests only: back to a fresh start. */
 export function resetNet(): void {
   clearTimeout(pollTimer);
+  clearTimeout(backTimer);
   state = START;
   good = 0;
   checking = false;
   lastCheck = 0;
+  weakTimes = [];
+  snoozedUntil = 0;
 }

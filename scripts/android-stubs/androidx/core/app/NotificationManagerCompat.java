@@ -12,5 +12,7 @@ public final class NotificationManagerCompat {
   public void notify(int id, Notification n) {}
   public void createNotificationChannel(NotificationChannelCompat channel) {}
   public void cancel(int id) {}
+  public void notify(String tag, int id, Notification n) {}
+  public void cancel(String tag, int id) {}
   public static final int IMPORTANCE_MIN = 1;
 }

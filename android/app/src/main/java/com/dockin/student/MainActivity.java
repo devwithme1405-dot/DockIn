@@ -24,6 +24,21 @@ public class MainActivity extends BridgeActivity {
     /** Which screen to open, set by DockIn's own notifications. */
     static final String EXTRA_OPEN = "com.dockin.student.OPEN";
 
+    /** DockIn is on screen: an update's "confirm" step can open straight away. */
+    static volatile boolean inFront = false;
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        inFront = true;
+    }
+
+    @Override
+    public void onPause() {
+        inFront = false;
+        super.onPause();
+    }
+
     /**
      * The launch splash (the cap docking onto the cover) is held on screen until
      * the web app has drawn its first real screen, so the opening reads as one

@@ -4,35 +4,36 @@ import { useState, type CSSProperties } from "react";
 import {
   CalendarDays,
   ChartNoAxesColumn,
+  Check,
   ChevronRight,
   CloudUpload,
   House,
   MessageCircle,
   ScanLine,
+  WifiLow,
   SquareCheckBig,
-  Wifi,
   WifiOff,
   type LucideIcon,
 } from "lucide-react";
 import { FRIENDS } from "@/lib/features";
-import { dismissPopup, goOnline, useNet } from "@/lib/net";
+import { acceptWeak, dismissWeak, retryNow, useNet } from "@/lib/net";
 import { showMessPass } from "@/lib/messPass";
 import { goTab } from "@/lib/tabs";
 import { Sheet, cx } from "./ui";
 
 /**
- * Everything offline mode shows: the strip at the top, the sheet it opens
- * (what still works, one tap each), and the "Network is back" popup.
+ * Everything offline mode shows: the strip at the top (offline, or a moment of
+ * "Back online"), the sheet it opens (what works offline, one tap each), and
+ * the "low network detected multiple times" prompt.
  */
 export function OfflineLayer() {
   const net = useNet();
   const [sheet, setSheet] = useState(false);
-  if (!net.offline) return null;
   return (
     <>
-      <OfflineStrip back={net.back} onOpen={() => setSheet(true)} />
-      <OfflineSheet open={sheet} back={net.back} onClose={() => setSheet(false)} />
-      {net.popup && !sheet && <BackOnline />}
+      {(net.offline || net.back) && <OfflineStrip back={!net.offline && net.back} onOpen={() => setSheet(true)} />}
+      <OfflineSheet open={sheet && net.offline} chosen={net.chosen} onClose={() => setSheet(false)} />
+      {net.weak && !net.offline && <WeakPrompt />}
     </>
   );
 }
@@ -43,11 +44,11 @@ function OfflineStrip({ back, onOpen }: { back: boolean; onOpen: () => void }) {
     <div className="offline-strip fixed inset-x-0 top-0 z-[60]" role="status" aria-live="polite">
       <div className="mx-auto flex h-9 max-w-md items-center justify-center px-4">
         {back ? (
-          <button onClick={goOnline} className="offline-pill offline-pill-back">
-            <Wifi size={13} strokeWidth={2.6} />
-            <span>Network is back</span>
-            <span className="offline-pill-cta">Go online</span>
-          </button>
+          <span className="offline-pill offline-pill-back">
+            <Check size={14} strokeWidth={3} />
+            <span>Back online</span>
+            <span className="opacity-80">· syncing</span>
+          </span>
         ) : (
           <button onClick={onOpen} className="offline-pill" aria-label="Offline mode. See what works offline">
             <span className="offline-dot" aria-hidden />
@@ -78,7 +79,7 @@ function afterClose(fn: () => void) {
   window.setTimeout(go, 450);
 }
 
-function OfflineSheet({ open, back, onClose }: { open: boolean; back: boolean; onClose: () => void }) {
+function OfflineSheet({ open, chosen, onClose }: { open: boolean; chosen: boolean; onClose: () => void }) {
   const spots: Spot[] = [
     { label: "Mess pass", note: "Show it at the counter", icon: ScanLine, tint: "#e0662b", go: showMessPass },
     { label: "Timetable", note: "Today and the week", icon: CalendarDays, tint: "#4b7fc4", go: () => goTab("/timetable") },
@@ -100,8 +101,8 @@ function OfflineSheet({ open, back, onClose }: { open: boolean; back: boolean; o
           <WifiOff size={23} strokeWidth={2.4} />
         </span>
         <p className="text-[13.5px] leading-snug">
-          <b className="block text-[15.5px] font-extrabold">No internet? No problem.</b>
-          Everything you do is saved on this phone and syncs by itself once you&rsquo;re back online.
+          <b className="block text-[15.5px] font-extrabold">{chosen ? "The network kept dropping." : "No internet? No problem."}</b>
+          Everything you do is saved on this phone. DockIn goes back online by itself and syncs the moment the network is good.
         </p>
       </div>
 
@@ -135,48 +136,37 @@ function OfflineSheet({ open, back, onClose }: { open: boolean; back: boolean; o
         ))}
       </div>
 
-      {back ? (
-        <button
-          onClick={() => {
-            onClose();
-            goOnline();
-          }}
-          className="btn-leather mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-bold"
-        >
-          <Wifi size={18} /> Network is back · Go online
-        </button>
-      ) : (
-        <p className="mt-6 flex items-center justify-center gap-2 text-[12.5px] font-semibold text-muted">
-          <span className="offline-dot offline-dot-muted" aria-hidden /> Looking for a network — we&rsquo;ll tell you
-        </p>
-      )}
+      <button
+        onClick={retryNow}
+        className="mt-6 flex w-full items-center justify-center gap-2 text-[12.5px] font-semibold text-muted active:opacity-70"
+      >
+        <span className="offline-dot offline-dot-muted" aria-hidden /> Looking for a good network — tap to check now
+      </button>
     </Sheet>
   );
 }
 
-/** "Network is back" — sits above the tab bar until answered. */
-function BackOnline() {
+/** "Low network detected multiple times" — offer offline mode, never force it. */
+function WeakPrompt() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(6.9rem+var(--sab))] z-[58] mx-auto max-w-md px-4">
-      <div
-        role="alertdialog"
-        aria-label="Network is back"
-        className="back-online glass-card pointer-events-auto flex items-center gap-3 rounded-3xl p-3.5"
-      >
-        <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-safe-soft text-safe">
-          <span className="anim-halo absolute inset-0 rounded-2xl bg-safe/20" aria-hidden />
-          <Wifi size={21} strokeWidth={2.5} className="relative" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-extrabold leading-tight">Network is back</p>
-          <p className="text-[12.5px] leading-snug text-muted">Go online to sync and get the latest.</p>
+      <div role="alertdialog" aria-label="Low network" className="back-online glass-card pointer-events-auto rounded-3xl p-3.5">
+        <div className="flex items-center gap-3">
+          <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-warn-soft text-warn">
+            <span className="anim-halo absolute inset-0 rounded-2xl bg-warn/20" aria-hidden />
+            <WifiLow size={22} strokeWidth={2.6} className="relative" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] leading-tight font-extrabold">Low network detected multiple times</p>
+            <p className="text-[12.5px] leading-snug text-muted">Switch to offline mode? It comes back online by itself.</p>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-col gap-1.5">
-          <button onClick={goOnline} className="btn-leather lip-sm h-9 rounded-xl px-3.5 text-[13px] font-bold">
-            Go online
+        <div className="mt-3 flex gap-2">
+          <button onClick={dismissWeak} className="btn-paper lip-sm h-10 flex-1 rounded-xl text-[13px] font-bold">
+            Stay online
           </button>
-          <button onClick={dismissPopup} className="h-7 rounded-xl px-2 text-[12px] font-semibold text-muted">
-            Not now
+          <button onClick={acceptWeak} className="btn-leather lip-sm h-10 flex-1 rounded-xl text-[13px] font-bold">
+            Switch to offline
           </button>
         </div>
       </div>
@@ -195,17 +185,8 @@ export function OfflineCard({ className }: { className?: string }) {
           <CloudUpload size={21} strokeWidth={2.4} />
         </span>
         <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
-          {net.back ? (
-            <>
-              <b className="block text-[14.5px] font-extrabold">Network is back</b>
-              Tap &ldquo;Go online&rdquo; up top to sync your changes.
-            </>
-          ) : (
-            <>
-              <b className="block text-[14.5px] font-extrabold">You&rsquo;re offline</b>
-              Mark attendance and tick tasks as usual — it all syncs later.
-            </>
-          )}
+          <b className="block text-[14.5px] font-extrabold">You&rsquo;re offline</b>
+          Mark attendance and tick tasks as usual — it all syncs later.
         </p>
         <button
           onClick={showMessPass}
