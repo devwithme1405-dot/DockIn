@@ -23,6 +23,8 @@ import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 import { goTab, tabOf } from "@/lib/tabs";
 import { TabHost } from "./TabHost";
+import { OfflineLayer } from "./Offline";
+import { startNet } from "@/lib/net";
 
 /**
  * How many things want attention right now: your own tasks that are overdue or
@@ -135,6 +137,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     void ensureCategories();
   }, []);
+
+  // Offline mode: watch the network from the start (see lib/net).
+  useEffect(() => {
+    if (!bare) startNet();
+  }, [bare]);
 
   /**
    * The entrance animations (the stagger that rises each card in) are a first
@@ -374,6 +381,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </main>
         )}
         {ready && !onboarding && <TabBar pathname={pathname} />}
+        {ready && !onboarding && <OfflineLayer />}
         {ready && !onboarding && isNativeApp() && <RemindersSync />}
         {ready && isNativeApp() && pathname !== "/onboarding" && <NotifyAsk />}
         {ready && !onboarding && FRIENDS && <SocialSync />}

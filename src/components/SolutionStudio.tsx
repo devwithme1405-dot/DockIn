@@ -31,6 +31,7 @@ import { db } from "@/lib/db";
 import { getProfile, saveProfile, setTaskDone } from "@/lib/repo";
 import { useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
+import { isOffline } from "@/lib/net";
 import { DraftOnly, WebOnlyLms, submitToLms } from "@/lib/lmsSubmit";
 import { useBackClose } from "@/lib/backClose";
 import { guessRolls } from "@/lib/docx";
@@ -564,6 +565,10 @@ export function CopyStudio({
 
   async function submit() {
     if (!copy || !task || instance === null || busy) return;
+    if (isOffline()) {
+      toast.show("You're offline. Your copy is ready — hand it in once you're back online.");
+      return;
+    }
     setPhase("sending");
     setFail(null);
     const t0 = clock();

@@ -25,6 +25,7 @@ import { ensureSessionsSince, getProfile, setSessionStatus, setTaskDone } from "
 import { useEvents, useSessionsOn, useSlots, useTasks } from "@/lib/hooks";
 import { holidayLastDay, holidayOn, useAttendanceData, type ViewSession } from "@/lib/college";
 import { CamuStatus, ConnectCamu } from "@/components/College";
+import { OfflineCard } from "@/components/Offline";
 import { eventsOn, holidayLength } from "@/lib/calendar";
 import { bucketOf, compareTasks, countdownText, daysBetween, doneToday, dueLabel } from "@/lib/tasks";
 import { addDays, fmtDay, fmtTime, greetingFor, nowHM, toDateStr, toMinutes } from "@/lib/dates";
@@ -184,6 +185,7 @@ export default function TodayPage() {
         </span>
       </div>
 
+      <OfflineCard className="mt-4" />
       <AttendanceCard overall={data.overall} trend={trend} target={target} />
       {camu && <CamuStatus camu={camu} className="mt-3.5" />}
       {!camu && native && (

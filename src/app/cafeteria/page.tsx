@@ -15,6 +15,8 @@ import type { MessDay } from "@/lib/types";
 import { toDateStr, fmtDayLong } from "@/lib/dates";
 import { TAB_SHOWN } from "@/lib/tabs";
 import { Sheet, cx } from "@/components/ui";
+import { SHOW_PASS, passRequested, takePassRequest } from "@/lib/messPass";
+import { isOffline } from "@/lib/net";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -100,7 +102,8 @@ export default function CafeteriaPage() {
   const [pulling, setPulling] = useState(false);
   useEffect(() => {
     if (pulled.current) return;
-    if (state.camu?.connected && !caf?.meals?.length) {
+    // Offline there is nothing to fetch: show what's saved, no loading bones.
+    if (state.camu?.connected && !caf?.meals?.length && !isOffline()) {
       pulled.current = true;
       void Promise.resolve().then(() => setPulling(true));
       void Promise.resolve(syncCollege())
@@ -168,6 +171,24 @@ export default function CafeteriaPage() {
       cancelAnimationFrame(raf);
     };
   }, [svg]);
+
+  // "Show my mess pass" from the offline sheet or Today: bring it into view as
+  // soon as this tab is the one on screen.
+  useEffect(() => {
+    const go = () => {
+      const el = document.getElementById("mess-pass");
+      if (!el || el.offsetParent === null || !passRequested()) return;
+      takePassRequest();
+      requestAnimationFrame(() => el.scrollIntoView({ block: "start", behavior: "smooth" }));
+    };
+    go();
+    window.addEventListener(SHOW_PASS, go);
+    window.addEventListener(TAB_SHOWN, go);
+    return () => {
+      window.removeEventListener(SHOW_PASS, go);
+      window.removeEventListener(TAB_SHOWN, go);
+    };
+  }, []);
 
   return (
     <div className="page-wash min-h-dvh">
@@ -277,7 +298,7 @@ export default function CafeteriaPage() {
       </section>
 
       {/* mess pass */}
-      <div className="mx-5 mt-7">
+      <div id="mess-pass" className="mx-5 mt-7 scroll-mt-[calc(var(--sat)+4.5rem)]">
         <div className="flex items-center gap-3">
           <span className="grid size-11 place-items-center rounded-2xl bg-mess-soft text-mess">
             <ScanLine size={21} />

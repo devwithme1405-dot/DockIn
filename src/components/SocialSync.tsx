@@ -9,6 +9,7 @@ import { getProfile } from "@/lib/repo";
 import { getSupabase } from "@/lib/supabase";
 import { TAB_SHOWN, goTab, tabOf } from "@/lib/tabs";
 import { whileVisible } from "@/lib/visible";
+import { BACK_ONLINE } from "@/lib/net";
 
 /**
  * Keeps chat live and push registered while someone is signed in: a pull on
@@ -74,6 +75,12 @@ export function SocialSync() {
       if (Date.now() - last > 15_000) soon(300);
     };
     document.addEventListener("visibilitychange", onShow);
+    // Tapped "Go online" after offline mode: catch up on everything now.
+    const onBack = () => {
+      void pullChat();
+      soon(300);
+    };
+    window.addEventListener(BACK_ONLINE, onBack);
     const onGranted = () => void startPush(openPath);
     window.addEventListener("dockin:notifications", onGranted);
     return () => {
@@ -82,6 +89,7 @@ export function SocialSync() {
       window.clearTimeout(timer);
       window.removeEventListener(TAB_SHOWN, onTab);
       document.removeEventListener("visibilitychange", onShow);
+      window.removeEventListener(BACK_ONLINE, onBack);
     };
   }, [uid]);
 

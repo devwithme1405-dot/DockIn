@@ -98,9 +98,79 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      .then(() => {
+        precacheRest();
+      }),
   );
 });
+
+// The rest of the app, for offline: every script, style and font of this build,
+// including parts nobody has opened yet (a sheet, a tool) — so offline mode
+// never meets a "this part couldn't load". Two sources: the list the build
+// writes, and the references inside the files already saved (followed until
+// there are no new ones). Best effort and in the background: a file missed here
+// is simply fetched when first used, and the next start tries again.
+let rest = null;
+let restAt = 0;
+function precacheRest() {
+  if (rest) return rest;
+  if (self.navigator && self.navigator.onLine === false) return null;
+  if (Date.now() - restAt < 120000) return null;
+  restAt = Date.now();
+  rest = (async () => {
+    const c = await caches.open(CACHE);
+    const queue = [];
+    try {
+      const r = await fetchSoon(new Request("/_next/static/dockin-precache.json", { cache: "no-store" }), 10000);
+      if (r.ok) {
+        const list = await r.json();
+        if (Array.isArray(list)) for (const a of list) if (typeof a === "string" && a.indexOf("/_next/static/") === 0) queue.push(a);
+      }
+    } catch (e) {}
+    for (const k of await c.keys()) {
+      const p = new URL(k.url).pathname;
+      if (p.indexOf("/_next/static/") === 0) queue.push(p);
+    }
+    const seen = new Set();
+    let missed = 0;
+    while (queue.length) {
+      const p = queue.pop();
+      if (seen.has(p)) continue;
+      seen.add(p);
+      let res = await c.match(p);
+      if (!res) {
+        try {
+          res = await fetchSoon(new Request(p, { cache: "reload" }), 20000);
+          if (!res.ok) continue;
+          await c.put(p, res.clone());
+        } catch (e) {
+          missed++;
+          continue;
+        }
+      }
+      if (!/\\.(js|css)$/.test(p)) continue;
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (e) {
+        continue;
+      }
+      const refs = text.match(/static\\/(?:chunks|media|css)\\/[A-Za-z0-9_.~\\/-]+\\.(?:js|css|woff2?)/g) || [];
+      for (const m of refs) {
+        const q = "/_next/" + m;
+        if (!seen.has(q)) queue.push(q);
+      }
+    }
+    return missed;
+  })()
+    .catch(() => 1)
+    .then((missed) => {
+      // Anything missed (a weak moment): allowed to try again later.
+      if (missed) rest = null;
+    });
+  return rest;
+}
 
 self.addEventListener("message", (event) => {
   if (event.data !== "dockin-reset") return;
@@ -129,6 +199,7 @@ self.addEventListener("fetch", (event) => {
   // socket must never become a minute-long freeze: after a short wait, fall back
   // to the app shell, which boots and renders the right screen from the URL.
   if (req.mode === "navigate") {
+    precacheRest();
     event.respondWith(
       (async () => {
         const hit = (await caches.match(req, { ignoreSearch: true })) || (await caches.match(url.pathname));

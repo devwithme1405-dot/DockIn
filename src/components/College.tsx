@@ -5,6 +5,7 @@ import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, TriangleAlert } fro
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
 import type { CamuState, LmsState } from "@/lib/native";
 import { cx, inputCls, useToast } from "./ui";
+import { isOffline } from "@/lib/net";
 
 /** "just now", "5 min ago", "2 h ago", "3 days ago". */
 export function timeAgo(ms: number | undefined, now = Date.now()): string {
@@ -23,6 +24,10 @@ function useBusy() {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   async function run(fn: () => Promise<void>, fail = "That did not work. Try again.") {
+    if (isOffline()) {
+      toast.show("You're offline — this needs internet. Everything else still works.");
+      return;
+    }
     setBusy(true);
     try {
       await fn();

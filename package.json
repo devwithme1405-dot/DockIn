@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/precache-list.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs && node scripts/native-check.mjs",
+    "smoke": "node scripts/smoke.mjs && node scripts/signed-in-check.mjs && node scripts/native-check.mjs && node scripts/offline-check.mjs",
     "android:check": "bash scripts/android-compile.sh",
     "verify": "npm run typecheck && npm run lint && npm test && npm run android:check && npm run build"
   },

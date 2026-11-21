@@ -4,6 +4,7 @@ import android.content.Context;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -100,6 +101,33 @@ final class Bundled {
             // Anything odd: let the network have it, exactly as before.
         }
         return null;
+    }
+
+    /**
+     * The APK's own copy of a screen, as text — for when a screen can't load at
+     * all (no network, nothing usable cached). The app boots from it and draws
+     * the screen the address asks for, offline, instead of an error page. Null
+     * when this APK carries no copy (a local debug build).
+     */
+    static String screenHtml(Context c, String path) {
+        String file = "index.html";
+        if (path != null) {
+            for (String s : SCREENS) {
+                if (s.equals(path)) {
+                    file = "/".equals(s) ? "index.html" : s.substring(1) + ".html";
+                    break;
+                }
+            }
+        }
+        try (InputStream in = c.getAssets().open("web/" + file)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return out.toString("UTF-8");
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static WebResourceResponse asset(Context c, String file, boolean immutable) {

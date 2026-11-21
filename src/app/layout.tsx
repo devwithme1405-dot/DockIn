@@ -42,7 +42,21 @@ const themeScript = `(function(){try{if(window.androidBridge||(window.Capacitor&
  */
 const healScript = `(function(){
 var CHUNK=/ChunkLoadError|Loading chunk|Loading CSS chunk|Failed to load chunk|dynamically imported module|Importing a module script failed|error loading dynamically imported/i;
+// A script that failed because the network is down or crawling is not a broken
+// install: wiping the saved copy then would leave nothing to open offline. So
+// heal only once DockIn's own server answers quickly (the line is fine, the
+// file really is missing).
 function heal(){
+  if(navigator.onLine===false)return;
+  try{
+    var ctl=window.AbortController?new AbortController():null;
+    var t=setTimeout(function(){ if(ctl)ctl.abort(); },4000);
+    fetch('/api/ping?t='+Date.now(),{cache:'no-store',signal:ctl?ctl.signal:undefined})
+      .then(function(r){ clearTimeout(t); if(r&&r.ok)doHeal(); })
+      .catch(function(){ clearTimeout(t); });
+  }catch(e){}
+}
+function doHeal(){
   // Once per ten minutes, and never twice in a row. A page whose scripts are
   // genuinely gone would otherwise reload itself forever, which is far worse
   // than the dead screen this is here to prevent.

@@ -79,15 +79,21 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 /**
-                 * A screen that fails to load shows DockIn's own "reconnecting"
-                 * page — never Android's grey "Web page not available" — and
-                 * goes back to the same screen by itself once the network is up.
+                 * A screen that fails to load (no network, nothing cached) opens
+                 * from the copy inside the APK instead — the app then runs in
+                 * offline mode with everything on the phone. Same address, so
+                 * it is the same app and the same data. Only an APK without
+                 * that copy falls back to DockIn's own "reconnecting" page —
+                 * never Android's grey "Web page not available".
                  */
                 @Override
                 public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                     if (request != null && request.isForMainFrame() && request.getUrl() != null
                             && "dock-in.vercel.app".equals(request.getUrl().getHost())) {
-                        view.loadDataWithBaseURL("https://dock-in.vercel.app/", retryPage(request.getUrl().toString()), "text/html", "utf-8", null);
+                        String url = request.getUrl().toString();
+                        String html = Bundled.screenHtml(app, request.getUrl().getPath());
+                        if (html != null) view.loadDataWithBaseURL(url, html, "text/html", "utf-8", url);
+                        else view.loadDataWithBaseURL("https://dock-in.vercel.app/", retryPage(url), "text/html", "utf-8", null);
                         return;
                     }
                     super.onReceivedError(view, request, error);
