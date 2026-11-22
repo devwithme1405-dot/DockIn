@@ -19,8 +19,14 @@ public class UpdaterTest {
         HttpServer s = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         s.createContext("/redirect", ex -> { ex.getResponseHeaders().add("Location", "/file"); ex.sendResponseHeaders(302, -1); ex.close(); });
         s.createContext("/file", ex -> serve(ex, false));
-        s.createContext("/flaky", ex -> serve(ex, flakyHits.getAndIncrement() == 0));
+        s.createContext("/flaky", ex -> {
+            String rg = ex.getRequestHeaders().getFirst("Range");
+            boolean probe = "bytes=0-0".equals(rg);
+            serve(ex, !probe && flakyHits.getAndIncrement() == 0);
+        });
+        s.createContext("/slow", ex -> serve(ex, false, 1_000_000));
         s.createContext("/norange", ex -> { ex.sendResponseHeaders(200, apk.length); ex.getResponseBody().write(apk); ex.close(); });
+        s.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(16));
         s.start();
         String base = "http://127.0.0.1:" + s.getAddress().getPort();
         File tmp = Files.createTempDirectory("up").toFile();
@@ -64,6 +70,14 @@ public class UpdaterTest {
         Updater.download(dirG, good, base + "/file", p -> {});
         check("older downloads are cleared", !new File(dirG, "DockIn-1.apk").exists());
 
+        long t1 = System.currentTimeMillis();
+        File fast = Updater.download(new File(tmp, "h"), good, base + "/slow", p -> {});
+        long parallelMs = System.currentTimeMillis() - t1;
+        check("big file on a slow line: several connections at once, intact (" + parallelMs + " ms for 3 MB at 1 MB/s per connection)",
+              Arrays.equals(Files.readAllBytes(fast.toPath()), apk) && parallelMs < 2200);
+        File[] leftovers = new File(tmp, "h").listFiles();
+        check("pieces cleaned up after joining", leftovers != null && leftovers.length == 1);
+
         s.stop(0);
         System.out.println("\n" + pass + " ok, " + fail + " failed");
         System.exit(fail == 0 ? 0 : 1);
@@ -75,15 +89,33 @@ public class UpdaterTest {
         return new Updater.Release(j);
     }
 
-    static void serve(com.sun.net.httpserver.HttpExchange ex, boolean dropHalfway) throws IOException {
+    /** Serves the APK like GitHub's file storage: full file, or a byte range (206). */
+    static void serve(com.sun.net.httpserver.HttpExchange ex, boolean dropHalfway) throws IOException { serve(ex, dropHalfway, 0); }
+
+    static void serve(com.sun.net.httpserver.HttpExchange ex, boolean dropHalfway, int bytesPerSecond) throws IOException {
         String range = ex.getRequestHeaders().getFirst("Range");
-        int from = 0;
-        if (range != null && range.startsWith("bytes=")) from = Integer.parseInt(range.substring(6, range.indexOf('-')));
+        int from = 0, to = apk.length - 1;
+        boolean ranged = range != null && range.startsWith("bytes=");
+        if (ranged) {
+            String[] ab = range.substring(6).split("-", -1);
+            from = Integer.parseInt(ab[0]);
+            if (!ab[1].isEmpty()) to = Math.min(apk.length - 1, Integer.parseInt(ab[1]));
+        }
         if (from >= apk.length) { ex.sendResponseHeaders(416, -1); ex.close(); return; }
-        int len = apk.length - from;
-        ex.sendResponseHeaders(from > 0 ? 206 : 200, len);
+        int len = to - from + 1;
+        ex.sendResponseHeaders(ranged ? 206 : 200, len);
         OutputStream o = ex.getResponseBody();
-        if (dropHalfway) { o.write(apk, from, len / 2); o.flush(); ex.getHttpContext().getServer(); ex.close(); return; }
+        if (dropHalfway && len > 2) { o.write(apk, from, len / 2); o.flush(); ex.close(); return; }
+        if (bytesPerSecond > 0) {
+            int step = 16 * 1024;
+            for (int at = from; at <= to; at += step) {
+                o.write(apk, at, Math.min(step, to - at + 1));
+                o.flush();
+                try { Thread.sleep(1000L * step / bytesPerSecond); } catch (InterruptedException ignored) {}
+            }
+            o.close();
+            return;
+        }
         o.write(apk, from, len); o.close();
     }
 

@@ -610,7 +610,7 @@ export function CopyStudio({
   // colours, its long-press and swipe) can reach in.
   return createPortal(
     <div
-      className="paper-page fixed inset-0 z-[60] flex flex-col [animation:fade-in_160ms_ease-out]"
+      className="studio-page fixed inset-0 z-[60] flex flex-col [animation:fade-in_160ms_ease-out]"
       role="dialog"
       aria-label={head}
       onPointerDown={stop}

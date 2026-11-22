@@ -151,6 +151,8 @@ interface DockInPlugin {
   installUpdate(): Promise<void>;
   /** The v2 updater (resume, checks, PackageInstaller, progress states). Missing on older builds. */
   updateInfo(): Promise<{ v: number; canInstall: boolean }>;
+  /** On Wi-Fi, start downloading the update in the background (v2.1 updater; missing on older builds). */
+  prefetchUpdate(): Promise<void>;
   /** Open a document (base64) in the phone's own viewer app. */
   openFile(options: { name: string; mime: string; data: string }): Promise<void>;
   /** status: what the LMS says afterwards ("submitted", "draft", "new"…); missing on older app builds. */

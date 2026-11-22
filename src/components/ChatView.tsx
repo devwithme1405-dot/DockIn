@@ -74,6 +74,7 @@ import { Avatar, Sheet, cx, useToast } from "./ui";
 import { getSupabase } from "@/lib/supabase";
 import { whileVisible } from "@/lib/visible";
 import { addTask } from "@/lib/repo";
+import { cleanReminders, describeReminder } from "@/lib/taskReminders";
 import { ChatInfo, PhotoViewer } from "./ChatInfo";
 import { Bone } from "./Skeleton";
 import { chatVars, useChatLook, useChatPhoto } from "@/lib/chatLook";
@@ -1228,11 +1229,17 @@ function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: bool
             {t.dueTime ? ` · ${fmtTime(t.dueTime)}` : ""}
           </p>
         )}
+        {(t.reminders?.length ?? 0) > 0 && (
+          <p className="mt-0.5 flex items-center gap-1 text-[12px] font-semibold text-accent">
+            <Bell size={12} />
+            {t.reminders!.length === 1 ? describeReminder(t.reminders![0], toDateStr()) : `${t.reminders!.length} reminders`}
+          </p>
+        )}
         <button
           onClick={async (e) => {
             e.stopPropagation();
             if (added) return;
-            await addTask({ title: t.title, kind: (t.kind as Task["kind"]) ?? "assignment", dueDate: t.dueDate, dueTime: t.dueTime, notes: t.subject ?? "" });
+            await addTask({ title: t.title, kind: (t.kind as Task["kind"]) ?? "assignment", dueDate: t.dueDate, dueTime: t.dueTime, notes: t.subject ?? "", reminders: cleanReminders(t.reminders) });
             toast.show("Added to your Tasks");
           }}
           className={cx(

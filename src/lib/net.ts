@@ -14,7 +14,9 @@ import { useSyncExternalStore } from "react";
  * - The phone says it is offline (`navigator.onLine === false`): offline at once.
  * - Whenever there is a reason to doubt the line — launch, coming back to the
  *   app, a request that hung — it asks DockIn's own server a tiny question
- *   (`/api/ping`). Two misses in a row: offline mode.
+ *   (`/api/ping`). Only three misses in a row (about half a minute of nothing
+ *   getting through) mean offline mode — and never while other requests are
+ *   still getting answers. A slow campus Wi-Fi is not "offline".
  * - An answer that comes, but slowly, is a "weak network" moment. Several of
  *   those within a few minutes and DockIn suggests switching to offline mode
  *   ("Low network detected multiple times").
@@ -65,20 +67,26 @@ export function useNet(): NetState {
 export const BACK_ONLINE = "dockin:back-online";
 
 export const TIMING = {
-  /** How long one ping may take before it counts as a miss. */
-  probe: 4500,
-  /** Gap before the second ping that confirms a miss. */
-  recheck: 1500,
+  /** How long one ping may take before it counts as a miss (slow Wi-Fi still answers in time). */
+  probe: 8000,
+  /** Gap before each ping that confirms a miss. */
+  recheck: 2500,
+  /** Misses in a row that mean offline. */
+  misses: 3,
+  /** Any answer from the network this recent means the line works. */
+  alive: 15_000,
+  /** After coming back online, don't go offline again by itself this soon. */
+  calm: 45_000,
   /** At most one check every this often while online. */
   gap: 20_000,
   /** How often to ask again while offline. */
   poll: 5000,
   /** A request still hanging after this long is a sign of a weak line. */
-  slow: 10_000,
+  slow: 15_000,
   /** An answer slower than this is a "weak network" moment. */
-  weak: 2500,
+  weak: 5000,
   /** An answer faster than this counts towards "good enough to go online". */
-  strong: 2000,
+  strong: 4000,
   /** This many weak moments… */
   weakCount: 3,
   /** …within this long suggests offline mode. */
@@ -100,6 +108,7 @@ export async function probe(): Promise<{ ok: boolean; ms: number }> {
   const t = setTimeout(() => ctl.abort(), TIMING.probe);
   try {
     const r = await f(`/api/ping?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
+    if (r.ok) lastAnswer = Date.now();
     return { ok: r.ok, ms: Date.now() - t0 };
   } catch {
     return { ok: false, ms: Date.now() - t0 };
@@ -115,6 +124,14 @@ const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 let checking = false;
 let lastCheck = 0;
+/** When the network last answered anything (any request, not only pings). */
+let lastAnswer = 0;
+let calmUntil = 0;
+
+/** The fetch watcher: something came back, so the line works right now. */
+export function answered(): void {
+  lastAnswer = Date.now();
+}
 let weakTimes: number[] = [];
 let snoozedUntil = 0;
 
@@ -125,26 +142,31 @@ function weakMoment() {
   if (weakTimes.length >= TIMING.weakCount && now >= snoozedUntil && !state.weak) set({ weak: true });
 }
 
-/** Two misses → offline mode. A slow answer, or a miss then an answer → a weak moment. */
+/**
+ * Three misses in a row → offline mode (unless other requests are still being
+ * answered, or it only just came back). A slow answer, or misses then an
+ * answer → a weak moment.
+ */
 export async function check(force = false): Promise<void> {
   if (state.offline || checking) return;
   if (!force && Date.now() - lastCheck < TIMING.gap) return;
   checking = true;
   lastCheck = Date.now();
   try {
-    const first = await probe();
-    if (first.ok) {
-      if (first.ms > TIMING.weak) weakMoment();
-      return;
+    for (let i = 0; i < TIMING.misses; i++) {
+      if (i > 0) await wait(TIMING.recheck);
+      if (state.offline) return;
+      const r = await probe();
+      if (r.ok) {
+        if (i > 0 || r.ms > TIMING.weak) weakMoment();
+        return;
+      }
     }
-    await wait(TIMING.recheck);
-    if (state.offline) return;
-    const second = await probe();
-    if (second.ok) {
-      weakMoment();
-      return;
-    }
-    goOffline();
+    const phoneSaysOffline = typeof navigator !== "undefined" && navigator.onLine === false;
+    const stillAnswering = Date.now() - lastAnswer < TIMING.alive;
+    const justBack = Date.now() < calmUntil;
+    if (phoneSaysOffline || (!stillAnswering && !justBack)) goOffline();
+    else weakMoment();
   } finally {
     checking = false;
   }
@@ -191,6 +213,7 @@ function backOnline(): void {
   clearTimeout(pollTimer);
   good = 0;
   lastCheck = Date.now();
+  calmUntil = Date.now() + TIMING.calm;
   weakTimes = [];
   set({ offline: false, chosen: false, back: true, weak: false });
   clearTimeout(backTimer);
@@ -225,6 +248,17 @@ export function trouble(): void {
   if (!state.offline) void check();
 }
 
+/** Requests that must cross the network: other servers, and DockIn's /api (never cached). */
+function overTheNetwork(input: RequestInfo | URL): boolean {
+  try {
+    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const u = new URL(raw, window.location.href);
+    return u.origin !== window.location.origin || u.pathname.startsWith("/api/");
+  } catch {
+    return false;
+  }
+}
+
 let started = false;
 
 /** Starts watching the network. Safe to call more than once. */
@@ -240,7 +274,12 @@ export function startNet(): void {
       const p = original(input, init);
       const slow = setTimeout(trouble, TIMING.slow);
       p.then(
-        () => clearTimeout(slow),
+        () => {
+          clearTimeout(slow);
+          // Only a real trip over the network counts (the service worker answers
+          // the app's own files from the phone, network or not).
+          if (overTheNetwork(input)) answered();
+        },
         (e: unknown) => {
           clearTimeout(slow);
           if (!(e instanceof DOMException && e.name === "AbortError")) trouble();
@@ -279,6 +318,8 @@ export function resetNet(): void {
   good = 0;
   checking = false;
   lastCheck = 0;
+  lastAnswer = 0;
+  calmUntil = 0;
   weakTimes = [];
   snoozedUntil = 0;
 }

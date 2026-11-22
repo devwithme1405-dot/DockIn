@@ -92,11 +92,61 @@ export function gradientOf(palette: number): string {
   return `linear-gradient(135deg, ${p.from}, ${p.to})`;
 }
 
+/** Profile photos are stored at this size: sharp in the full-screen viewer, still tiny. */
+export const PHOTO_SIDE = 512;
+
 /**
- * Makes a profile photo small on the phone (192×192 centre crop, JPEG ~15 KB),
- * uploads it under a fresh 12-character key and returns 'p:<key>'. The old
- * photo (if this phone made it) is removed. Nothing big ever touches the
- * database: it stores only the key.
+ * Centre square of `source`, scaled to `out`×`out` in halving steps with
+ * high-quality smoothing — one big jump from a 4000px camera photo is what
+ * made photos look smeared.
+ */
+function squareOf(source: CanvasImageSource, w: number, h: number, out: number): HTMLCanvasElement | null {
+  let side = Math.min(w, h);
+  let canvas = document.createElement("canvas");
+  canvas.width = canvas.height = side;
+  let ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(source, (w - side) / 2, (h - side) / 2, side, side, 0, 0, side, side);
+  while (side / 2 >= out) {
+    const next = document.createElement("canvas");
+    next.width = next.height = Math.floor(side / 2);
+    const nctx = next.getContext("2d");
+    if (!nctx) return null;
+    nctx.imageSmoothingEnabled = true;
+    nctx.imageSmoothingQuality = "high";
+    nctx.drawImage(canvas, 0, 0, next.width, next.height);
+    canvas = next;
+    side = next.width;
+    ctx = nctx;
+  }
+  if (side === out) return canvas;
+  const final = document.createElement("canvas");
+  final.width = final.height = out;
+  const fctx = final.getContext("2d");
+  if (!fctx) return null;
+  fctx.imageSmoothingEnabled = true;
+  fctx.imageSmoothingQuality = "high";
+  fctx.fillStyle = "#fff";
+  fctx.fillRect(0, 0, out, out);
+  fctx.drawImage(canvas, 0, 0, out, out);
+  return final;
+}
+
+/** WebP where the phone can make it (~35 KB at 512px), JPEG otherwise (~55 KB). */
+async function encode(canvas: HTMLCanvasElement): Promise<Blob | null> {
+  const as = (type: string, q: number) => new Promise<Blob | null>((r) => canvas.toBlob(r, type, q));
+  const webp = await as("image/webp", 0.82);
+  let out = webp && webp.type === "image/webp" ? webp : await as("image/jpeg", 0.85);
+  // The bucket takes up to 200 KB; a very busy photo gets a little more squeeze.
+  if (out && out.size > 180_000) out = (await as("image/jpeg", 0.7)) ?? out;
+  return out;
+}
+
+/**
+ * Makes a profile photo on the phone (512×512 centre crop, ~35–55 KB), uploads
+ * it under a fresh 12-character key and returns 'p:<key>'. The old photo (if
+ * this phone made it) is removed. Nothing big ever touches the database: it
+ * stores only the key; the picture sits in Storage.
  */
 export async function uploadAvatarPhoto(file: File, previous?: string): Promise<string> {
   const { getSupabase } = await import("./supabase");
@@ -106,22 +156,19 @@ export async function uploadAvatarPhoto(file: File, previous?: string): Promise<
 
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) throw new Error("That photo could not be read.");
-  const side = Math.min(bitmap.width, bitmap.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = 192;
-  canvas.height = 192;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("That photo could not be read.");
-  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 192, 192);
+  const canvas = squareOf(bitmap, bitmap.width, bitmap.height, PHOTO_SIDE);
   bitmap.close?.();
-  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+  if (!canvas) throw new Error("That photo could not be read.");
+  const blob = await encode(canvas);
   if (!blob) throw new Error("That photo could not be read.");
 
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   const key = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+  // Always "<key>.jpg": every app version builds the address that way; the
+  // stored content type says what it really is, and browsers go by that.
   const { error } = await sb.storage.from("avatars").upload(`a/${key}.jpg`, blob, {
-    contentType: "image/jpeg",
+    contentType: blob.type || "image/jpeg",
     cacheControl: "31536000",
     upsert: false,
   });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { acceptWeak, check, dismissWeak, getNet, goOffline, poll, resetNet, TIMING } from "@/lib/net";
+import { acceptWeak, answered, check, dismissWeak, getNet, goOffline, poll, resetNet, TIMING } from "@/lib/net";
 
 // The node test environment has no DOM: a tiny document and window will do.
 const doc = Object.assign(new EventTarget(), { visibilityState: "visible", documentElement: { classList: { toggle: () => {} } } });
@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 /** Runs a check while time moves on, as it would on a phone. */
-async function run(p: Promise<void>, ms = TIMING.probe * 2 + TIMING.recheck + 200) {
+async function run(p: Promise<void>, ms = TIMING.probe * TIMING.misses + TIMING.recheck * (TIMING.misses - 1) + 200) {
   await vi.advanceTimersByTimeAsync(ms);
   await p;
 }
@@ -43,7 +43,7 @@ describe("offline mode", () => {
     expect(getNet()).toMatchObject({ offline: false, weak: false });
   });
 
-  it("a line too weak to answer twice goes offline by itself", async () => {
+  it("nothing getting through three times in a row (about half a minute) goes offline by itself", async () => {
     answer = "none";
     await run(check(true));
     expect(getNet().offline).toBe(true);
@@ -59,9 +59,27 @@ describe("offline mode", () => {
     expect(getNet().offline).toBe(false);
   });
 
+  it("slow campus Wi-Fi: pings miss but other requests still get answers → stays online", async () => {
+    answer = "none";
+    const p = check(true);
+    await vi.advanceTimersByTimeAsync(TIMING.probe * 2 + TIMING.recheck * 2);
+    answered(); // Supabase answered meanwhile
+    await run(p);
+    expect(getNet().offline).toBe(false);
+  });
+
+  it("a miss or two, then an answer: online (just a weak moment)", async () => {
+    answer = "none";
+    const p = check(true);
+    await vi.advanceTimersByTimeAsync(TIMING.probe * 2 + TIMING.recheck + 10);
+    answer = "ok";
+    await run(p);
+    expect(getNet().offline).toBe(false);
+  });
+
   it("the phone saying it is offline is believed at once, without asking", async () => {
     (navigator as { onLine: boolean }).onLine = false;
-    await run(check(true), TIMING.recheck + 50);
+    await run(check(true), TIMING.recheck * TIMING.misses + 50);
     expect(getNet().offline).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -82,6 +100,11 @@ describe("offline mode", () => {
     expect(refresh).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(TIMING.backFor + 10);
     expect(getNet().back).toBe(false);
+
+    // Just back: a wobble right after doesn't throw it straight offline again.
+    answer = "none";
+    await run(check(true));
+    expect(getNet().offline).toBe(false);
   });
 
   it("a slow line does not count as back", async () => {

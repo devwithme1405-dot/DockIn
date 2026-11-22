@@ -151,6 +151,8 @@ export function AppUpdate() {
         if (!alive) return;
         if (u.latest > u.current) {
           setOffer({ code: u.latest, name: u.name, ready: !!u.ready });
+          // On Wi-Fi the phone starts fetching it now, so Update is quick.
+          if (!u.ready) void DockIn.prefetchUpdate().catch(() => {});
           const later = read<{ code: number; at: number }>(LATER);
           const snoozed = !force && later?.code === u.latest && Date.now() - later.at < LATER_FOR;
           if (!snoozed) setOpen(true);

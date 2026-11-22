@@ -273,9 +273,9 @@ await step("network back: online again by itself — 'Back online' flashes, then
   if (await page.getByRole("alertdialog").count()) throw new Error("a popup asked for a tap");
 });
 
-// A line that is "connected" but too weak to use: every answer takes 3 s.
+// A line that is "connected" but very weak: every answer takes 6 s.
 await ctx.route("**/api/ping**", async (r) => {
-  await new Promise((res) => setTimeout(res, 3000));
+  await new Promise((res) => setTimeout(res, 6000));
   await r.continue().catch(() => {});
 });
 await step("weak line several times: 'Low network detected multiple times' asks to switch", async () => {
@@ -283,7 +283,7 @@ await step("weak line several times: 'Low network detected multiple times' asks 
   for (let i = 0; i < 6 && !(await prompt.count()); i++) {
     // Coming back to the app is one of the moments it re-checks the line.
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
-    await page.waitForTimeout(21000);
+    await page.waitForTimeout(27000);
   }
   await prompt.getByText("Low network detected multiple times").waitFor({ timeout: 2000 });
   await page.screenshot({ path: SHOTS + "/5-weak.png" });
@@ -306,13 +306,27 @@ await step("line good again: back online by itself", async () => {
 await ctx.route("**/api/ping**", () => new Promise(() => {}));
 await step("dead line (requests hang): offline mode by itself after a reload", async () => {
   await page.reload({ waitUntil: "load" });
-  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 20000 });
+  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 60000 });
   await noWall();
 });
 await ctx.unroute("**/api/ping**");
 await step("…and back online by itself", async () => {
   await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 20000 });
 });
+
+// Campus Wi-Fi: pings stall, but the app's other requests still get answers.
+await ctx.route("**/api/ping**", () => new Promise(() => {}));
+await step("slow Wi-Fi that still answers other requests: stays online", async () => {
+  await page.reload({ waitUntil: "load" });
+  const end = Date.now() + 45000;
+  while (Date.now() < end) {
+    // The app's own requests (like Supabase) still come back, just slowly.
+    await page.evaluate(() => fetch("/api/push", { method: "POST", body: "{}" }).catch(() => {}));
+    await page.waitForTimeout(3000);
+  }
+  if (await page.locator(".offline-strip", { hasText: "Offline mode" }).count()) throw new Error("went offline while requests were answered");
+});
+await ctx.unroute("**/api/ping**");
 console.log(`\n${ok} ok, ${fail.length} failed`, fail, bad.length ? bad : "");
 await browser.close();
 process.exit(fail.length || bad.length ? 1 : 0);

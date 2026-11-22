@@ -192,6 +192,19 @@ export interface Subtask {
   done: boolean;
 }
 
+/**
+ * A reminder you set on a task yourself (times are the phone's local time):
+ * - `at`: once, on a day at a time ("tomorrow 6 PM", "in 3 days 9 AM");
+ * - `daily`: every day at a time — or only on `days` (0 = Sunday … 6) — from
+ *   today until the task is done or its deadline passes;
+ * - `before`: this many minutes before the deadline ("1 day before").
+ * Reminders stop by themselves once the task is ticked off.
+ */
+export type TaskReminder =
+  | { id: string; kind: "at"; date: string; time: string }
+  | { id: string; kind: "daily"; time: string; days?: number[] }
+  | { id: string; kind: "before"; minutes: number };
+
 export interface Task extends Base {
   title: string;
   notes: string;
@@ -214,6 +227,8 @@ export interface Task extends Base {
   pinned?: boolean;
   /** Where to open it on the LMS. */
   url?: string;
+  /** Your own reminders for this task (see TaskReminder). */
+  reminders?: TaskReminder[];
 }
 
 export type EventKind = "holiday" | "event";

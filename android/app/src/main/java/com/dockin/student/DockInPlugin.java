@@ -474,6 +474,32 @@ public class DockInPlugin extends Plugin {
     }
 
     private static final java.util.concurrent.atomic.AtomicBoolean updating = new java.util.concurrent.atomic.AtomicBoolean(false);
+    private static final java.util.concurrent.atomic.AtomicBoolean prefetching = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** An update was offered: on Wi-Fi, start downloading it now, quietly. Answers at once. */
+    @PluginMethod
+    public void prefetchUpdate(PluginCall call) {
+        call.resolve();
+        final Context c = getContext();
+        if (!prefetching.compareAndSet(false, true)) return;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Updater.prefetch(c, new Updater.Progress() {
+                        @Override
+                        public void at(int percent) {
+                            JSObject p = new JSObject();
+                            p.put("percent", percent);
+                            notifyListeners("updateProgress", p);
+                        }
+                    });
+                } finally {
+                    prefetching.set(false);
+                }
+            }
+        }, "dockin-update-prefetch").start();
+    }
 
     /**
      * Downloads the newest APK (resuming, checked end to end) and hands it to

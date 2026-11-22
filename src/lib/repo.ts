@@ -21,6 +21,7 @@ import type {
   Subtask,
   Task,
   TaskKind,
+  TaskReminder,
   ThemePref,
 } from "./types";
 
@@ -333,6 +334,7 @@ export interface TaskInput {
   room?: string;
   priority?: Priority;
   subtasks?: Subtask[];
+  reminders?: TaskReminder[];
 }
 
 export async function addTask(input: TaskInput): Promise<Task> {
@@ -350,6 +352,7 @@ export async function addTask(input: TaskInput): Promise<Task> {
     done: false,
     doneAt: null,
     subtasks: input.subtasks ?? [],
+    ...(input.reminders?.length ? { reminders: input.reminders } : {}),
     createdAt: t,
     updatedAt: t,
     deletedAt: null,
@@ -394,6 +397,8 @@ export async function copyTask(id: string, date: string | null): Promise<Task | 
     room: src.room,
     priority: src.priority,
     subtasks: src.subtasks.map((s) => ({ ...s, done: false })),
+    // Repeating and "before the deadline" reminders still fit the copy; one-off dates don't.
+    reminders: (src.reminders ?? []).filter((r) => r.kind !== "at").map((r) => ({ ...r, id: uid() })),
   });
 }
 

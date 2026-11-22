@@ -13,6 +13,8 @@ public class View {
   public void setBackgroundColor(int c) {}
   public void setVisibility(int v) {}
   public void setClickable(boolean c) {}
+  public boolean postDelayed(Runnable r, long delayMillis) { return true; }
+  public boolean post(Runnable r) { return true; }
   public void bringToFront() {}
   public void setBackground(android.graphics.drawable.Drawable d) {}
   public void setPadding2() {}

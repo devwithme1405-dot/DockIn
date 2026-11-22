@@ -164,3 +164,34 @@ describe("solution reminders", () => {
     expect(items.filter((x) => x.title.includes("OS Lab"))).toHaveLength(0);
   });
 });
+
+describe("morning attendance nudge only on class days", () => {
+  const low = { pct: 62, state: "danger" as const };
+  const wake = (date: string) => new Date(`${date}T06:00:00`).getTime();
+  const nudge = (items: { title: string }[]) => items.find((i) => /Attendance is low|don't skip today/.test(i.title));
+
+  it("comes on a weekday with classes", () => {
+    const d = "2026-03-10"; // Tuesday
+    const items = buildReminders({ sessions: [ses("a", "dbms", d, "09:25", "10:25")], subjects: [dbms], tasks: [], overall: low, stats, target: 75, today: d, now: wake(d) });
+    expect(nudge(items)).toBeTruthy();
+  });
+
+  it("not on a Saturday or Sunday, even with attendance low", () => {
+    for (const d of ["2026-03-14", "2026-03-15"]) {
+      const items = buildReminders({ sessions: [], subjects: [dbms], tasks: [], overall: low, stats, target: 75, today: d, now: wake(d) });
+      expect(nudge(items)).toBeUndefined();
+    }
+  });
+
+  it("not on an official holiday, even if a class was on the timetable", () => {
+    const d = "2026-11-24"; // Guru Nanak Jayanti (a Tuesday) on the academic calendar
+    const items = buildReminders({ sessions: [ses("a", "dbms", d, "09:25", "10:25")], subjects: [dbms], tasks: [], overall: low, stats, target: 75, today: d, now: wake(d) });
+    expect(nudge(items)).toBeUndefined();
+  });
+
+  it("not on a weekday with no classes (or a timetable Camu hasn't published)", () => {
+    const d = "2026-03-11";
+    const items = buildReminders({ sessions: [], subjects: [dbms], tasks: [], overall: low, stats, target: 75, today: d, now: wake(d) });
+    expect(nudge(items)).toBeUndefined();
+  });
+});

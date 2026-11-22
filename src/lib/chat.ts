@@ -4,7 +4,8 @@ import type { ChatSolution } from "./solution";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { db } from "./db";
-import type { Task } from "./types";
+import type { Task, TaskReminder } from "./types";
+import { cleanReminders } from "./taskReminders";
 import { getSupabase } from "./supabase";
 import { notifyPush } from "./push";
 import { mimeOf } from "./files";
@@ -52,6 +53,8 @@ export interface ChatTask {
   origin?: string | null;
   notes?: string | null;
   priority?: string | null;
+  /** The sender's reminders — everyone who gets the task gets them too (they can change their own). */
+  reminders?: TaskReminder[] | null;
 }
 
 export interface ChatPoll {
@@ -211,6 +214,8 @@ async function absorbSharedTasks(fresh: ChatMessage[]): Promise<void> {
       dueTime: d.dueTime ?? null,
       notes: [d.subject, d.notes].filter(Boolean).join(" · "),
       priority: (["low", "med", "high"].includes(d.priority ?? "") ? d.priority : undefined) as never,
+      // Only what is well-formed survives (it came from someone else's phone).
+      reminders: cleanReminders(d.reminders),
     });
     await db.taskOrigins.put({ key, taskId: t.id, at: Date.now() });
   }
@@ -233,6 +238,7 @@ export async function sendTaskTo(threads: ThreadId[], t: Task, subject?: string 
     origin,
     notes: t.notes || null,
     priority: t.priority,
+    reminders: t.reminders?.length ? t.reminders : null,
   };
   for (const th of [...new Set(threads)]) await sendMessage(th, "", { task });
 }

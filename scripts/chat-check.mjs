@@ -523,6 +523,23 @@ await step("Back from a chat returns to the list", async () => {
   await page.screenshot({ path: `${SHOTS}/chat-friends-home.png` });
 });
 
+await step("Android Back goes through the page: chat → Friends → Today, one screen at a time", async () => {
+  // Start the way a phone does: on Today, then the Friends tab.
+  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.locator('nav[aria-label="Main"] a', { hasText: "Friends" }).click();
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva)/ }).first().click();
+  await page.getByRole("dialog", { name: /Chat with/ }).waitFor({ timeout: 3000 });
+  const back = () => page.evaluate(() => window.__dockinBack());
+  if ((await back()) !== "web") throw new Error("page did not take Back");
+  await page.waitForTimeout(500);
+  if (await page.getByRole("dialog", { name: /Chat with/ }).count()) throw new Error("chat still open");
+  if (new URL(page.url()).pathname !== "/circle") throw new Error("not on Friends: " + page.url());
+  if ((await back()) !== "web") throw new Error("page did not take Back from Friends");
+  await page.waitForTimeout(500);
+  if (new URL(page.url()).pathname !== "/") throw new Error("not on Today: " + page.url());
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+});
+
 await step("a friend's solution: card, my name in, animation, check", async () => {
   await page.getByRole("button", { name: /CSE E1/ }).first().click();
   const chat = page.getByRole("dialog").first();

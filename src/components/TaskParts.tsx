@@ -8,6 +8,7 @@ import {
   CircleHelp,
   FileText,
   Flag,
+  Bell,
   Flame,
   GraduationCap,
   ListChecks,
@@ -28,9 +29,11 @@ import {
   subtaskProgress,
 } from "@/lib/tasks";
 import { addDays, toDateStr, weekdayOf } from "@/lib/dates";
-import type { Priority, Subject, Subtask, Task, TaskKind } from "@/lib/types";
+import type { Priority, Subject, Subtask, Task, TaskKind, TaskReminder } from "@/lib/types";
 import { Button, cx, useToast } from "./ui";
 import { LmsHandIn } from "./SolutionStudio";
+import { ReminderEditor } from "./TaskReminders";
+import { reminderSummary } from "@/lib/taskReminders";
 
 export const KIND_ICON: Record<TaskKind, typeof FileText> = {
   assignment: FileText,
@@ -168,6 +171,11 @@ export function TaskRow({
                     {prog.done}/{prog.total}
                   </span>
                 )}
+                {reminderSummary(task, today) && (
+                  <span className="inline-flex items-center gap-0.5 font-medium text-accent">
+                    <Bell size={11} /> {reminderSummary(task, today)}
+                  </span>
+                )}
               </>
             )}
             {origin && (
@@ -248,6 +256,7 @@ export function TaskForm({
   const [priority, setPriority] = useState<Priority>(task?.priority ?? "med");
   const [notes, setNotes] = useState(task?.notes ?? "");
   const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
+  const [reminders, setReminders] = useState<TaskReminder[]>(task?.reminders ?? []);
   const [newSub, setNewSub] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -287,6 +296,7 @@ export function TaskForm({
       subtasks: newSub.trim()
         ? [...subtasks, { id: uid(), text: newSub.trim(), done: false }]
         : subtasks,
+      reminders,
     };
     if (task) {
       await updateTask(task.id, data);
@@ -406,6 +416,8 @@ export function TaskForm({
           />
         )}
       </section>
+
+      <ReminderEditor value={reminders} onChange={setReminders} dueDate={dueDate} dueTime={dueTime} />
 
       {/* Subject + priority */}
       {subjects.length > 0 && (

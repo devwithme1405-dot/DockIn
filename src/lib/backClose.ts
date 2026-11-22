@@ -97,3 +97,27 @@ export function pushPastLayer(state: Record<string, unknown>, url: string) {
     window.history.pushState(state, "", url);
   }
 }
+
+/**
+ * Android's Back button, answered by the page itself (MainActivity asks this
+ * first).
+ *
+ * Android's WebView, like Chrome, skips history entries a page added without
+ * a fresh tap when it goes back on its own — so a chat opened from a profile,
+ * or the "Send this file" sheet after the file picker, made Back jump past
+ * Friends straight to Today. A `history.back()` from the page is never
+ * skipped: it always lands on the screen right behind. Returns "web" when it
+ * went back, "root" when there is nothing behind (the app steps aside), or
+ * "native" when this WebView can't tell (the old way is used).
+ */
+export function installBackHandler(): void {
+  if (typeof window === "undefined") return;
+  (window as unknown as { __dockinBack?: () => string }).__dockinBack = () => {
+    const nav = (window as unknown as { navigation?: { canGoBack?: boolean } }).navigation;
+    if (!nav || typeof nav.canGoBack !== "boolean") return "native";
+    if (!nav.canGoBack) return "root";
+    window.history.back();
+    return "web";
+  };
+}
+

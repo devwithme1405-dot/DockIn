@@ -25,6 +25,7 @@ import { goTab, tabOf } from "@/lib/tabs";
 import { TabHost } from "./TabHost";
 import { OfflineLayer } from "./Offline";
 import { startNet } from "@/lib/net";
+import { installBackHandler } from "@/lib/backClose";
 
 /**
  * How many things want attention right now: your own tasks that are overdue or
@@ -142,6 +143,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!bare) startNet();
   }, [bare]);
+
+  // Android's Back goes through the page, so it always lands one screen back.
+  useEffect(() => {
+    installBackHandler();
+  }, []);
 
   /**
    * The entrance animations (the stagger that rises each card in) are a first

@@ -9,9 +9,10 @@ import type { ReminderItem } from "./native";
 import type { AttendanceSummary, Subject } from "./types";
 import type { ViewSession } from "./college";
 import type { Task } from "./types";
-import { fmtTime, toDateStr } from "./dates";
+import { fmtDay, fmtTime, toDateStr } from "./dates";
 import { bucketOf } from "./tasks";
 import { holidayInfo } from "./academic";
+import { dueMoment, reminderTimes } from "./taskReminders";
 
 /** Local epoch ms for a date + "HH:MM". */
 function at(date: string, hm: string): number {
@@ -152,6 +153,39 @@ export function buildReminders({ sessions, subjects, tasks, overall, stats, targ
     }
   }
 
+  // Your own reminders on tasks: once, every day, on chosen days, or a set time
+  // before the deadline. They look further ahead than the rest (daily ones two
+  // weeks) and stop by themselves once the task is done.
+  const ownUntil = now + 21 * 24 * 3_600_000;
+  for (const t of tasks) {
+    if (t.done || t.deletedAt || !t.reminders?.length) continue;
+    const due = dueMoment(t);
+    const times = new Set<number>();
+    for (const r of t.reminders) for (const when of reminderTimes(t, r, now, ownUntil)) times.add(when);
+    for (const when of times) {
+      // One of the automatic ones already covers this minute: don't double up.
+      if (items.some((x) => x.path === "/tasks" && Math.abs(x.at - when) < 5 * 60_000 && x.body.startsWith(t.title))) continue;
+      const left = due === null ? null : due - when;
+      const dueText =
+        left === null
+          ? "No deadline — tap to open it"
+          : left <= 0
+            ? "Due now"
+            : left < 3_600_000
+              ? `Due in ${Math.max(1, Math.round(left / 60_000))} min`
+              : left < 24 * 3_600_000
+                ? `Due in ${Math.round(left / 3_600_000)} h${t.dueTime ? ` · ${clock(t.dueTime)}` : ""}`
+                : `Due ${fmtDay(t.dueDate!)}${t.dueTime ? `, ${clock(t.dueTime)}` : ""} · ${Math.round(left / (24 * 3_600_000))} days left`;
+      items.push({
+        id: id++,
+        at: when,
+        title: `⏰ ${t.title}`,
+        body: `${dueText}${t.subtasks?.length ? ` · ${t.subtasks.filter((x) => x.done).length}/${t.subtasks.length} done` : ""}`,
+        path: "/tasks",
+      });
+    }
+  }
+
   // Shared work you have not finished: a day before and half an hour before.
   // Ticking it off (or submitting it) removes it from this list, so only the
   // people who still have it pending are reminded.
@@ -194,9 +228,12 @@ export function buildReminders({ sessions, subjects, tasks, overall, stats, targ
     }
   }
 
-  // Morning: the subjects you have today that are below target, by name.
+  // Morning: the subjects you have today that are below target, by name. Only
+  // on a day with classes: never on a Saturday, Sunday, official holiday or a
+  // day with nothing on the timetable — "don't skip today" on a day off is noise.
   const morning = nextMorning(now);
   const mDate = toDateStr(new Date(morning));
+  const classDay = !holidayInfo(mDate) && live.some((s) => s.date === mDate);
   const todaysLow = [
     ...new Set(
       live
@@ -204,7 +241,9 @@ export function buildReminders({ sessions, subjects, tasks, overall, stats, targ
         .map((s) => s.subjectId),
     ),
   ];
-  if (todaysLow.length) {
+  if (!classDay) {
+    // A day off: no attendance nudge at all.
+  } else if (todaysLow.length) {
     const first = summary.get(todaysLow[0])!;
     items.push({
       id: id++,

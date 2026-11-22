@@ -131,14 +131,43 @@ public class MainActivity extends BridgeActivity {
         getOnBackPressedDispatcher().addCallback(new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                WebView web = bridge == null ? null : bridge.getWebView();
-                if (web != null && web.canGoBack()) {
-                    web.goBack();
+                final WebView web = bridge == null ? null : bridge.getWebView();
+                if (web == null) {
+                    moveTaskToBack(true);
                     return;
                 }
-                // Out of screens: step aside like the home button does, so the
-                // next open is instant instead of a cold start.
-                moveTaskToBack(true);
+                // Ask the page first (window.__dockinBack): its own history.back()
+                // lands on the screen right behind. The WebView's goBack() skips
+                // entries added without a fresh tap — that was Back from a chat
+                // jumping past Friends straight to Today.
+                final boolean[] answered = {false};
+                final Runnable fallback = () -> {
+                    if (answered[0]) return;
+                    answered[0] = true;
+                    if (web.canGoBack()) web.goBack();
+                    else moveTaskToBack(true);
+                };
+                try {
+                    web.evaluateJavascript(
+                            "(function(){try{return window.__dockinBack?window.__dockinBack():'native'}catch(e){return 'native'}})()",
+                            value -> {
+                                if (answered[0]) return;
+                                if ("\"web\"".equals(value)) {
+                                    answered[0] = true;
+                                } else if ("\"root\"".equals(value)) {
+                                    answered[0] = true;
+                                    // Out of screens: step aside like the home button does, so
+                                    // the next open is instant instead of a cold start.
+                                    moveTaskToBack(true);
+                                } else {
+                                    fallback.run();
+                                }
+                            });
+                    // A page too busy to answer still gets its Back.
+                    web.postDelayed(fallback, 700);
+                } catch (RuntimeException e) {
+                    fallback.run();
+                }
             }
         });
     }

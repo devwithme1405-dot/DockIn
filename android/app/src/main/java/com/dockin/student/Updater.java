@@ -99,6 +99,11 @@ final class Updater {
 
     /** Follows GitHub's redirect to its file storage, asking for bytes from `from` on. */
     private static HttpURLConnection open(String url, long from) throws IOException {
+        return open(url, from, -1);
+    }
+
+    /** Same, for the bytes `from`..`to` (inclusive); `to` < 0 means to the end. */
+    private static HttpURLConnection open(String url, long from, long to) throws IOException {
         String at = url;
         for (int hop = 0; hop < 6; hop++) {
             HttpURLConnection c = (HttpURLConnection) new URL(at).openConnection();
@@ -107,7 +112,9 @@ final class Updater {
             c.setReadTimeout(30_000);
             c.setRequestProperty("Accept", "*/*");
             c.setRequestProperty("Cache-Control", "no-cache");
-            if (from > 0) c.setRequestProperty("Range", "bytes=" + from + "-");
+            c.setRequestProperty("Accept-Encoding", "identity");
+            if (to >= 0) c.setRequestProperty("Range", "bytes=" + from + "-" + to);
+            else if (from > 0) c.setRequestProperty("Range", "bytes=" + from + "-");
             int code = c.getResponseCode();
             if (code >= 300 && code < 400) {
                 String next = c.getHeaderField("Location");
@@ -186,7 +193,20 @@ final class Updater {
      * part-download, retries a dropped connection a few times, and only returns
      * a file whose size and SHA-256 match what the release promised.
      */
+    private static final Object DOWNLOADING = new Object();
+    /** Files this size and up come down over several connections at once. */
+    static final long PARALLEL_FROM = 1_500_000;
+    static final int PARTS = 4;
+
     static File download(File dir, Release r, String url, Progress progress) throws IOException {
+        // One download at a time: Update tapped while the Wi-Fi prefetch runs
+        // simply waits for it (and then finds the file ready).
+        synchronized (DOWNLOADING) {
+            return downloadNow(dir, r, url, progress);
+        }
+    }
+
+    private static File downloadNow(File dir, Release r, String url, Progress progress) throws IOException {
         //noinspection ResultOfMethodCallIgnored
         dir.mkdirs();
         File done = fileFor(dir, r.code);
@@ -199,10 +219,21 @@ final class Updater {
         File[] old = dir.listFiles();
         if (old != null) {
             for (File f : old) {
-                if (!f.getName().equals(done.getName()) && !f.getName().equals(part.getName())) {
+                if (!f.getName().startsWith(done.getName())) {
                     //noinspection ResultOfMethodCallIgnored
                     f.delete();
                 }
+            }
+        }
+        // Several connections at once: a campus line that gives each connection
+        // a thin slice still adds up to a fast download.
+        if (r.size >= PARALLEL_FROM) {
+            try {
+                File got = parallel(dir, r, url, done, part, progress);
+                if (got != null) return got;
+            } catch (IOException e) {
+                if (e.getMessage() != null && e.getMessage().startsWith("The update file didn't check out")) throw e;
+                // Otherwise: one plain stream below.
             }
         }
         IOException last = null;
@@ -260,6 +291,160 @@ final class Updater {
                 }
             }
             if (total > 0 && part.length() != total) throw new IOException("The download stopped early.");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    /** The address GitHub finally serves the file from, so each connection skips the redirect. */
+    private static String resolve(String url) {
+        String at = url;
+        try {
+            for (int hop = 0; hop < 6; hop++) {
+                HttpURLConnection c = (HttpURLConnection) new URL(at).openConnection();
+                c.setInstanceFollowRedirects(false);
+                c.setConnectTimeout(15_000);
+                c.setReadTimeout(15_000);
+                c.setRequestProperty("Range", "bytes=0-0");
+                int code = c.getResponseCode();
+                String next = c.getHeaderField("Location");
+                c.disconnect();
+                if (code >= 300 && code < 400 && next != null) {
+                    at = new URL(new URL(at), next).toString();
+                    continue;
+                }
+                return at;
+            }
+        } catch (IOException ignored) {
+            // The plain address still works (each connection redirects itself).
+        }
+        return url;
+    }
+
+    /** The server ignored a byte range: only a single stream will do. */
+    private static final class NoRanges extends IOException {
+        NoRanges() {
+            super("no ranges");
+        }
+    }
+
+    /**
+     * Downloads in {@link #PARTS} pieces at once, each resumable, then joins
+     * and checks them. Null if the server won't serve pieces.
+     */
+    private static File parallel(File dir, final Release r, String url, File done, File part, final Progress progress) throws IOException {
+        final String direct = resolve(url);
+        final String plain = url;
+        final long size = r.size;
+        final long piece = (size + PARTS - 1) / PARTS;
+        final File[] files = new File[PARTS];
+        final long[] from = new long[PARTS];
+        final long[] to = new long[PARTS];
+        final java.util.concurrent.atomic.AtomicLong got = new java.util.concurrent.atomic.AtomicLong();
+        for (int i = 0; i < PARTS; i++) {
+            files[i] = new File(dir, done.getName() + ".p" + i);
+            from[i] = i * piece;
+            to[i] = Math.min(size, (i + 1) * piece) - 1;
+            long want = to[i] - from[i] + 1;
+            if (files[i].length() > want) {
+                //noinspection ResultOfMethodCallIgnored
+                files[i].delete();
+            }
+            got.addAndGet(files[i].length());
+        }
+        final int[] shown = {-1};
+        final IOException[] failed = new IOException[PARTS];
+        Thread[] workers = new Thread[PARTS];
+        for (int i = 0; i < PARTS; i++) {
+            final int n = i;
+            workers[i] = new Thread(() -> {
+                String at = direct;
+                for (int attempt = 0; attempt < 6; attempt++) {
+                    try {
+                        fetchPiece(at, files[n], from[n], to[n], got, size, shown, progress);
+                        failed[n] = null;
+                        return;
+                    } catch (NoRanges e) {
+                        failed[n] = e;
+                        return;
+                    } catch (IOException e) {
+                        failed[n] = e;
+                        // A signed GitHub address can expire mid-way: fall back to the plain one.
+                        if (attempt >= 1) at = plain;
+                        pause(1200L * (attempt + 1));
+                    }
+                }
+            }, "dockin-update-" + i);
+            workers[i].start();
+        }
+        for (Thread t : workers) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted");
+            }
+        }
+        for (IOException e : failed) {
+            if (e instanceof NoRanges) {
+                for (File f : files) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+                return null;
+            }
+            if (e != null) throw e;
+        }
+        // Join the pieces, then check the whole thing.
+        try (OutputStream o = new FileOutputStream(part, false)) {
+            byte[] buf = new byte[256 * 1024];
+            for (File f : files) {
+                try (InputStream in = new FileInputStream(f)) {
+                    int n;
+                    while ((n = in.read(buf)) != -1) o.write(buf, 0, n);
+                }
+            }
+        }
+        for (File f : files) {
+            //noinspection ResultOfMethodCallIgnored
+            f.delete();
+        }
+        if (!whole(part, r)) {
+            //noinspection ResultOfMethodCallIgnored
+            part.delete();
+            throw new IOException("The download was damaged.");
+        }
+        //noinspection ResultOfMethodCallIgnored
+        done.delete();
+        if (!part.renameTo(done)) throw new IOException("Could not save the update.");
+        progress.at(100);
+        return done;
+    }
+
+    private static void fetchPiece(String url, File f, long start, long end, java.util.concurrent.atomic.AtomicLong got,
+                                   long size, int[] shown, Progress progress) throws IOException {
+        long have = f.length();
+        long want = end - start + 1;
+        if (have >= want) return;
+        HttpURLConnection c = open(url, start + have, end);
+        try {
+            if (c.getResponseCode() != 206) throw new NoRanges();
+            try (InputStream in = c.getInputStream(); OutputStream o = new FileOutputStream(f, true)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    o.write(buf, 0, n);
+                    long all = got.addAndGet(n);
+                    int pct = (int) Math.min(99, all * 100 / size);
+                    synchronized (shown) {
+                        if (pct > shown[0]) {
+                            shown[0] = pct;
+                            progress.at(pct);
+                        }
+                    }
+                }
+            }
+            if (f.length() != want) throw new IOException("The download stopped early.");
         } finally {
             c.disconnect();
         }
@@ -441,6 +626,19 @@ final class Updater {
     static boolean unmetered(Context c) {
         ConnectivityManager cm = (ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
         return cm != null && !cm.isActiveNetworkMetered();
+    }
+
+    /** The app saw an update: on Wi-Fi, fetch it now so Update installs at once. */
+    static void prefetch(Context c, Progress progress) {
+        if (!unmetered(c)) return;
+        try {
+            Release r = latest();
+            if (r.code <= current(c) || ready(c, r)) return;
+            File f = download(dir(c), r, BASE + "DockIn.apk", progress);
+            verify(c, f);
+        } catch (Exception ignored) {
+            // Downloads when they tap Update instead.
+        }
     }
 
     /** {@link UpdateJob}: is there a newer DockIn? Tell the person — once, then again daily until updated. */
