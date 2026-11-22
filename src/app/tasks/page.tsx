@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFlip } from "@/lib/flip";
 import { HeroHeader, PageHeader } from "@/components/PageHeader";
 import { ConnectLms, timeAgo } from "@/components/College";
 import { syncCollege, useCollege } from "@/lib/college";
@@ -102,6 +103,9 @@ export default function TasksPage() {
     () => groupPending(list.filter((t) => t.source !== "lms"), today, justDone),
     [list, today, justDone],
   );
+  // Ticking a task off (or back on) moves it; it glides there instead of jumping.
+  const listBox = useRef<HTMLDivElement>(null);
+  useFlip(listBox, `${tab}|${groups.map((g) => g.bucket + ":" + g.items.map((t) => t.id + (t.done ? "+" : "")).join(",")).join("|")}`);
   const doneList = useMemo(
     () => list.filter((t) => t.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
     [list],
@@ -239,7 +243,7 @@ export default function TasksPage() {
       </div>
 
       {/* Room under the last task so the + button never sits on top of it. */}
-      <div className="mt-4 pb-28">
+      <div ref={listBox} className="mt-4 pb-28">
         {tab === "todo" && lmsPending.length > 0 && (
           <section className="mb-5 px-5">
             <h2 className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold text-accent">

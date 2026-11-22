@@ -121,6 +121,8 @@ const rpcs = {
 };
 
 const problems = [];
+/** The chat's network: drop every send, as a dead campus Wi-Fi would. */
+const net = { dropSends: false };
 const requested = [];
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
@@ -158,10 +160,12 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
     return json({ status: "pending" });
   }
   if (isRpc) return json(rpcs[name] ?? []);
+  if (req.method() === "POST" && name === "messages" && net.dropSends) return route.abort("internetdisconnected");
   if (req.method() === "POST" && name === "messages") {
     const body = JSON.parse(req.postData() || "{}");
     const row = { author: ME, created_at: new Date().toISOString(), deleted_at: null, data: null, reply_to: null, ...body };
-    messages.push(row);
+    // Sent again with the same id (a retry): ignored, like ON CONFLICT DO NOTHING.
+    if (!messages.some((m) => m.id === row.id)) messages.push(row);
     const one = (req.headers()["accept"] || "").includes("vnd.pgrst.object");
     return json(one ? row : [row], 201);
   }
@@ -185,6 +189,13 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
     return json([b], 201);
   }
   if (req.method() !== "GET") return json([], 200);
+  // One row by id (e.g. the server's copy of a message just sent).
+  const byId = url.searchParams.get("id");
+  if (byId?.startsWith("eq.")) {
+    const hit = (tables[name] ?? []).filter((r) => r.id === byId.slice(3));
+    const one = (req.headers()["accept"] || "").includes("vnd.pgrst.object");
+    return one ? (hit[0] ? json(hit[0]) : json({}, 406)) : json(hit);
+  }
   return json(tables[name] ?? []);
 });
 await page.route("**/api/push", (r) => r.fulfill({ status: 503, body: "{}" }));
@@ -245,6 +256,41 @@ await step("a one-to-one chat opens and sends", async () => {
   await page.getByRole("dialog").getByLabel("Back").click();
   await page.waitForTimeout(400);
   if (new URL(page.url()).searchParams.get("chat")) throw new Error("back did not close the chat");
+});
+
+await step("no network: the message waits (🕓), then goes by itself once — ✓, ✓✓ delivered, blue ✓✓ read", async () => {
+  await page.getByRole("button", { name: /^Yash/ }).first().click();
+  const dlg = page.getByRole("dialog", { name: "Chat with Yash" });
+  net.dropSends = true;
+  try {
+  await page.getByLabel("Message", { exact: true }).fill("Wifi bekaar hai yaar");
+  await page.getByLabel("Send").click();
+  const bubble = dlg.locator('[id^="msg-"]', { hasText: "Wifi bekaar hai yaar" });
+  await bubble.getByLabel("Waiting to send").last().waitFor({ timeout: 4000 });
+  await page.waitForTimeout(3000);
+  if (!(await bubble.count())) throw new Error("the message vanished while the line was down");
+  await page.screenshot({ path: `${SHOTS}/chat-waiting.png` });
+  net.dropSends = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await bubble.getByLabel("Sent").last().waitFor({ timeout: 20000 });
+  const copies = messages.filter((m) => m.body === "Wifi bekaar hai yaar").length;
+  if (copies !== 1) throw new Error(`${copies} copies on the server`);
+  // Yash's phone got it, then he read it.
+  const later = new Date(Date.now() + 60_000).toISOString();
+  tables.thread_reads.push({ user_id: YASH, thread: dm, read_at: "1970-01-01T00:00:00Z", delivered_at: later, muted: false, pinned: false });
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await bubble.getByLabel("Delivered").last().waitFor({ timeout: 8000 });
+  tables.thread_reads[tables.thread_reads.length - 1].read_at = later;
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await bubble.getByLabel("Read").last().waitFor({ timeout: 8000 });
+  await page.screenshot({ path: `${SHOTS}/chat-ticks.png` });
+  } finally {
+    // Whatever happened above, the rest of the run gets a working network and a closed chat.
+    net.dropSends = false;
+    tables.thread_reads = tables.thread_reads.filter((r) => r.user_id !== YASH);
+    if (await dlg.count()) await dlg.getByLabel("Back").click().catch(() => {});
+    await page.waitForTimeout(400);
+  }
 });
 
 await step("the group chat shows who said what and the task card", async () => {
@@ -592,6 +638,8 @@ await step("sending a PDF: pick the assignment and it goes — names read from t
   await page.screenshot({ path: `${SHOTS}/solution-send.png` });
   await page.getByRole("dialog", { name: "Which assignment?" }).getByText("DBMS Assignment 4").click();
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Which assignment?"]'), null, { timeout: 8000 });
+  // It leaves from the outbox a moment later.
+  for (let i = 0; i < 25 && !messages.some((m) => m.data?.solution && m.author === ME); i++) await page.waitForTimeout(200);
   const sent = messages.find((m) => m.data?.solution && m.author === ME);
   if (!sent || sent.data.solution.instance !== 41) throw new Error("solution not sent: " + JSON.stringify(sent?.data));
   // My profile says "Sachin", the file says Vaibhav: whose name it really is was read from the file.

@@ -13,4 +13,17 @@
     <string name="channel_college_about">New LMS assignments, deadlines within a day, and absences Camu records.</string>
     <string name="channel_updates">App updates</string>
     <string name="channel_updates_about">When a new version of DockIn is ready to install.</string>
+    <string name="share_label">Send on DockIn</string>
+    <string name="widget_attendance">Attendance</string>
+    <string name="widget_attendance_about">Your overall attendance and how many classes you can miss.</string>
+    <string name="widget_next_class">Next class</string>
+    <string name="widget_next_class_about">Your next class, when it starts and where.</string>
+    <string name="widget_today">Today\'s classes</string>
+    <string name="widget_today_about">All of today\'s classes at a glance.</string>
+    <string name="widget_tasks">Tasks</string>
+    <string name="widget_tasks_about">What\'s due next, overdue first.</string>
+    <string name="widget_mess">Mess menu</string>
+    <string name="widget_mess_about">What the mess is serving now, or next.</string>
+    <string name="widget_mess_pass">Mess pass</string>
+    <string name="widget_mess_pass_about">Your cafeteria QR on the home screen.</string>
 </resources>

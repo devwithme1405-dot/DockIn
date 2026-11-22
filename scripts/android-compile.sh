@@ -35,6 +35,16 @@ done
 for name in $(grep -ohE 'R\.drawable\.[a-z_]+' -r "$java" | sed 's/.*R\.drawable\.//' | sort -u); do
   ls "$res"/drawable*/"$name".* >/dev/null 2>&1 || { echo "android: no drawable called $name" >&2; missing=1; }
 done
+for name in $(grep -ohE 'R\.layout\.[a-z_]+' -r "$java" | sed 's/.*R\.layout\.//' | sort -u); do
+  [ -f "$res/layout/$name.xml" ] || { echo "android: no layout called $name" >&2; missing=1; }
+done
+for name in $(grep -ohE 'R\.id\.[a-z0-9_]+' -r "$java" | sed 's/.*R\.id\.//' | sort -u); do
+  grep -rq "@+id/$name\"" "$res/layout" || { echo "android: no view with id $name" >&2; missing=1; }
+done
+# Every widget the manifest names has its provider info and layout.
+for name in $(grep -ohE '@xml/widget_[a-z_]+_info' "$here/../android/app/src/main/AndroidManifest.xml" | sed 's/@xml\///' | sort -u); do
+  [ -f "$res/xml/$name.xml" ] || { echo "android: no $name.xml" >&2; missing=1; }
+done
 [ "$missing" -eq 0 ] || exit 1
 
 # The plugin is only reachable if MainActivity registers it.

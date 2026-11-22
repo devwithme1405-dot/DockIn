@@ -742,6 +742,58 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /** The summary home-screen widgets draw from (JSON text); they redraw at once. */
+    @PluginMethod
+    public void setWidgets(PluginCall call) {
+        String data = call.getString("data");
+        if (data != null && data.length() < 400_000) Widgets.save(getContext(), data);
+        call.resolve();
+    }
+
+    /** What was shared into DockIn (text, subject, files copied into the cache), once. */
+    @PluginMethod
+    public void takeShare(PluginCall call) {
+        org.json.JSONObject w = ShareIn.take();
+        JSObject o = new JSObject();
+        if (w != null) {
+            try {
+                o = JSObject.fromJSONObject(w);
+            } catch (JSONException ignored) {
+                // Empty answer: nothing to share.
+            }
+        }
+        call.resolve(o);
+    }
+
+    /** A piece of a shared file (base64), so big files cross the bridge in parts. */
+    @PluginMethod
+    public void readShared(final PluginCall call) {
+        final String path = call.getString("path");
+        final long offset = call.getLong("offset", 0L);
+        final int length = Math.max(1, Math.min(call.getInt("length", 1 << 20), 4 << 20));
+        if (path == null) {
+            call.reject("No file.");
+            return;
+        }
+        final Context c = getContext();
+        new Thread(() -> {
+            try {
+                JSObject o = new JSObject();
+                o.put("data", ShareIn.chunk(c, path, offset, length));
+                call.resolve(o);
+            } catch (Exception e) {
+                call.reject("Could not read the shared file.");
+            }
+        }, "dockin-share-read").start();
+    }
+
+    /** Done with shared files: delete the copies. */
+    @PluginMethod
+    public void clearShared(PluginCall call) {
+        ShareIn.clear(getContext());
+        call.resolve();
+    }
+
     /** The app hands over the upcoming reminders (class, task, attendance); the
      * phone sets the alarms. The whole list replaces the last one. */
     @PluginMethod
@@ -761,6 +813,23 @@ public class DockInPlugin extends Plugin {
     @Override
     protected void handleOnNewIntent(Intent intent) {
         if (intent == null) return;
+        // Shared from another app (text, a link, documents): copy it in, then tell
+        // the web app, which opens Friends to pick who gets it.
+        if (ShareIn.isShare(intent)) {
+            final Intent shared = new Intent(intent);
+            intent.setAction(Intent.ACTION_MAIN); // taken: reopening from recents doesn't share again
+            intent.replaceExtras(new android.os.Bundle());
+            final Context c = getContext();
+            new Thread(() -> {
+                try {
+                    ShareIn.put(ShareIn.read(c, shared));
+                    notifyListeners("share", new JSObject(), true);
+                } catch (Exception ignored) {
+                    // Nothing readable was shared.
+                }
+            }, "dockin-share-in").start();
+            return;
+        }
         String path = intent.getStringExtra(MainActivity.EXTRA_OPEN);
         // A DockIn link: https://dock-in.vercel.app/circle?join=… or dockin://open/circle?add=…
         Uri link = intent.getData();

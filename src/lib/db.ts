@@ -65,7 +65,7 @@ export class DockinDB extends Dexie {
   chatReads!: Table<ChatRead, string>;
   chatPeople!: Table<ChatPerson, string>;
   pollVotes!: Table<PollVote, string>;
-  seenBy!: Table<{ id: string; thread: string; userId: string; readAt: number }, string>;
+  seenBy!: Table<{ id: string; thread: string; userId: string; readAt: number; deliveredAt?: number }, string>;
   /** Chat documents already downloaded once, so they reopen offline. */
   fileCache!: Table<{ path: string; blob: Blob; at: number }, string>;
   /** What was handed in to the practice LMS (lib/practiceLms.ts), newest per assignment. */

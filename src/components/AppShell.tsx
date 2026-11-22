@@ -16,12 +16,15 @@ import { NotifyAsk } from "./NotifyAsk";
 import { CropHost } from "./PhotoCropper";
 import { SocialSync } from "./SocialSync";
 import { AppUpdate } from "./AppUpdate";
+import { ShareInbox } from "./ShareInbox";
+import { WidgetsSync } from "./WidgetsSync";
 import { useAuth } from "@/lib/auth";
 import { DockIn, appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
 import { getSupabase } from "@/lib/supabase";
 import { getSyncStatus, startSync, subscribeSync } from "@/lib/sync";
 import { goTab, tabOf } from "@/lib/tabs";
+import { showMessPass } from "@/lib/messPass";
 import { TabHost } from "./TabHost";
 import { OfflineLayer } from "./Offline";
 import { startNet } from "@/lib/net";
@@ -240,6 +243,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       onPhone("open", ({ path }) => {
         const to = new URL(path, window.location.href);
+        // The Mess pass widget: Cafeteria with the pass up.
+        if (to.pathname === "/cafeteria" && to.searchParams.get("pass")) {
+          showMessPass();
+          return;
+        }
         if (tabOf(to.pathname)) goTab(to.pathname + to.search);
         else router.push(path);
         window.dispatchEvent(new CustomEvent("dockin-open", { detail: path }));
@@ -393,6 +401,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         {ready && !onboarding && FRIENDS && <SocialSync />}
         {ready && !onboarding && FRIENDS && session && <StatsPublisher />}
         {isNativeApp() && <AppUpdate />}
+        {isNativeApp() && ready && !onboarding && FRIENDS && <ShareInbox />}
+        {isNativeApp() && ready && !onboarding && <WidgetsSync />}
         <CropHost />
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second

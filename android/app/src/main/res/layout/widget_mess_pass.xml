@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_bg" android:padding="12dp" android:gravity="center_horizontal">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/w_label" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="Mess pass" android:textColor="@color/widget_accent" android:textSize="12sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/widget_chip"
+            android:paddingLeft="8dp" android:paddingRight="8dp" android:paddingTop="2dp" android:paddingBottom="2dp"
+            android:textColor="@color/widget_ink" android:textSize="11sp" android:textStyle="bold" android:visibility="gone" />
+    </LinearLayout>
+    <ImageView android:id="@+id/w_qr" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:layout_marginTop="6dp"
+        android:background="@drawable/widget_qr_bg" android:padding="6dp" android:scaleType="fitCenter" android:adjustViewBounds="true"
+        android:contentDescription="Mess pass QR" />
+    <TextView android:id="@+id/w_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center"
+        android:textColor="@color/widget_muted" android:textSize="12.5sp" android:visibility="gone" />
+</LinearLayout>

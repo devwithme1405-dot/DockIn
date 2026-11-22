@@ -21,4 +21,5 @@ public class Context {
   public int checkSelfPermission(String p) { return 0; }
   public ComponentName startForegroundService(Intent i) { return null; }
   public ComponentName startService(Intent i) { return null; }
+  public void sendBroadcast(Intent i) {}
 }

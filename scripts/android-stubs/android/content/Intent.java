@@ -36,4 +36,15 @@ public class Intent {
   public static final int FLAG_GRANT_READ_URI_PERMISSION = 1;
   public Intent setDataAndType(Uri u, String t) { return this; }
   public static Intent createChooser(Intent target, CharSequence title) { return target; }
+  public static final String ACTION_SEND = "android.intent.action.SEND";
+  public static final String ACTION_SEND_MULTIPLE = "android.intent.action.SEND_MULTIPLE";
+  public static final String ACTION_MAIN = "android.intent.action.MAIN";
+  public static final String EXTRA_TEXT = "android.intent.extra.TEXT";
+  public static final String EXTRA_SUBJECT = "android.intent.extra.SUBJECT";
+  public static final String EXTRA_STREAM = "android.intent.extra.STREAM";
+  public Intent(Intent o) {}
+  public CharSequence getCharSequenceExtra(String k) { return null; }
+  public <T> java.util.ArrayList<T> getParcelableArrayListExtra(String k) { return null; }
+  public Intent replaceExtras(android.os.Bundle b) { return this; }
+  public Intent putExtra(String k, int[] v) { return this; }
 }

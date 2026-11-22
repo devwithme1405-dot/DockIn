@@ -9,4 +9,11 @@
     <color name="colorPrimary">#7C3D1B</color>
     <color name="colorPrimaryDark">#7C3D1B</color>
     <color name="colorAccent">#6A3DE8</color>
+    <!-- Home-screen widgets. -->
+    <color name="widget_bg">#FFF6EA</color>
+    <color name="widget_line">#E9D6B8</color>
+    <color name="widget_ink">#3B2416</color>
+    <color name="widget_muted">#8A6A52</color>
+    <color name="widget_accent">#B85D1C</color>
+    <color name="widget_chip">#F6E3C8</color>
 </resources>

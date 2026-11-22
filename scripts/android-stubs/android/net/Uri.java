@@ -6,4 +6,5 @@ public abstract class Uri {
   public String getScheme() { return null; }
   public String getQuery() { return null; }
   public static Uri fromParts(String scheme, String ssp, String fragment) { return null; }
+  public String getLastPathSegment() { return null; }
 }

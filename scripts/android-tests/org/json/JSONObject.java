@@ -13,6 +13,7 @@ public class JSONObject {
   public JSONObject put(String k, double v) throws JSONException { m.put(k, v); return this; }
   public Object opt(String k) { return null; }
   public boolean has(String k) { return false; }
+  public boolean isNull(String k) { return true; }
   public Object remove(String k) { return null; }
   public Iterator<String> keys() { return null; }
   public int length() { return 0; }

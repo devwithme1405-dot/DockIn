@@ -37,8 +37,9 @@ export interface ChatMessage {
   editedAt?: number | null;
   /** Deleted for me only (this phone). */
   hidden?: boolean;
-  /** Written here, not yet confirmed by the server. */
+  /** Written here, not yet confirmed by the server (in the outbox: sent as soon as the line lets it). */
   pending?: boolean;
+  /** The server refused it (not a network problem): shown with "tap to retry". */
   failed?: boolean;
 }
 
@@ -127,11 +128,40 @@ export function chatMe(): string | null {
  */
 async function ensureMe(): Promise<string | null> {
   if (myId) return myId;
+  myId = await whoIsSignedIn();
+  return myId;
+}
+
+/**
+ * The signed-in user's id. Asking Supabase can need the network (an expired
+ * token gets refreshed); on a dead line that fails — so fall back to the
+ * session saved on this phone. A weak signal must never look like "signed out":
+ * that is how a message used to vanish.
+ */
+async function whoIsSignedIn(): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return null;
-  const { data } = await sb.auth.getSession();
-  myId = data.session?.user.id ?? null;
-  return myId;
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data.session?.user.id) return data.session.user.id;
+  } catch {
+    /* fall through to what is saved */
+  }
+  return savedUserId();
+}
+
+function savedUserId(): string | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !/^sb-.+-auth-token$/.test(k)) continue;
+      const v = JSON.parse(localStorage.getItem(k) || "null") as { user?: { id?: string } } | null;
+      if (v?.user?.id) return v.user.id;
+    }
+  } catch {
+    /* nothing saved */
+  }
+  return null;
 }
 
 /** Hook: your user id, resolved from the saved session. */
@@ -170,6 +200,7 @@ async function putMsgs(list: ChatMessage[]): Promise<void> {
   const prev = await db.messages.bulkGet(list.map((m) => m.id));
   await db.messages.bulkPut(list.map((m, i) => (prev[i]?.hidden ? { ...m, hidden: true } : m)));
   const fresh = list.filter((m, i) => !prev[i]);
+  noteDelivered(list);
   // One at a time: the live channel and a pull can deliver the same message
   // together, and the origin check must see the first one's result.
   absorbing = absorbing.then(() => absorbSharedTasks(fresh)).catch(() => {});
@@ -298,60 +329,102 @@ function since(): string {
   }
 }
 
-/** Catch up on everything since the last pull, plus read marks and names. */
-export async function pullChat(): Promise<void> {
+/** A request that may hang on a dead line: give up after a while instead. */
+function deadline(ms = 20_000): AbortSignal {
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+/**
+ * Pulls re-read a few minutes before the last one ended: a message the server
+ * stamped a moment earlier but committed a moment later (busy server, weak
+ * line) would otherwise fall between two pulls and never show up.
+ */
+const OVERLAP = 5 * 60_000;
+/** Reactions, votes and names are re-read in full only this often. */
+const FULL_EVERY = 5 * 60_000;
+let lastFull = 0;
+let pulling: Promise<void> | null = null;
+let pullAgain = false;
+
+/**
+ * Catch up on everything since the last pull, plus read and delivered marks.
+ * One at a time: calls made while one runs are folded into one more after it.
+ */
+export function pullChat(opts: { full?: boolean } = {}): Promise<void> {
+  if (opts.full) lastFull = 0;
+  if (pulling) {
+    pullAgain = true;
+    return pulling;
+  }
+  pulling = (async () => {
+    try {
+      do {
+        pullAgain = false;
+        await pullOnce();
+      } while (pullAgain);
+    } finally {
+      pulling = null;
+    }
+  })();
+  return pulling;
+}
+
+async function pullOnce(): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
-  myId = null;
-  if (!(await ensureMe())) return;
+  // Re-check who is signed in (another account may have signed in), without
+  // ever forgetting them because the network is bad.
+  const who = await whoIsSignedIn();
+  if (!who) return;
+  if (who !== myId) myId = who;
+  void flushOutbox();
 
-  const from = since();
-  const [msgs, reads, people] = await Promise.all([
-    sb
-      .from("messages")
-      .select("*")
-      .gt("created_at", from)
-      .order("created_at", { ascending: true })
-      .limit(1000),
-    sb.from("thread_reads").select("*").eq("user_id", myId),
-    sb.from("profiles").select("user_id,name,avatar"),
+  const from = new Date(Math.max(0, Date.parse(since()) - OVERLAP)).toISOString();
+  const [msgs, changed] = await Promise.all([
+    sb.from("messages").select("*").gt("created_at", from).order("created_at", { ascending: true }).limit(1000).abortSignal(deadline()),
+    // Edits and "delete for everyone" made while this phone wasn't listening.
+    sb.from("messages").select("*").or(`edited_at.gt.${from},deleted_at.gt.${from}`).limit(500).abortSignal(deadline()),
   ]);
-  if (msgs.error) return; // tables not set up yet, or offline — try again later
+  if (msgs.error) return; // offline or timed out — the next pull catches up
   const rows = (msgs.data ?? []) as Row[];
-  if (rows.length) {
-    await putMsgs(rows.map(toMsg));
-    try {
-      localStorage.setItem(SINCE_KEY, rows[rows.length - 1].created_at);
-    } catch {
-      /* a full re-pull next time is fine */
-    }
+  const extra = changed.error ? [] : ((changed.data ?? []) as Row[]);
+  if (rows.length || extra.length) {
+    await putMsgs([...rows, ...extra.filter((r) => !rows.some((x) => x.id === r.id))].map(toMsg));
+    if (rows.length)
+      try {
+        localStorage.setItem(SINCE_KEY, rows[rows.length - 1].created_at);
+      } catch {
+        /* a full re-pull next time is fine */
+      }
   }
-  const others = await sb.from("thread_reads").select("user_id,thread,read_at").neq("user_id", myId);
-  if (!others.error) {
-    const list = (others.data ?? []) as { user_id: string; thread: string; read_at: string }[];
-    await db.seenBy.bulkPut(list.map((r) => ({ id: `${r.thread}:${r.user_id}`, thread: r.thread, userId: r.user_id, readAt: Date.parse(r.read_at) })));
-  }
-  if (!reads.error) {
-    const marks = (reads.data ?? []) as { thread: string; read_at: string; muted?: boolean; pinned?: boolean }[];
-    await db.chatReads.bulkPut(
-      marks.map((m) => ({ thread: m.thread, readAt: Date.parse(m.read_at), muted: !!m.muted, pinned: !!m.pinned })),
-    );
-  }
-  const reacts = await sb.from("message_reactions").select("message_id,user_id,emoji");
+  await pullMarks(sb);
+
+  if (Date.now() - lastFull < FULL_EVERY) return;
+  lastFull = Date.now();
+  const [reacts, votes, people] = await Promise.all([
+    sb.from("message_reactions").select("message_id,user_id,emoji").abortSignal(deadline()),
+    sb.from("poll_votes").select("message_id,user_id,choice").abortSignal(deadline()),
+    sb.from("profiles").select("user_id,name,avatar").abortSignal(deadline()),
+  ]);
   if (!reacts.error) {
     const list = (reacts.data ?? []) as { message_id: string; user_id: string; emoji: string }[];
-    await db.msgReactions.clear();
-    await db.msgReactions.bulkPut(
-      list.map((r) => ({ id: `${r.message_id}:${r.user_id}`, messageId: r.message_id, userId: r.user_id, emoji: r.emoji })),
-    );
+    await db.transaction("rw", db.msgReactions, async () => {
+      await db.msgReactions.clear();
+      await db.msgReactions.bulkPut(
+        list.map((r) => ({ id: `${r.message_id}:${r.user_id}`, messageId: r.message_id, userId: r.user_id, emoji: r.emoji })),
+      );
+    });
   }
-  const votes = await sb.from("poll_votes").select("message_id,user_id,choice");
   if (!votes.error) {
     const list = (votes.data ?? []) as { message_id: string; user_id: string; choice: number }[];
-    await db.pollVotes.clear();
-    await db.pollVotes.bulkPut(
-      list.map((v) => ({ id: `${v.message_id}:${v.user_id}`, messageId: v.message_id, userId: v.user_id, choice: v.choice })),
-    );
+    await db.transaction("rw", db.pollVotes, async () => {
+      await db.pollVotes.clear();
+      await db.pollVotes.bulkPut(
+        list.map((v) => ({ id: `${v.message_id}:${v.user_id}`, messageId: v.message_id, userId: v.user_id, choice: v.choice })),
+      );
+    });
   }
   if (!people.error) {
     const list = (people.data ?? []) as { user_id: string; name: string | null; avatar: string | null }[];
@@ -359,6 +432,76 @@ export async function pullChat(): Promise<void> {
       list.map((p) => ({ id: p.user_id, name: p.name?.trim() || "Someone", avatar: p.avatar ?? undefined })),
     );
   }
+}
+
+type MarkRow = { user_id: string; thread: string; read_at: string; delivered_at?: string | null; muted?: boolean; pinned?: boolean };
+
+/** Read marks (mine: unread counts; theirs: blue ticks) and delivered marks (grey double ticks). */
+async function pullMarks(sb: NonNullable<ReturnType<typeof getSupabase>>): Promise<void> {
+  let marks: { data: unknown[] | null; error: { message: string } | null } = await sb
+    .from("thread_reads")
+    .select("user_id,thread,read_at,delivered_at,muted,pinned")
+    .abortSignal(deadline());
+  // Server not updated yet (no delivered_at column): read marks still work.
+  if (marks.error && /delivered_at/.test(marks.error.message)) marks = await sb.from("thread_reads").select("user_id,thread,read_at,muted,pinned").abortSignal(deadline());
+  if (marks.error) return;
+  const list = (marks.data ?? []) as MarkRow[];
+  await db.seenBy.bulkPut(list.filter((r) => r.user_id !== myId).map(markOf));
+  const mine = list.filter((r) => r.user_id === myId);
+  if (!mine.length) return;
+  const local = new Map((await db.chatReads.bulkGet(mine.map((m) => m.thread))).filter(Boolean).map((r) => [r!.thread, r!]));
+  await db.chatReads.bulkPut(
+    mine.map((m) => {
+      const here = local.get(m.thread);
+      // Never move a read mark back: this phone may have read further than the server knows yet.
+      return { ...here, thread: m.thread, readAt: Math.max(Date.parse(m.read_at) || 0, here?.readAt ?? 0), muted: !!m.muted, pinned: !!m.pinned };
+    }),
+  );
+}
+
+const markOf = (r: Pick<MarkRow, "user_id" | "thread" | "read_at" | "delivered_at">) => {
+  const readAt = Date.parse(r.read_at) || 0;
+  return {
+    id: `${r.thread}:${r.user_id}`,
+    thread: r.thread,
+    userId: r.user_id,
+    readAt,
+    // Read means delivered too.
+    deliveredAt: Math.max(readAt, r.delivered_at ? Date.parse(r.delivered_at) || 0 : 0),
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Delivered (✓✓): this phone tells the sender their messages reached it.
+
+const deliveredSent = new Map<ThreadId, number>();
+let deliverTimer: ReturnType<typeof setTimeout> | undefined;
+const deliverQueue = new Map<ThreadId, number>();
+
+/** Messages from others reached this phone: say so, a few at a time. */
+function noteDelivered(list: ChatMessage[]): void {
+  for (const m of list) {
+    if (m.author === myId || m.deleted) continue;
+    if ((deliveredSent.get(m.thread) ?? 0) >= m.createdAt) continue;
+    deliverQueue.set(m.thread, Math.max(deliverQueue.get(m.thread) ?? 0, m.createdAt));
+  }
+  if (!deliverQueue.size) return;
+  clearTimeout(deliverTimer);
+  deliverTimer = setTimeout(() => void sendDelivered(), 1200);
+}
+
+async function sendDelivered(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb || !myId) return;
+  const batch = [...deliverQueue];
+  deliverQueue.clear();
+  for (const [thread, at] of batch) {
+    const { error } = await sb.rpc("mark_delivered", { p_thread: thread, p_at: new Date(at).toISOString() }).abortSignal(deadline(15_000));
+    if (!error) deliveredSent.set(thread, Math.max(deliveredSent.get(thread) ?? 0, at));
+    // Not set up on the server yet: nothing to retry.
+    else if (!/mark_delivered|function/i.test(error.message)) deliverQueue.set(thread, Math.max(deliverQueue.get(thread) ?? 0, at));
+  }
+  if (deliverQueue.size) deliverTimer = setTimeout(() => void sendDelivered(), 15_000);
 }
 
 let channel: RealtimeChannel | null = null;
@@ -374,9 +517,9 @@ export function listenChat(): () => Promise<unknown> | void {
       if (row?.id) void putMsgs([toMsg(row)]);
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "thread_reads" }, (payload) => {
-      const r = payload.new as { user_id?: string; thread?: string; read_at?: string } | undefined;
+      const r = payload.new as Partial<MarkRow> | undefined;
       if (!r?.user_id || !r.thread || r.user_id === myId) return;
-      void db.seenBy.put({ id: `${r.thread}:${r.user_id}`, thread: r.thread, userId: r.user_id, readAt: Date.parse(r.read_at ?? "") || 0 });
+      void db.seenBy.put(markOf({ user_id: r.user_id, thread: r.thread, read_at: r.read_at ?? "", delivered_at: r.delivered_at }));
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, (payload) => {
       const r = (payload.new ?? payload.old) as { message_id?: string; user_id?: string; emoji?: string } | undefined;
@@ -392,7 +535,11 @@ export function listenChat(): () => Promise<unknown> | void {
       if (payload.eventType === "DELETE") void db.pollVotes.delete(id);
       else void db.pollVotes.put({ id, messageId: v.message_id, userId: v.user_id, choice: v.choice ?? 0 });
     })
-    .subscribe();
+    // Every (re)connect: catch up on whatever came while the line was down —
+    // the live stream alone misses those.
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") void pullChat();
+    });
   return () => {
     const ch = channel;
     channel = null;
@@ -406,13 +553,13 @@ export async function sendMessage(
   opts: { task?: ChatTask; poll?: ChatPoll; file?: ChatFile; invite?: "compare"; replyTo?: string | null; silent?: boolean } = {},
 ): Promise<void> {
   const { task, poll, file, invite, replyTo, silent } = opts;
-  const sb = getSupabase();
-  if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to chat.");
+  if (!getSupabase() || !(await ensureMe()) || !myId) throw new Error("Sign in to chat.");
   const text = body.trim();
   if (!text && !task && !poll && !file) return;
-  const id = crypto.randomUUID();
-  const local: ChatMessage = {
-    id,
+  // Saved on this phone first, then sent from the outbox — however bad the line,
+  // it is never lost: it waits (🕓) and goes as soon as the network lets it.
+  await db.messages.put({
+    id: crypto.randomUUID(),
     thread,
     author: myId,
     body: text.slice(0, 4000),
@@ -422,31 +569,107 @@ export async function sendMessage(
     replyTo: replyTo ?? null,
     createdAt: Date.now(),
     pending: true,
-  };
-  await db.messages.put(local);
-  const { data, error } = await sb
-    .from("messages")
-    .insert({ id, thread, body: local.body, kind: local.kind, data: local.data, reply_to: local.replyTo })
-    .select("*")
-    .single();
-  if (error || !data) {
-    await db.messages.update(id, { pending: false, failed: true });
-    throw new Error(/Failed to fetch|NetworkError/i.test(error?.message ?? "") ? "No internet — tap to retry." : "Could not send.");
-  }
-  await db.messages.put(toMsg(data as Row));
-  await markRead(thread);
-  if (!silent) notifyPush({ type: "message", id });
+    ...(silent ? { silent: true } : {}),
+  } as ChatMessage);
+  void flushOutbox();
 }
 
-export async function retryMessage(m: ChatMessage): Promise<void> {
-  await db.messages.delete(m.id);
-  const d = m.data ?? undefined;
-  await sendMessage(m.thread, m.body, {
-    task: m.kind === "task" ? d : undefined,
-    poll: m.kind === "poll" ? (d as ChatPoll) : undefined,
-    file: m.kind === "file" ? (d as ChatFile) : undefined,
-    replyTo: m.replyTo,
+// ---------------------------------------------------------------------------
+// Outbox: messages written on this phone that the server hasn't confirmed yet.
+
+let flushing = false;
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+let backoff = 0;
+const BACKOFF = [2_000, 4_000, 8_000, 15_000, 30_000];
+
+const networkish = (msg: string) => /fetch|network|abort|timeout|timed out|load failed|offline|503|502|504|gateway|ECONN|socket/i.test(msg);
+
+/**
+ * Sends every waiting message, oldest first. The same id every try, and a
+ * duplicate is ignored by the server — so a send whose answer got lost on the
+ * way back can be tried again without ever making a second copy.
+ */
+export function flushOutbox(): Promise<void> {
+  // One pass at a time; a call during a pass asks for one more after it.
+  if (flushRun) {
+    flushAgain = true;
+    return flushRun;
+  }
+  flushRun = (async () => {
+    try {
+      do {
+        flushAgain = false;
+        await flushOnce();
+      } while (flushAgain);
+    } finally {
+      flushRun = null;
+    }
+  })();
+  return flushRun;
+}
+let flushRun: Promise<void> | null = null;
+let flushAgain = false;
+
+async function flushOnce(): Promise<void> {
+  if (flushing) return;
+  const sb = getSupabase();
+  if (!sb || !(await ensureMe()) || !myId) return;
+  flushing = true;
+  clearTimeout(flushTimer);
+  try {
+    const me = myId;
+    const waiting = await db.messages.filter((m) => !!m.pending && !m.failed && m.author === me).sortBy("createdAt");
+    for (const m of waiting) {
+      const { error } = await sb
+        .from("messages")
+        .upsert({ id: m.id, thread: m.thread, body: m.body, kind: m.kind, data: m.data ?? null, reply_to: m.replyTo ?? null }, { onConflict: "id", ignoreDuplicates: true })
+        .abortSignal(deadline(25_000));
+      if (error) {
+        if (networkish(error.message) || !error.code) {
+          // The line: keep it waiting, try again soon (and the moment the network is back).
+          flushAgain = false;
+          flushTimer = setTimeout(() => void flushOutbox(), BACKOFF[Math.min(backoff++, BACKOFF.length - 1)]);
+          return;
+        }
+        // The server said no (not the network): show "tap to retry" on it.
+        await db.messages.update(m.id, { pending: false, failed: true });
+        continue;
+      }
+      backoff = 0;
+      // The server's own copy (its timestamp) replaces the one written here.
+      const { data } = await sb.from("messages").select("*").eq("id", m.id).abortSignal(deadline(15_000)).maybeSingle();
+      if (data) await putMsgs([toMsg(data as Row)]);
+      else await db.messages.update(m.id, { pending: false });
+      void markRead(m.thread).catch(() => {});
+      if (!(m as ChatMessage & { silent?: boolean }).silent) notifyPush({ type: "message", id: m.id });
+    }
+  } catch {
+    flushTimer = setTimeout(() => void flushOutbox(), BACKOFF[Math.min(backoff++, BACKOFF.length - 1)]);
+  } finally {
+    flushing = false;
+  }
+}
+
+/** Kick the outbox whenever the network might be back. */
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    backoff = 0;
+    void flushOutbox();
   });
+  window.addEventListener("dockin:back-online", () => {
+    backoff = 0;
+    void flushOutbox();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void flushOutbox();
+  });
+}
+
+/** "Not sent — tap to retry": the same message (same id) goes back in the outbox. */
+export async function retryMessage(m: ChatMessage): Promise<void> {
+  await db.messages.update(m.id, { failed: false, pending: true });
+  backoff = 0;
+  await flushOutbox();
 }
 
 /** Edit your own text message (WhatsApp allows it for a while; so do we). */
@@ -480,10 +703,16 @@ export async function forwardMessage(m: ChatMessage, to: ThreadId): Promise<void
   });
 }
 
-/** When each other person last read this chat — for ✓✓ Seen. */
+/** When each other person last read this chat — for the blue ✓✓. */
 export function useSeenBy(thread: ThreadId): Map<string, number> {
   const list = useLiveQuery(() => db.seenBy.where("thread").equals(thread).toArray(), [thread]);
   return new Map((list ?? []).map((r) => [r.userId, r.readAt]));
+}
+
+/** Up to when each other person's phone has received this chat — for the grey ✓✓. */
+export function useDeliveredTo(thread: ThreadId): Map<string, number> {
+  const list = useLiveQuery(() => db.seenBy.where("thread").equals(thread).toArray(), [thread]);
+  return new Map((list ?? []).map((r) => [r.userId, Math.max(r.readAt, r.deliveredAt ?? 0)]));
 }
 
 /** "Delete for everyone": your own message only. */
@@ -604,8 +833,17 @@ export async function uploadChatFile(thread: ThreadId, file: File): Promise<Chat
   const clean = file.name.normalize("NFKD").replace(/[^\w.\- ]+/g, "").replace(/\s+/g, " ").trim().slice(-80) || "document";
   const path = `${thread.replace(/:/g, "_")}/${crypto.randomUUID()}/${clean}`;
   const contentType = mimeOf(file.name, file.type);
-  const { error } = await sb.storage.from("chat-files").upload(path, body, { contentType, upsert: false });
+  // A weak line drops uploads: try again a few times before giving up.
+  let error: { message: string } | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1500 * attempt));
+    ({ error } = await sb.storage.from("chat-files").upload(path, body, { contentType, upsert: false }));
+    // An earlier try did get through (only its answer was lost): that's a success.
+    if (error && attempt && /exists|duplicate/i.test(error.message)) error = null;
+    if (!error || !networkish(error.message)) break;
+  }
   if (error) {
+    if (networkish(error.message)) throw new Error("The network is too weak to send this file right now — try again in a bit.");
     if (/Bucket not found/i.test(error.message)) throw new Error("Documents are not set up on the server yet.");
     if (/mime type/i.test(error.message)) throw new Error("Only documents: PDF, Word, PowerPoint, Excel or text.");
     if (/maximum allowed size|too large|413/i.test(error.message)) throw new Error("That file is too big for the server right now (limit 10 MB until the update is applied).");

@@ -98,7 +98,7 @@ export function TaskRow({
 
   if (removing) {
     return (
-      <li className="flex items-center gap-3 bg-danger-soft px-3.5 py-3">
+      <li data-flip={task.id} className="flex items-center gap-3 bg-danger-soft px-3.5 py-3">
         <span className="min-w-0 flex-1">
           <span className="line-clamp-1 text-[15px] font-medium text-muted line-through">
             {task.title}
@@ -122,7 +122,7 @@ export function TaskRow({
   }
 
   return (
-    <li className="flex items-center gap-3 px-3.5 py-3">
+    <li data-flip={task.id} className="flex items-center gap-3 bg-card px-3.5 py-3">
       <button
         onClick={toggle}
         aria-label={task.done ? "Mark as not done" : "Mark as done"}

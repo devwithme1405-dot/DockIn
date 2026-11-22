@@ -61,6 +61,7 @@ import {
   usePollVotes,
   useReactionsFor,
   useSeenBy,
+  useDeliveredTo,
   useThread,
   votePoll,
 } from "@/lib/chat";
@@ -153,6 +154,7 @@ export function ChatView({
   const me = useChatMe() ?? chatMe();
   const reactions = useReactionsFor(thread);
   const seenBy = useSeenBy(thread);
+  const deliveredTo = useDeliveredTo(thread);
   const pref = useLiveQuery(() => db.chatReads.get(thread), [thread]);
   const isGroup = thread.startsWith("g:");
   // A compare invite's button opens Compare over this chat (back comes back here).
@@ -313,6 +315,9 @@ export function ChatView({
     try {
       await sendMessage(thread, body, { replyTo: quoted?.id ?? null });
     } catch (e) {
+      // Never lose what was typed.
+      setText(body);
+      if (quoted) setReplyTo(quoted);
       toast.show(e instanceof Error ? e.message : "Could not send.");
     }
   }
@@ -360,6 +365,14 @@ export function ChatView({
   const seenAll = (m: ChatMessage) => {
     let n = 0;
     seenBy.forEach((at) => {
+      if (at >= m.createdAt) n += 1;
+    });
+    return n >= others;
+  };
+  // ✓✓ grey: every other person's phone has it (WhatsApp waits for all of a group).
+  const deliveredAll = (m: ChatMessage) => {
+    let n = 0;
+    deliveredTo.forEach((at) => {
       if (at >= m.createdAt) n += 1;
     });
     return n >= others;
@@ -549,6 +562,7 @@ export function ChatView({
               me={me}
               people={people}
               seen={r.msg.author === me && seenAll(r.msg)}
+              delivered={r.msg.author === me && deliveredAll(r.msg)}
               seenLabel={!isGroup && r.msg.id === lastMine?.id && seenAll(r.msg)}
               fresh={r.msg.createdAt > openedAt}
               starred={starSet.has(r.msg.id)}
@@ -999,6 +1013,7 @@ function Bubble({
   me,
   people,
   seen,
+  delivered,
   seenLabel,
   fresh,
   starred,
@@ -1026,6 +1041,8 @@ function Bubble({
   me: string | null;
   people: Map<string, ChatPerson>;
   seen: boolean;
+  /** Every other person's phone has it (grey ✓✓). */
+  delivered: boolean;
   seenLabel: boolean;
   /** Arrived (or was sent) while the chat is open: it pops in. */
   fresh: boolean;
@@ -1111,7 +1128,24 @@ function Bubble({
       {mine &&
         !m.deleted &&
         !m.failed &&
-        (m.pending ? <Clock size={12} /> : seen ? <CheckCheck size={15} className="text-orange" /> : <Check size={14} />)}
+        // WhatsApp: 🕓 waiting · ✓ on the server · ✓✓ on their phone · blue ✓✓ read.
+        (m.pending ? (
+          <span role="img" aria-label="Waiting to send" className="inline-flex">
+            <Clock size={12} />
+          </span>
+        ) : seen ? (
+          <span role="img" aria-label="Read" className="tick-read inline-flex">
+            <CheckCheck size={15} />
+          </span>
+        ) : delivered ? (
+          <span role="img" aria-label="Delivered" className="inline-flex">
+            <CheckCheck size={15} />
+          </span>
+        ) : (
+          <span role="img" aria-label="Sent" className="inline-flex">
+            <Check size={14} />
+          </span>
+        ))}
     </>
   );
 

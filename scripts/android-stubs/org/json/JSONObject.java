@@ -30,4 +30,5 @@ public class JSONObject {
   public JSONArray getJSONArray(String k) throws JSONException { return null; }
   public String getString(String k) throws JSONException { return null; }
   public String toString() { return ""; }
+  public boolean isNull(String k) { return true; }
 }

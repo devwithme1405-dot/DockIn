@@ -816,6 +816,9 @@ html[data-navved] .stagger > * {
 }
 .chat-input { background: var(--chat-input); }
 .chat-accent { color: var(--chat-accent); }
+/* Read: WhatsApp's blue double tick, on every chat theme. */
+.tick-read { color: #34b7f1; }
+[data-theme="dark"] .tick-read { color: #53bdeb; }
 .chat-accent-bg { background: var(--chat-accent); color: #fff; }
 .bubble-out,
 .bubble-in {

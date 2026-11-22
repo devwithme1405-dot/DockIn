@@ -170,11 +170,28 @@ interface DockInPlugin {
   /** The phone maker's own run-in-background screens, so reminders keep firing. */
   openOemSettings(options: { which: "autostart" | "battery" }): Promise<void>;
   appReady(): Promise<void>;
+  /** What another app shared into DockIn (once; empty when nothing waits). */
+  takeShare(): Promise<SharedIn>;
+  /** A piece of a shared file, base64. */
+  readShared(options: { path: string; offset: number; length: number }): Promise<{ data: string }>;
+  clearShared(): Promise<void>;
+  /** The numbers home-screen widgets show (JSON text); the phone redraws them. */
+  setWidgets(options: { data: string }): Promise<void>;
+  addListener(event: "share", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "college", fn: (s: CollegeState) => void): Promise<PluginListenerHandle>;
   addListener(event: "updateProgress", fn: (p: { percent: number }) => void): Promise<PluginListenerHandle>;
   addListener(event: "updateState", fn: (p: { state: UpdateState; message?: string }) => void): Promise<PluginListenerHandle>;
+}
+
+/** Text, a link or documents shared into DockIn from another app. */
+export interface SharedIn {
+  text?: string;
+  subject?: string;
+  files?: { name: string; type: string; size: number; path: string }[];
+  /** Files left out (images, too big, unreadable). */
+  skipped?: number;
 }
 
 /** Where an in-app update is, as the v2 updater reports it. */
@@ -227,7 +244,8 @@ export function isNativeApp(): boolean {
 export function onPhone(event: "open", fn: (d: { path: string }) => void): () => void;
 export function onPhone(event: "resume", fn: () => void): () => void;
 export function onPhone(event: "college", fn: (s: CollegeState) => void): () => void;
-export function onPhone(event: "open" | "resume" | "college", fn: (arg: never) => void): () => void {
+export function onPhone(event: "share", fn: () => void): () => void;
+export function onPhone(event: "open" | "resume" | "college" | "share", fn: (arg: never) => void): () => void {
   if (!isNativeApp()) return () => {};
   let handle: PluginListenerHandle | null = null;
   let gone = false;
@@ -241,4 +259,40 @@ export function onPhone(event: "open" | "resume" | "college", fn: (arg: never) =
     gone = true;
     if (handle) void handle.remove();
   };
+}
+
+/** Takes whatever was shared into DockIn, if anything (older app: nothing). */
+export async function takeShare(): Promise<SharedIn | null> {
+  if (!isNativeApp()) return null;
+  try {
+    const s = await DockIn.takeShare();
+    return s && (s.text || s.files?.length || s.skipped) ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A shared file, read from the phone in 1 MB pieces. */
+export async function readSharedFile(f: { name: string; type: string; size: number; path: string }): Promise<File> {
+  const parts: BlobPart[] = [];
+  const step = 1 << 20;
+  for (let at = 0; at < f.size; at += step) {
+    const { data } = await DockIn.readShared({ path: f.path, offset: at, length: step });
+    if (!data) break;
+    const bin = atob(data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    parts.push(bytes);
+  }
+  return new File(parts, f.name, { type: f.type || "application/octet-stream" });
+}
+
+export function clearShared(): void {
+  if (isNativeApp()) DockIn.clearShared().catch(() => {});
+}
+
+/** Hands the widgets their numbers. Older app without widgets: nothing happens. */
+export function setWidgets(data: unknown): void {
+  if (!isNativeApp()) return;
+  DockIn.setWidgets({ data: JSON.stringify(data) }).catch(() => {});
 }
