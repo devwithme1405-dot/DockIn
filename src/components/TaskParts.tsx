@@ -15,6 +15,7 @@ import {
   Pin,
   Plus,
   Rocket,
+  Send,
   Trash2,
   UserRound,
   X,
@@ -30,8 +31,10 @@ import {
 } from "@/lib/tasks";
 import { addDays, toDateStr, weekdayOf } from "@/lib/dates";
 import type { Priority, Subject, Subtask, Task, TaskKind, TaskReminder } from "@/lib/types";
+import { db } from "@/lib/db";
 import { Button, cx, useToast } from "./ui";
 import { LmsHandIn } from "./SolutionStudio";
+import { assignInstance } from "@/lib/solution";
 import { ReminderEditor } from "./TaskReminders";
 import { reminderSummary } from "@/lib/taskReminders";
 
@@ -185,7 +188,13 @@ export function TaskRow({
             )}
             {!origin && task.source === "lms" && (
               <span className="inline-flex items-center rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">
-                LMS
+                {/* An assignment can be handed in from the task itself (tap it). */}
+                {!task.done && assignInstance(task.id) !== null ? "LMS · Hand in" : "LMS"}
+              </span>
+            )}
+            {(task.sharedWith?.length ?? 0) > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#d9772b]/12 px-1.5 py-0.5 text-[11px] font-medium text-[#b85d1c]">
+                <Send size={10} /> Shared
               </span>
             )}
           </span>
@@ -233,6 +242,7 @@ export function TaskForm({
   defaultDate = null,
   onDone,
   onCreated,
+  onShare,
   submitLabel,
 }: {
   task?: Task;
@@ -244,6 +254,11 @@ export function TaskForm({
   onCreated?: (t: Task) => void;
   /** Overrides the main button's text for a new task. */
   submitLabel?: string;
+  /**
+   * Editing: send this task to friends ("send"), or — a task already shared
+   * whose details just changed — offer to send the changes ("update").
+   */
+  onShare?: (t: Task, mode: "send" | "update") => void;
 }) {
   const toast = useToast();
   const today = toDateStr();
@@ -281,7 +296,7 @@ export function TaskForm({
     setNewSub("");
   }
 
-  async function save() {
+  async function save(thenShare = false) {
     if (!valid || busy) return;
     setBusy(true);
     const data = {
@@ -299,7 +314,22 @@ export function TaskForm({
       reminders,
     };
     if (task) {
+      // What friends see of it: a change here is worth sending them.
+      const theySee = (x: Pick<Task, "title" | "kind" | "subjectId" | "dueDate" | "dueTime" | "notes" | "priority">) =>
+        JSON.stringify([x.title.trim(), x.kind, x.subjectId ?? null, x.dueDate ?? null, x.dueTime || null, (x.notes ?? "").trim(), x.priority]);
+      const changed = theySee(task) !== theySee(data);
       await updateTask(task.id, data);
+      const fresh = (await db.tasks.get(task.id)) ?? { ...task, ...data };
+      if (onShare && thenShare) {
+        onDone();
+        onShare(fresh, "send");
+        return;
+      }
+      if (onShare && changed && (task.sharedWith?.length ?? 0) > 0) {
+        onDone();
+        onShare(fresh, "update");
+        return;
+      }
       toast.show("Saved");
     } else {
       const t = await addTask(data);
@@ -522,6 +552,22 @@ export function TaskForm({
         aria-label="Notes"
       />
 
+      {task && onShare && !task.deletedAt && (
+        <button type="button" onClick={() => void save(true)} disabled={!valid || busy} className="form-card flex w-full items-center gap-3 text-left active:scale-[0.99]">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#d9772b]/15 text-[#b85d1c]">
+            <Send size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-extrabold">{task.sharedWith?.length ? "Send changes to friends" : "Send to friends"}</span>
+            <span className="block text-[12.5px] text-muted">
+              {task.sharedWith?.length
+                ? `Shared with ${task.sharedWith.length} ${task.sharedWith.length === 1 ? "chat" : "chats"} — their copy updates, or add more people`
+                : "Pick friends or groups — it lands in their Tasks"}
+            </span>
+          </span>
+        </button>
+      )}
+
       {task && (
         <section className="form-card">
           <p className="form-label">
@@ -562,7 +608,7 @@ export function TaskForm({
               Delete
             </Button>
           )}
-          <Button className="h-12 flex-1 text-[15.5px]" onClick={save} disabled={!valid || busy}>
+          <Button className="h-12 flex-1 text-[15.5px]" onClick={() => void save()} disabled={!valid || busy}>
             {task ? "Save changes" : (submitLabel ?? `Add ${KIND_BY_ID[kind].label.toLowerCase()}`)}
           </Button>
         </div>

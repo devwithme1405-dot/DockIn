@@ -37,6 +37,13 @@ const messages = [
   { id: "m7", thread: `g:${G}`, author: YASH, body: "", kind: "file", data: { name: "Assignment4_Vaibhav.pdf", size: 61000, type: "application/pdf", path: "g/sol/Assignment4_Vaibhav.pdf", solution: { instance: 41, title: "DBMS Assignment 4", course: "Database Management Systems", dueDate: new Date(Date.now() + 3 * 86400_000).toISOString().slice(0, 10), dueTime: "23:59", authorName: "Vaibhav Sharma", authorRoll: "S25CSEU0155" } }, reply_to: null, created_at: t(10), deleted_at: null },
   { id: "m6", thread: dm, author: YASH, body: "", kind: "file", data: { name: "DBMS_Lab7_question.pdf", size: 182000, type: "application/pdf", path: "x/y/DBMS_Lab7_question.pdf" }, reply_to: null, created_at: t(40), deleted_at: null },
 ];
+// Yash shared a task, then sent changes to it: I must end up with ONE task, the changed one.
+const osDue = (d) => new Date(Date.now() + d * 86400_000).toISOString().slice(0, 10);
+messages.push(
+  { id: "m8", thread: dm, author: YASH, body: "", kind: "task", data: { title: "OS sheet 3", kind: "assignment", dueDate: osDue(4), dueTime: "17:00", subject: "Operating Systems", origin: `${YASH}:os3`, rev: 0 }, reply_to: null, created_at: t(58), deleted_at: null },
+  { id: "m9", thread: dm, author: YASH, body: "", kind: "task", data: { title: "OS sheet 3 — Q1 to Q8", kind: "assignment", dueDate: osDue(5), dueTime: "17:00", subject: "Operating Systems", origin: `${YASH}:os3`, rev: 1, update: true }, reply_to: null, created_at: t(57), deleted_at: null },
+);
+messages.push({ id: "m10", thread: dm, author: YASH, body: "Compare pe aaja 😄 — turn on sharing, phir dekhte hain kiski attendance zyada hai", kind: "text", data: { invite: "compare" }, reply_to: null, created_at: t(56), deleted_at: null });
 const votes = [{ message_id: "m5", user_id: YASH, choice: 0 }];
 
 const tables = {
@@ -609,6 +616,75 @@ await step("Tasks: my upload with someone else's name offers to put mine in", as
   await studio.getByLabel("Close").click();
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
+});
+
+await step("a compare invite is a button that opens Compare's sharing switches over the chat", async () => {
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: /^Yash/ }).first().click();
+  const chat = page.getByRole("dialog", { name: "Chat with Yash" });
+  await chat.getByText("Yash wants to compare").waitFor({ timeout: 5000 });
+  await chat.getByRole("button", { name: "Turn on sharing" }).click();
+  const cmp = page.getByRole("dialog", { name: "Compare" });
+  await cmp.locator("#compare-sharing").waitFor({ timeout: 4000 });
+  await cmp.getByRole("switch", { name: "Attendance" }).waitFor({ timeout: 2000 });
+  await page.screenshot({ path: `${SHOTS}/compare-invite.png` });
+  await page.goBack();
+  await page.waitForTimeout(500);
+  if (await page.getByRole("dialog", { name: "Compare" }).count()) throw new Error("back did not close Compare");
+  await chat.getByText("Yash wants to compare").waitFor({ timeout: 2000 });
+  await chat.getByLabel("Back").click();
+  await page.waitForTimeout(400);
+});
+
+await step("a friend's changes to a shared task update my copy — no second task", async () => {
+  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
+  await page.getByText("OS sheet 3 — Q1 to Q8").first().waitFor({ timeout: 8000 });
+  const old = await page.getByText("OS sheet 3", { exact: true }).count();
+  if (old) throw new Error("the old version is still there as its own task");
+  await page.screenshot({ path: `${SHOTS}/task-updated-by-friend.png` });
+});
+
+await step("my shared task: edit it, send the changes to the same chat — sent as an update", async () => {
+  await page.goto(`${BASE}/tasks`, { waitUntil: "networkidle" });
+  await page.getByLabel("Add task").click();
+  await page.getByLabel("Title", { exact: true }).first().fill("Mini project report");
+  await page.getByRole("button", { name: /^Add assignment/ }).click();
+  await page.getByRole("button", { name: /Share it/ }).click();
+  await page.getByRole("button", { name: /^Yash/ }).click();
+  await page.getByRole("button", { name: /Send to 1/ }).click();
+  await page.waitForTimeout(800);
+  const first = messages.filter((m) => m.kind === "task" && m.data?.title === "Mini project report");
+  if (first.length !== 1 || first[0].data.rev !== 0) throw new Error(`first send: ${JSON.stringify(first.map((m) => m.data))}`);
+
+  await page.getByText("Mini project report").first().click();
+  const title = page.getByLabel("Title", { exact: true }).first();
+  await title.fill("Mini project report (final)");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const ask = page.getByRole("dialog", { name: "Send the changes?" });
+  await ask.getByText("Shared with Yash").waitFor({ timeout: 4000 });
+  await page.screenshot({ path: `${SHOTS}/task-send-changes.png` });
+  await ask.getByRole("button", { name: /Update it for Yash/ }).click();
+  await page.waitForTimeout(800);
+  const upd = messages.filter((m) => m.kind === "task" && m.data?.title === "Mini project report (final)");
+  if (upd.length !== 1 || upd[0].data.rev !== 1 || !upd[0].data.update || upd[0].data.origin !== first[0].data.origin)
+    throw new Error(`update send: ${JSON.stringify(upd.map((m) => m.data))}`);
+  if (upd[0].thread !== first[0].thread) throw new Error("changes went to a different chat");
+});
+
+await step("a task kept to myself can be sent later from the task", async () => {
+  await page.getByLabel("Add task").click();
+  await page.getByLabel("Title", { exact: true }).first().fill("Physics lab file");
+  await page.getByRole("button", { name: /^Add assignment/ }).click();
+  await page.getByRole("button", { name: /Only for me/ }).click();
+  await page.waitForTimeout(400);
+  await page.getByText("Physics lab file").first().click();
+  await page.getByRole("button", { name: /^Send to friends/ }).click();
+  const pick = page.getByRole("dialog", { name: "Share with" });
+  await pick.getByRole("button", { name: /^Yash/ }).click();
+  await page.screenshot({ path: `${SHOTS}/task-send-later.png` });
+  await pick.getByRole("button", { name: /Send to 1/ }).click();
+  await page.waitForTimeout(800);
+  if (!messages.some((m) => m.kind === "task" && m.data?.title === "Physics lab file")) throw new Error("not sent");
 });
 
 await step("a new group starts with no emoji picked", async () => {

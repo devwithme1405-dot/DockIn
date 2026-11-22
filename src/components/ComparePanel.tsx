@@ -33,7 +33,19 @@ const TONE_BAR = { safe: "bg-safe", warn: "bg-warn", danger: "bg-danger", none: 
  * that shows what a few days off does to everyone's numbers, and who is free
  * right now. Everyone only appears with what they chose to share.
  */
-export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose: () => void }) {
+export function ComparePanel({
+  friends,
+  onClose,
+  startOnSharing = false,
+  onTop = false,
+}: {
+  friends: Friend[];
+  onClose: () => void;
+  /** Opened from a friend's invite: start on the sharing switches. */
+  startOnSharing?: boolean;
+  /** Shown over an open chat (back returns to the chat). */
+  onTop?: boolean;
+}) {
   useBackClose(true, onClose);
   const toast = useToast();
   const me = useChatMe();
@@ -41,7 +53,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
   const mine = useStatsSnapshot(true);
   const stats = useFriendStats();
   const [tab, setTab] = useState<Tab>("attendance");
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(startOnSharing);
   const share = profile?.shareStats ?? { attendance: false, tasks: false, schedule: false };
   const sharingAny = share.attendance || share.tasks || share.schedule;
 
@@ -62,7 +74,8 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
   async function nudge(p: Person) {
     if (!me) return;
     try {
-      await sendMessage(directThread(me, p.id), "Compare pe aaja 😄 — Friends → Compare → turn on sharing, phir dekhte hain kiski attendance zyada hai");
+      // A card with a button that takes them straight to the sharing switches.
+      await sendMessage(directThread(me, p.id), "Compare pe aaja 😄 — turn on sharing, phir dekhte hain kiski attendance zyada hai", { invite: "compare" });
       toast.show(`Asked ${p.name.split(" ")[0]}`);
     } catch {
       toast.show("Could not send that.");
@@ -77,7 +90,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
   ];
 
   return (
-    <div className="paper-page fixed inset-0 z-[46] flex flex-col" role="dialog" aria-label="Compare">
+    <div className={cx("paper-page fixed inset-0 flex flex-col", onTop ? "z-[60]" : "z-[46]")} role="dialog" aria-label="Compare">
       <header className="solid-bar rounded-none border-x-0 border-t-0 pt-[max(0.4rem,var(--sat))]">
         <div className="flex items-center gap-1.5 px-1.5 pb-1">
           <button onClick={onClose} aria-label="Back" className="grid size-11 place-items-center rounded-full active:bg-surface-2">
@@ -110,7 +123,7 @@ export function ComparePanel({ friends, onClose }: { friends: Friend[]; onClose:
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-12">
         {(editing || !sharingAny) && (
-          <section className="form-card anim-pop mb-3">
+          <section id="compare-sharing" className={cx("form-card anim-pop mb-3", startOnSharing && "ring-2 ring-[#d9772b]/60")}>
             <div className="flex items-start gap-2">
               <p className="flex-1 text-[15px] font-extrabold">{sharingAny ? "What your friends can see" : "Turn on sharing to start comparing"}</p>
               {sharingAny && (

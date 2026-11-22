@@ -79,6 +79,7 @@ import { ChatInfo, PhotoViewer } from "./ChatInfo";
 import { Bone } from "./Skeleton";
 import { chatVars, useChatLook, useChatPhoto } from "@/lib/chatLook";
 import { ChatLookSheet } from "./ChatLook";
+import { ComparePanel } from "./ComparePanel";
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const EDIT_WINDOW = 15 * 60_000;
@@ -154,6 +155,14 @@ export function ChatView({
   const seenBy = useSeenBy(thread);
   const pref = useLiveQuery(() => db.chatReads.get(thread), [thread]);
   const isGroup = thread.startsWith("g:");
+  // A compare invite's button opens Compare over this chat (back comes back here).
+  const [comparing, setComparing] = useState(false);
+  const acceptedFriends = useLiveQuery(() => db.friends.filter((f) => f.status === "accepted").toArray(), []);
+  useEffect(() => {
+    const open = () => setComparing(true);
+    window.addEventListener(OPEN_COMPARE, open);
+    return () => window.removeEventListener(OPEN_COMPARE, open);
+  }, []);
 
   const [text, setText] = useState("");
   const [view, setView] = useState<"chat" | "files" | "tasks" | "polls">("chat");
@@ -336,7 +345,9 @@ export function ChatView({
     setPicking(false);
     try {
       const subject = t.subjectId ? (await db.subjects.get(t.subjectId))?.name : null;
-      await sendTaskTo([thread], t, subject ?? (t.source === "lms" ? t.notes || null : null));
+      // Sent here before: this brings their copy up to date instead of adding a second one.
+      const again = !!t.sharedWith?.includes(thread);
+      await sendTaskTo([thread], t, subject ?? (t.source === "lms" ? t.notes || null : null), again);
       toast.show(isGroup ? "Sent — it's in everyone's Tasks now" : "Sent — it's in their Tasks now");
     } catch (e) {
       toast.show(e instanceof Error ? e.message : "Could not share that.");
@@ -409,6 +420,7 @@ export function ChatView({
   ] as const;
 
   return (
+    <>
     <div
       className={cx("chat-root fixed inset-0 z-50 flex flex-col text-text", leaving ? "chat-out pointer-events-none" : "chat-in")}
       data-theme={paint.dark ? "dark" : "light"}
@@ -492,7 +504,7 @@ export function ChatView({
         )}
       </header>
 
-      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overscroll-contain px-2.5 pt-2 pb-3">
+      <div ref={scroller} onScroll={onScroll} className="flex-1 overflow-y-auto overscroll-contain px-3.5 pt-2 pb-3">
         {msgs === undefined && (
           <div className="space-y-3 pt-3" role="status" aria-label="Loading messages">
             {[["w-1/2", false], ["w-2/3", true], ["w-2/5", false], ["w-1/2", true], ["w-3/5", false]].map(([w, mine], i) => (
@@ -559,10 +571,10 @@ export function ChatView({
           ),
         )}
         {typing.length > 0 && view === "chat" && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="bubble-in flex gap-1 rounded-[var(--r)] px-3.5 py-3" aria-label="Typing">
+          <div className="typing-in mt-[var(--gap-first)] flex items-center gap-2" aria-live="polite">
+            <span className="bubble-in bubble-tail relative flex h-9 items-center gap-[5px] rounded-[var(--r)] rounded-tl-none px-4" aria-label={status}>
               {[0, 1, 2].map((d) => (
-                <span key={d} className="size-1.5 animate-bounce rounded-full bg-[var(--in-meta)]" style={{ animationDelay: `${d * 150}ms` }} />
+                <span key={d} className="typing-dot size-[7px] rounded-full bg-[var(--in-meta)]" style={{ animationDelay: `${d * 180}ms` }} />
               ))}
             </span>
           </div>
@@ -899,6 +911,8 @@ export function ChatView({
         />
       )}
     </div>
+      {comparing && <ComparePanel friends={acceptedFriends ?? []} startOnSharing onTop onClose={() => setComparing(false)} />}
+    </>
   );
 }
 
@@ -1080,12 +1094,26 @@ function Bubble({
 
   const card = !m.deleted && (m.kind === "poll" || m.kind === "task");
   const jumbo = !m.deleted && m.kind === "text" && !quoted && isJumbo(m.body);
+  const tail = first && !jumbo;
+  // Plain text: the time sits at the end of the last line, inside the bubble.
+  const inline = !jumbo && (m.deleted || (m.kind === "text" && !m.data?.invite));
   const [more, setMore] = useState(false);
   const long = m.kind === "text" && m.body.length > 700;
   const mentionsMe = !mine && !!myName && new RegExp(`@${escapeRe(myName.split(" ")[0])}\\b`, "i").test(m.body);
   const counts = new Map<string, number>();
   for (const r of reacts) counts.set(r.emoji, (counts.get(r.emoji) ?? 0) + 1);
   const mineReact = reacts.find((r) => r.userId === me)?.emoji;
+  const meta = (
+    <>
+      {starred && <Star size={11} className="fill-current" aria-label="Starred" />}
+      {m.editedAt && !m.deleted && <span className="italic">edited</span>}
+      <span>{clock(m.createdAt)}</span>
+      {mine &&
+        !m.deleted &&
+        !m.failed &&
+        (m.pending ? <Clock size={12} /> : seen ? <CheckCheck size={15} className="text-orange" /> : <Check size={14} />)}
+    </>
+  );
 
   return (
     <div id={`msg-${m.id}`} className={cx("relative flex items-end gap-2", mine ? "justify-end" : "justify-start", first ? "mt-[var(--gap-first)]" : "mt-[var(--gap)]")}>
@@ -1103,9 +1131,11 @@ function Bubble({
           {...handlers}
           className={cx(
             "px-3 py-1.5 leading-snug [overflow-wrap:anywhere] select-none",
+            // WhatsApp-style: the first of a run has a tail at its top corner.
             mine
-              ? cx("bubble-out", "rounded-[var(--r)]", !first && "rounded-tr-[6px]", !last && "rounded-br-[6px]")
-              : cx("bubble-in", "rounded-[var(--r)]", !first && "rounded-tl-[6px]", !last && "rounded-bl-[6px]"),
+              ? cx("bubble-out", "rounded-[var(--r)]", tail ? "bubble-tail rounded-tr-none" : "rounded-tr-[6px]", !last && "rounded-br-[6px]")
+              : cx("bubble-in", "rounded-[var(--r)]", tail ? "bubble-tail rounded-tl-none" : "rounded-tl-[6px]", !last && "rounded-bl-[6px]"),
+            "relative",
             jumbo && "!bg-transparent !shadow-none !px-1",
             mentionsMe && "ring-2 ring-[var(--chat-accent)]/60",
             fresh && "anim-bubble",
@@ -1139,8 +1169,12 @@ function Bubble({
             </button>
           )}
           {m.deleted ? (
-            <span className="flex items-center gap-1.5 text-muted">
-              <Trash2 size={13} /> This message was deleted
+            <span className="text-muted">
+              <Trash2 size={13} className="mr-1.5 inline align-[-2px]" />
+              This message was deleted
+              <span className="invisible ml-2 inline-flex items-center gap-1 text-[11px]" aria-hidden>
+                {meta}
+              </span>
             </span>
           ) : m.kind === "poll" && m.data?.options ? (
             <PollCard m={m} people={people} />
@@ -1150,6 +1184,8 @@ function Bubble({
             <FileCard f={m.data as ChatFile} />
           ) : m.kind === "task" && m.data ? (
             <TaskCard t={m.data} mine={mine} />
+          ) : m.kind === "text" && m.data?.invite === "compare" ? (
+            <CompareInvite mine={mine} from={name} />
           ) : jumbo ? (
             <span className="block text-[44px] leading-tight">{m.body.trim()}</span>
           ) : (
@@ -1168,18 +1204,15 @@ function Bubble({
                   {more ? "Show less" : "Read more"}
                 </button>
               )}
+              <span className="invisible ml-2 inline-flex items-center gap-1 text-[11px] leading-none" aria-hidden>
+                {meta}
+              </span>
             </span>
           )}
-          {(last || m.pending || m.failed || m.editedAt) && (
-            <span className={cx("-mb-0.5 mt-0.5 flex items-center justify-end gap-1 text-[11px] text-muted", jumbo && "chat-chip rounded-full px-2 py-0.5")}>
-              {starred && <Star size={11} className="fill-current" aria-label="Starred" />}
-              {m.editedAt && !m.deleted && <span className="italic">edited ·</span>}
-              {clock(m.createdAt)}
-              {mine &&
-                !m.deleted &&
-                !m.failed &&
-                (m.pending ? <Clock size={11} /> : seen ? <CheckCheck size={14} className="text-orange" /> : <Check size={13} />)}
-            </span>
+          {inline ? (
+            <span className="absolute right-2.5 bottom-1 flex items-center gap-1 text-[11px] leading-none text-muted">{meta}</span>
+          ) : (
+            <span className={cx("-mb-0.5 mt-0.5 flex items-center justify-end gap-1 text-[11px] text-muted", jumbo && "chat-chip rounded-full px-2 py-0.5")}>{meta}</span>
           )}
         </div>
         {counts.size > 0 && (
@@ -1206,12 +1239,49 @@ function Bubble({
   );
 }
 
+const OPEN_COMPARE = "dockin:open-compare";
+
+/** "Compare with me?" — one tap opens Compare right on the sharing switches. */
+function CompareInvite({ mine, from }: { mine: boolean; from: string }) {
+  return (
+    <div className="flex items-start gap-3 py-0.5">
+      <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl border-[1.5px] border-mess text-mess">
+        <BarChart3 size={18} strokeWidth={2.4} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-extrabold tracking-wide text-mess uppercase">Compare invite</p>
+        <p className="text-[15px] leading-tight font-extrabold">{mine ? "You asked to compare" : `${from.split(" ")[0]} wants to compare`}</p>
+        <p className="mt-0.5 text-[12.5px] text-muted">Attendance, tasks and free time side by side — only what each of you shares.</p>
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent(OPEN_COMPARE));
+          }}
+          className="mt-2 flex h-8 items-center gap-1.5 rounded-full border border-orange/50 px-3 text-[12.5px] font-bold text-mess"
+        >
+          <BarChart3 size={13} /> {mine ? "Open Compare" : "Turn on sharing"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: boolean }) {
   const toast = useToast();
-  // Already in my Tasks (same title and due day), whether I sent it or added it before.
+  // Already in my Tasks: the same shared task (even after its sender changed it),
+  // or one with the same title and due day — whether I sent it or added it before.
   const have = useLiveQuery(
-    () => db.tasks.filter((x) => !x.deletedAt && x.title.trim() === (t.title ?? "").trim() && (x.dueDate ?? null) === (t.dueDate ?? null)).count(),
-    [t.title, t.dueDate],
+    () =>
+      db.tasks
+        .filter(
+          (x) =>
+            !x.deletedAt &&
+            ((!!t.origin && (x.origin === t.origin || t.origin.endsWith(`:${x.id}`))) ||
+              (x.title.trim() === (t.title ?? "").trim() && (x.dueDate ?? null) === (t.dueDate ?? null))),
+        )
+        .count(),
+    [t.title, t.dueDate, t.origin],
   );
   const added = (have ?? 0) > 0;
   return (
@@ -1220,7 +1290,10 @@ function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: bool
         <Check size={18} strokeWidth={2.6} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-extrabold tracking-wide text-mess uppercase">{KIND_LABEL[t.kind] ?? "Task"}</p>
+        <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wide text-mess uppercase">
+          {KIND_LABEL[t.kind] ?? "Task"}
+          {t.update && <span className="rounded-full bg-[#d9772b]/15 px-1.5 py-px text-[10px] tracking-normal text-[#b85d1c] normal-case">Updated</span>}
+        </p>
         <p className="text-[15px] leading-tight font-extrabold">{t.title}</p>
         {t.subject && <p className="truncate text-[12.5px] text-muted">{t.subject}</p>}
         {t.dueDate && (
@@ -1239,7 +1312,16 @@ function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: bool
           onClick={async (e) => {
             e.stopPropagation();
             if (added) return;
-            await addTask({ title: t.title, kind: (t.kind as Task["kind"]) ?? "assignment", dueDate: t.dueDate, dueTime: t.dueTime, notes: t.subject ?? "", reminders: cleanReminders(t.reminders) });
+            await addTask({
+              title: t.title,
+              kind: (t.kind as Task["kind"]) ?? "assignment",
+              dueDate: t.dueDate,
+              dueTime: t.dueTime,
+              notes: t.subject ?? "",
+              reminders: cleanReminders(t.reminders),
+              // Linked to the sender's task, so later changes they send update this one.
+              ...(!mine && t.origin ? { origin: t.origin, originRev: Number(t.rev) || 0 } : {}),
+            });
             toast.show("Added to your Tasks");
           }}
           className={cx(
@@ -1247,7 +1329,7 @@ function TaskCard({ t, mine }: { t: NonNullable<ChatMessage["data"]>; mine: bool
             added ? "border-safe text-safe" : "border-orange/50 text-mess",
           )}
         >
-          {added ? <Check size={13} /> : <Plus size={13} />} {added ? "In your Tasks" : mine ? "Add to my Tasks" : "Add this to your Tasks?"}
+          {added ? <Check size={13} /> : <Plus size={13} />} {added ? (t.update ? "Updated in your Tasks" : "In your Tasks") : mine ? "Add to my Tasks" : "Add this to your Tasks?"}
         </button>
       </div>
     </div>

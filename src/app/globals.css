@@ -859,6 +859,44 @@ html[data-navved] .stagger > * {
   to { opacity: 1; transform: none; }
 }
 .anim-bubble { animation: bubble-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both; }
+/* A sent bubble grows out of the send button's corner, a received one from the left. */
+.bubble-out.anim-bubble { transform-origin: 100% 100%; }
+.bubble-in.anim-bubble { transform-origin: 0 100%; }
+
+/* WhatsApp's tail: the first bubble of a run gets a small curved point at its top corner. */
+.bubble-tail::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 13px;
+  background: inherit;
+  pointer-events: none;
+}
+.bubble-out.bubble-tail::before {
+  right: -7.5px;
+  clip-path: path("M0 0 H6.6 Q8.2 0 7.3 1.4 L0 13 Z");
+}
+.bubble-in.bubble-tail::before {
+  left: -7.5px;
+  clip-path: path("M8 0 H1.4 Q-0.2 0 0.7 1.4 L8 13 Z");
+}
+[data-bubble="outline"] .bubble-tail::before { display: none; }
+
+/* "typing…": three dots rising one after another, like WhatsApp. */
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.typing-dot { animation: typing-dot 1.25s ease-in-out infinite; }
+@keyframes typing-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+.typing-in { animation: typing-in 200ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; transform-origin: 0 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot, .typing-in { animation: none; }
+}
 
 /* A solid bar (the chat sections row): no see-through. */
 .solid-bar {

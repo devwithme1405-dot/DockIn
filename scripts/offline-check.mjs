@@ -273,9 +273,10 @@ await step("network back: online again by itself — 'Back online' flashes, then
   if (await page.getByRole("alertdialog").count()) throw new Error("a popup asked for a tap");
 });
 
-// A line that is "connected" but very weak: every answer takes 6 s.
+// A line that is "connected" but very weak: every answer takes 7.5 s (weak is
+// over 7 s; a probe only gives up at 8 s).
 await ctx.route("**/api/ping**", async (r) => {
-  await new Promise((res) => setTimeout(res, 6000));
+  await new Promise((res) => setTimeout(res, 7500));
   await r.continue().catch(() => {});
 });
 await step("weak line several times: 'Low network detected multiple times' asks to switch", async () => {
@@ -302,15 +303,31 @@ await step("line good again: back online by itself", async () => {
   await page.locator(".offline-strip").waitFor({ state: "detached", timeout: 6000 });
 });
 
-// A line that answers nothing at all (connected, but dead).
+// College Wi-Fi at its worst: connected, but nothing comes back for a while.
+// That alone is not "no internet" — offline only after 2 minutes of total silence.
 await ctx.route("**/api/ping**", () => new Promise(() => {}));
-await step("dead line (requests hang): offline mode by itself after a reload", async () => {
+await step("requests hang for a minute (weak Wi-Fi): stays online", async () => {
   await page.reload({ waitUntil: "load" });
-  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 60000 });
+  await page.waitForTimeout(60000);
+  if (await page.locator(".offline-strip", { hasText: "Offline mode" }).count()) throw new Error("went offline on a slow line");
+});
+await step("…silent for over 2 minutes: offline mode by itself", async () => {
+  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 110000 });
   await noWall();
 });
 await ctx.unroute("**/api/ping**");
 await step("…and back online by itself", async () => {
+  await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 20000 });
+});
+
+// No network at all (requests fail straight away): offline quickly.
+await ctx.route("**/api/ping**", (r) => r.abort("internetdisconnected"));
+await step("no network (requests fail at once): offline mode by itself, fast", async () => {
+  await page.reload({ waitUntil: "load" });
+  await page.locator(".offline-strip", { hasText: "Offline mode" }).waitFor({ timeout: 20000 });
+});
+await ctx.unroute("**/api/ping**");
+await step("…and back online again", async () => {
   await page.locator(".offline-pill-back", { hasText: "Back online" }).waitFor({ timeout: 20000 });
 });
 

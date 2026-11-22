@@ -5,7 +5,7 @@ import { acceptWeak, answered, check, dismissWeak, getNet, goOffline, poll, rese
 const doc = Object.assign(new EventTarget(), { visibilityState: "visible", documentElement: { classList: { toggle: () => {} } } });
 
 /** How the server answers: "ok" at once, "slow" after a while, "none" never. */
-let answer: "ok" | "slow" | "none" = "ok";
+let answer: "ok" | "slow" | "none" | "fail" = "ok";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -20,6 +20,7 @@ beforeEach(() => {
       (_url: string, init?: RequestInit) =>
         new Promise((resolve, reject) => {
           init?.signal?.addEventListener("abort", () => reject(new DOMException("t", "AbortError")));
+          if (answer === "fail") reject(new TypeError("Failed to fetch")); // no network at all
           if (answer === "ok") resolve(new Response(null, { status: 204 }));
           if (answer === "slow") setTimeout(() => resolve(new Response(null, { status: 204 })), TIMING.weak + 500);
         }),
@@ -43,33 +44,64 @@ describe("offline mode", () => {
     expect(getNet()).toMatchObject({ offline: false, weak: false });
   });
 
-  it("nothing getting through three times in a row (about half a minute) goes offline by itself", async () => {
-    answer = "none";
+  it("no network at all (the connection itself fails three times) goes offline by itself", async () => {
+    answer = "fail";
     await run(check(true));
     expect(getNet().offline).toBe(true);
     expect(getNet().chosen).toBe(false);
   });
 
-  it("one bad moment is not enough to go offline", async () => {
+  it("weak campus Wi-Fi that only times out stays ONLINE…", async () => {
     answer = "none";
+    await run(check(true));
+    expect(getNet().offline).toBe(false);
+  });
+
+  it("…unless nothing at all comes back for two whole minutes", async () => {
+    answer = "none";
+    const end = Date.now() + TIMING.dead + TIMING.gap * 2;
+    while (Date.now() < end && !getNet().offline) await run(check(true));
+    expect(getNet().offline).toBe(true);
+  });
+
+  it("a silent line is noticed even when nobody taps anything (it keeps re-checking)", async () => {
+    answer = "none";
+    void check(true); // one check, then the app sits idle
+    await vi.advanceTimersByTimeAsync(TIMING.dead + TIMING.gap * 3 + TIMING.probe * TIMING.misses * 2);
+    expect(getNet().offline).toBe(true);
+  });
+
+  it("…but not while the app is in the background", async () => {
+    answer = "none";
+    void check(true);
+    await vi.advanceTimersByTimeAsync(TIMING.probe * TIMING.misses + TIMING.recheck * 2 + 100);
+    (doc as { visibilityState: string }).visibilityState = "hidden";
+    const calls = (fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(TIMING.dead * 2);
+    (doc as { visibilityState: string }).visibilityState = "visible";
+    expect((fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(calls);
+    expect(getNet().offline).toBe(false);
+  });
+
+  it("one bad moment is not enough to go offline", async () => {
+    answer = "fail";
     const p = check(true);
-    await vi.advanceTimersByTimeAsync(TIMING.probe + 10);
+    await vi.advanceTimersByTimeAsync(100); // the first try fails at once
     answer = "ok";
     await run(p, TIMING.recheck + 50);
     expect(getNet().offline).toBe(false);
   });
 
-  it("slow campus Wi-Fi: pings miss but other requests still get answers → stays online", async () => {
-    answer = "none";
+  it("pings fail but other requests still get answers → stays online", async () => {
+    answer = "fail";
     const p = check(true);
-    await vi.advanceTimersByTimeAsync(TIMING.probe * 2 + TIMING.recheck * 2);
     answered(); // Supabase answered meanwhile
     await run(p);
     expect(getNet().offline).toBe(false);
   });
 
   it("a miss or two, then an answer: online (just a weak moment)", async () => {
-    answer = "none";
+    answer = "fail";
     const p = check(true);
     await vi.advanceTimersByTimeAsync(TIMING.probe * 2 + TIMING.recheck + 10);
     answer = "ok";
@@ -102,7 +134,7 @@ describe("offline mode", () => {
     expect(getNet().back).toBe(false);
 
     // Just back: a wobble right after doesn't throw it straight offline again.
-    answer = "none";
+    answer = "fail";
     await run(check(true));
     expect(getNet().offline).toBe(false);
   });

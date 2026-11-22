@@ -55,6 +55,10 @@ export interface ChatTask {
   priority?: string | null;
   /** The sender's reminders — everyone who gets the task gets them too (they can change their own). */
   reminders?: TaskReminder[] | null;
+  /** 0 when first shared; each "send changes" counts up. A higher one updates the copy people already have. */
+  rev?: number;
+  /** This message carries changes to a task sent before (not a new task). */
+  update?: boolean;
 }
 
 export interface ChatPoll {
@@ -73,7 +77,9 @@ export interface ChatFile {
   solution?: ChatSolution;
 }
 
-export type ChatData = ChatTask & Partial<ChatPoll> & Partial<ChatFile>;
+/** A text message that also carries a button: "compare" opens Compare's sharing switches. */
+export type ChatInvite = { invite?: "compare" };
+export type ChatData = ChatTask & Partial<ChatPoll> & Partial<ChatFile> & ChatInvite;
 
 export interface PollVote {
   /** messageId:userId */
@@ -187,35 +193,57 @@ async function absorbSharedTasks(fresh: ChatMessage[]): Promise<void> {
   const me = myId;
   if (!me) return;
   const recent = Date.now() - 7 * 86400_000;
-  const incoming = fresh.filter((m) => m.kind === "task" && m.author !== me && !m.deleted && m.data?.title && m.createdAt > recent);
+  const incoming = fresh
+    .filter((m) => m.kind === "task" && m.author !== me && !m.deleted && m.data?.title && m.createdAt > recent)
+    .sort((a, b) => a.createdAt - b.createdAt);
   if (!incoming.length) return;
   // Let this login's tasks arrive from the cloud first: a shared task deleted or
   // finished before a logout must not come back as a new one.
   const { afterFirstSync } = await import("./sync");
   await afterFirstSync();
-  const { addTask } = await import("./repo");
+  const { addTask, updateTask } = await import("./repo");
+  const kinds = ["assignment", "exam", "project", "quiz", "personal"];
   for (const m of incoming) {
     const d = m.data as ChatTask;
     const key = taskOriginOf(m.author, d);
-    if (await db.taskOrigins.get(key)) continue;
+    const rev = Number.isFinite(Number(d.rev)) ? Math.max(0, Math.floor(Number(d.rev))) : 0;
+    const fields = {
+      title: d.title.trim().slice(0, 120),
+      kind: (kinds.includes(d.kind) ? d.kind : "assignment") as Task["kind"],
+      dueDate: d.dueDate ?? null,
+      dueTime: d.dueTime ?? null,
+      notes: [d.subject, d.notes].filter(Boolean).join(" · "),
+      priority: (["low", "med", "high"].includes(d.priority ?? "") ? d.priority : "med") as Task["priority"],
+    };
+
+    // Already have it (by the link kept on this phone, or the one on the task itself)?
+    const known = await db.taskOrigins.get(key);
+    const mineId = known?.taskId ?? (await db.tasks.filter((t) => t.origin === key).first())?.id;
+    if (mineId) {
+      const mine = await db.tasks.get(mineId);
+      // The sender changed it: change my copy in place — never a second task.
+      // A copy I deleted stays deleted; ticked off stays ticked off.
+      if (mine && !mine.deletedAt && rev > (mine.originRev ?? 0)) {
+        await updateTask(mine.id, { ...fields, origin: key, originRev: rev });
+      }
+      if (!known) await db.taskOrigins.put({ key, taskId: mineId, at: Date.now() });
+      continue;
+    }
     // Deleted ones count too: deleting a shared task means "I don't want it".
     const same = await db.tasks
       .filter((t) => t.title.trim().toLowerCase() === d.title.trim().toLowerCase() && (t.dueDate ?? null) === (d.dueDate ?? null))
       .first();
     if (same) {
       await db.taskOrigins.put({ key, taskId: same.id, at: Date.now() });
+      if (!same.origin) await updateTask(same.id, { origin: key, originRev: rev });
       continue;
     }
-    const kinds = ["assignment", "exam", "project", "quiz", "personal"];
     const t = await addTask({
-      title: d.title,
-      kind: (kinds.includes(d.kind) ? d.kind : "assignment") as never,
-      dueDate: d.dueDate ?? null,
-      dueTime: d.dueTime ?? null,
-      notes: [d.subject, d.notes].filter(Boolean).join(" · "),
-      priority: (["low", "med", "high"].includes(d.priority ?? "") ? d.priority : undefined) as never,
+      ...fields,
       // Only what is well-formed survives (it came from someone else's phone).
       reminders: cleanReminders(d.reminders),
+      origin: key,
+      originRev: rev,
     });
     await db.taskOrigins.put({ key, taskId: t.id, at: Date.now() });
   }
@@ -224,23 +252,35 @@ async function absorbSharedTasks(fresh: ChatMessage[]): Promise<void> {
 /**
  * Sends one of my tasks to chats (friends and/or groups). Everyone there gets
  * it added to their Tasks once, however many of these chats they are in.
+ *
+ * `update`: the task was sent before and I changed it — the copies people
+ * already have change in place (a new person in the list simply gets it).
+ * The chats it went to are remembered on the task, for "send changes" later.
  */
-export async function sendTaskTo(threads: ThreadId[], t: Task, subject?: string | null): Promise<void> {
+export async function sendTaskTo(threads: ThreadId[], t: Task, subject?: string | null, update = false): Promise<void> {
   if (!(await ensureMe()) || !myId) throw new Error("Sign in to share.");
-  const origin = `${myId}:${t.id}`;
-  await markTaskShared(origin, t.id);
+  const current = (await db.tasks.get(t.id)) ?? t;
+  const origin = `${myId}:${current.id}`;
+  await markTaskShared(origin, current.id);
+  const rev = update ? (current.shareRev ?? 0) + 1 : (current.shareRev ?? 0);
   const task: ChatTask = {
-    title: t.title,
-    kind: t.kind,
-    dueDate: t.dueDate,
-    dueTime: t.dueTime,
+    title: current.title,
+    kind: current.kind,
+    dueDate: current.dueDate,
+    dueTime: current.dueTime,
     subject: subject ?? null,
     origin,
-    notes: t.notes || null,
-    priority: t.priority,
-    reminders: t.reminders?.length ? t.reminders : null,
+    notes: current.notes || null,
+    priority: current.priority,
+    reminders: current.reminders?.length ? current.reminders : null,
+    rev,
   };
-  for (const th of [...new Set(threads)]) await sendMessage(th, "", { task });
+  const list = [...new Set(threads)];
+  const before = new Set(current.sharedWith ?? []);
+  // Chats that had it get "changes"; a chat new to it just gets the task.
+  for (const th of list) await sendMessage(th, "", { task: update && before.has(th) ? { ...task, update: true } : task });
+  const { updateTask } = await import("./repo");
+  await updateTask(current.id, { sharedWith: [...new Set([...(current.sharedWith ?? []), ...list])], shareRev: rev });
 }
 
 /** Remember my own task as shared, so it never comes back to me as a copy. */
@@ -363,9 +403,9 @@ export function listenChat(): () => Promise<unknown> | void {
 export async function sendMessage(
   thread: ThreadId,
   body: string,
-  opts: { task?: ChatTask; poll?: ChatPoll; file?: ChatFile; replyTo?: string | null; silent?: boolean } = {},
+  opts: { task?: ChatTask; poll?: ChatPoll; file?: ChatFile; invite?: "compare"; replyTo?: string | null; silent?: boolean } = {},
 ): Promise<void> {
-  const { task, poll, file, replyTo, silent } = opts;
+  const { task, poll, file, invite, replyTo, silent } = opts;
   const sb = getSupabase();
   if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to chat.");
   const text = body.trim();
@@ -377,7 +417,8 @@ export async function sendMessage(
     author: myId,
     body: text.slice(0, 4000),
     kind: task ? "task" : poll ? "poll" : file ? "file" : "text",
-    data: (task ?? poll ?? file ?? null) as ChatData | null,
+    // An invite is still a text message (older apps just show the words).
+    data: (task ?? poll ?? file ?? (invite ? { invite } : null)) as ChatData | null,
     replyTo: replyTo ?? null,
     createdAt: Date.now(),
     pending: true,

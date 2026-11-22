@@ -335,6 +335,8 @@ export interface TaskInput {
   priority?: Priority;
   subtasks?: Subtask[];
   reminders?: TaskReminder[];
+  origin?: string;
+  originRev?: number;
 }
 
 export async function addTask(input: TaskInput): Promise<Task> {
@@ -353,6 +355,7 @@ export async function addTask(input: TaskInput): Promise<Task> {
     doneAt: null,
     subtasks: input.subtasks ?? [],
     ...(input.reminders?.length ? { reminders: input.reminders } : {}),
+    ...(input.origin ? { origin: input.origin, originRev: input.originRev ?? 0 } : {}),
     createdAt: t,
     updatedAt: t,
     deletedAt: null,

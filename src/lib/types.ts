@@ -229,6 +229,12 @@ export interface Task extends Base {
   url?: string;
   /** Your own reminders for this task (see TaskReminder). */
   reminders?: TaskReminder[];
+  /** A task I shared: the chats it went to, and how many times I sent changes since. */
+  sharedWith?: string[];
+  shareRev?: number;
+  /** A task a friend shared with me: whose task it is ("<sender>:<their id>") and which version I have. */
+  origin?: string;
+  originRev?: number;
 }
 
 export type EventKind = "holiday" | "event";

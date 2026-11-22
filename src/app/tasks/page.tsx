@@ -40,7 +40,7 @@ export default function TasksPage() {
   const today = toDateStr();
   const [tab, setTab] = useState<Tab>("todo");
   const [quick, setQuick] = useState("");
-  const [sharing, setSharing] = useState<Task | null>(null);
+  const [sharing, setSharing] = useState<{ task: Task; mode: "new" | "send" | "update" } | null>(null);
   const [adding, setAdding] = useState(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1",
   );
@@ -364,12 +364,20 @@ export default function TasksPage() {
           subjects={subjects}
           defaultKind={tab === "exams" ? "exam" : "assignment"}
           onDone={() => setAdding(false)}
-          onCreated={(t) => setSharing(t)}
+          onCreated={(t) => setSharing({ task: t, mode: "new" })}
         />
       </Sheet>
-      <ShareTask task={sharing} onClose={() => setSharing(null)} />
+      <ShareTask task={sharing?.task ?? null} mode={sharing?.mode} onClose={() => setSharing(null)} />
       <Sheet open={!!editing} onClose={() => setEditing(null)} title={editing ? KIND_BY_ID[editing.kind].label : "Task"}>
-        {editing && <TaskForm key={editing.id} task={editing} subjects={subjects} onDone={() => setEditing(null)} />}
+        {editing && (
+          <TaskForm
+            key={editing.id}
+            task={editing}
+            subjects={subjects}
+            onDone={() => setEditing(null)}
+            onShare={(t, mode) => setSharing({ task: t, mode })}
+          />
+        )}
       </Sheet>
     </>
   );

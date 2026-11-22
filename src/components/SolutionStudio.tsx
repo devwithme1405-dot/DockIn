@@ -20,6 +20,7 @@ import {
   ScanLine,
   Send,
   Sparkles,
+  Users,
   X,
 } from "lucide-react";
 import type { Task } from "@/lib/types";
@@ -58,6 +59,7 @@ import {
 } from "@/lib/solution";
 import { handOver } from "./AssignmentFile";
 import { Sheet, cx, useToast } from "./ui";
+import { PickChats } from "./ShareTask";
 
 const LMS_HOME = "https://lms.bennett.edu.in/";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -461,6 +463,9 @@ export function CopyStudio({
   const [copy, setCopy] = useState<Awaited<ReturnType<typeof makeCopy>> | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [checked, setChecked] = useState(false);
+  // After handing it in: send what I submitted to friends, as a solution they can put their name on.
+  const [sharing, setSharing] = useState(false);
+  const [sharedTo, setSharedTo] = useState(0);
   const busy = phase === "working" || phase === "sending";
   const closeRef = useRef(onClose);
   useEffect(() => {
@@ -594,6 +599,23 @@ export function CopyStudio({
     }
   }
 
+  async function shareSubmitted(threads: string[]) {
+    if (!copy || !task) return;
+    let body: Blob = copy.blob;
+    if (body.size > SOLUTION_MAX) body = (await makeCopy(copy.blob, copy.name, [], "keep")).blob;
+    const file = new File([body], copy.name, { type: body.type || copy.blob.type });
+    // Whose name is in it now (mine, after the swap): friends' studios swap it for theirs.
+    const author = { name: hits(copy.text, me.name) ? me.name : "", roll: hits(copy.text, me.roll) ? me.roll : "" };
+    const sol = solutionFor(task, author);
+    for (const th of threads) {
+      const up = await uploadChatFile(th, file);
+      await sendMessage(th, "", { file: { ...up, solution: sol } });
+    }
+    setSharedTo((n) => n + threads.length);
+    setSharing(false);
+    toast.show(threads.length === 1 ? "Sent — they can put their own name on it and submit" : `Sent to ${threads.length} chats`);
+  }
+
   const head =
     phase === "preview"
       ? "Check your copy"
@@ -723,6 +745,22 @@ export function CopyStudio({
               </Section>
             )}
 
+            {own && readable && !swapping && (
+              // My own file with no other name found: I can still change one in it.
+              <button
+                type="button"
+                onClick={() => setTheirEdit({ name: ownOther.name, roll: ownOther.roll })}
+                className="flex w-full items-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-card-edge px-3.5 py-2.5 text-left text-[13px] active:scale-[0.99]"
+              >
+                <PenLine size={16} className="shrink-0 text-mess" />
+                <span className="min-w-0 flex-1">
+                  <b>Change a name in it</b>
+                  <span className="block text-[12px] text-muted">Put your name and enrollment in place of what the file has</span>
+                </span>
+                <ChevronRight size={16} className="shrink-0 text-muted" />
+              </button>
+            )}
+
             {info?.kind === "docx" && (
               <Section label="Hand in as">
                 <div className="grid grid-cols-2 gap-2">
@@ -831,9 +869,19 @@ export function CopyStudio({
             </div>
           )}
           {phase === "done" && (
-            <button onClick={onClose} className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px]">
-              <Check size={18} /> Done
-            </button>
+            <div className="space-y-2">
+              {copy && task && (
+                <button
+                  onClick={() => setSharing(true)}
+                  className="btn-paper flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14.5px] font-bold"
+                >
+                  <Users size={17} /> {sharedTo ? `Shared with ${sharedTo} — share with more` : "Share this assignment with friends"}
+                </button>
+              )}
+              <button onClick={onClose} className="btn-leather flex h-13 w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-[16px]">
+                <Check size={18} /> Done
+              </button>
+            </div>
           )}
           {phase === "failed" && (
             <div className="space-y-2">
@@ -900,6 +948,7 @@ export function CopyStudio({
           </div>
         </div>
       )}
+      <PickChats open={sharing} title="Share with friends" onClose={() => setSharing(false)} onSend={shareSubmitted} />
     </div>,
     document.body,
   );
