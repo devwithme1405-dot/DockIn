@@ -7,8 +7,16 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BitmapShader;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.graphics.Shader;
+import android.graphics.Typeface;
+import android.os.Bundle;
 import android.util.Base64;
 import android.view.View;
 import android.widget.RemoteViews;
@@ -34,7 +42,7 @@ final class Widgets {
     /** Every kind of widget, so a new summary redraws them all. */
     static final Class<?>[] ALL = {
             AttendanceWidget.class, NextClassWidget.class, TodayWidget.class,
-            TasksWidget.class, MessWidget.class, MessPassWidget.class
+            TasksWidget.class, MessWidget.class, MessPassWidget.class, FriendsWidget.class
     };
 
     static void save(Context c, String json) {
@@ -61,6 +69,26 @@ final class Widgets {
             Intent i = new Intent(c, k).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
             i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
             c.sendBroadcast(i);
+        }
+    }
+
+    /**
+     * "in 20 min", "On now", "Serving now" move with the clock: redraw every ten
+     * minutes in the day (hourly at night). Not exact, so it costs no battery to
+     * speak of; Android batches it with other work.
+     */
+    static void scheduleTick(Context c) {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Calendar k = Calendar.getInstance();
+            int h = k.get(Calendar.HOUR_OF_DAY);
+            long gap = (h >= 23 || h < 7) ? 60 * 60_000L : 10 * 60_000L;
+            Intent i = new Intent(c, WidgetTick.class).setAction("com.dockin.student.WIDGET_TICK");
+            PendingIntent pi = PendingIntent.getBroadcast(c, 4242, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.set(android.app.AlarmManager.RTC, System.currentTimeMillis() + gap, pi);
+        } catch (RuntimeException ignored) {
+            // The 30-minute system refresh still runs.
         }
     }
 
@@ -139,20 +167,142 @@ final class Widgets {
 
     // ---------------------------------------------------------------- drawing helpers
 
+    static final int SAFE = 0xFF2F9E6B, WARN = 0xFFD9952B, DANGER = 0xFFD64545, ACCENT = 0xFFC0662A, NEUTRAL = 0xFF8A6A52;
+
     static void text(RemoteViews v, int id, String s) {
         v.setTextViewText(id, s == null ? "" : s);
         v.setViewVisibility(id, s == null || s.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     static int tone(Context c, String t) {
-        if ("danger".equals(t)) return 0xFFD64545;
-        if ("warn".equals(t)) return 0xFFD9952B;
-        if ("safe".equals(t)) return 0xFF2F9E6B;
-        return 0xFF8A6A52;
+        if ("danger".equals(t)) return DANGER;
+        if ("warn".equals(t)) return WARN;
+        if ("safe".equals(t)) return SAFE;
+        return NEUTRAL;
+    }
+
+    /** A rounded pill in the header: "Safe", "in 20 min", "3 unread". Null hides it. */
+    static void chip(RemoteViews v, int id, String label, String tone) {
+        if (label == null || label.isEmpty()) {
+            v.setViewVisibility(id, View.GONE);
+            return;
+        }
+        int bg = R.drawable.chip_neutral;
+        int fg = NEUTRAL;
+        if ("safe".equals(tone)) { bg = R.drawable.chip_safe; fg = SAFE; }
+        else if ("warn".equals(tone)) { bg = R.drawable.chip_warn; fg = WARN; }
+        else if ("danger".equals(tone)) { bg = R.drawable.chip_danger; fg = DANGER; }
+        else if ("accent".equals(tone)) { bg = R.drawable.chip_accent; fg = ACCENT; }
+        else if ("info".equals(tone)) { bg = R.drawable.chip_info; fg = 0xFF3D7BD9; }
+        v.setInt(id, "setBackgroundResource", bg);
+        v.setTextColor(id, fg);
+        v.setTextViewText(id, label);
+        v.setViewVisibility(id, View.VISIBLE);
+    }
+
+    static boolean dark(Context c) {
+        return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    static float density(Context c) {
+        return c.getResources().getDisplayMetrics().density;
+    }
+
+    /** How tall the widget is on the home screen right now (dp), to show more when there's room. */
+    static int heightDp(AppWidgetManager m, int id) {
+        try {
+            Bundle o = m.getAppWidgetOptions(id);
+            int h = o == null ? 0 : o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
+            return h > 0 ? h : 180;
+        } catch (RuntimeException e) {
+            return 180;
+        }
+    }
+
+    /**
+     * The attendance ring: the track, the coloured arc, a tick at the target,
+     * the percentage in the middle and "of N" under it.
+     */
+    static Bitmap ring(Context c, double pct, int target, int color, String under) {
+        float d = density(c);
+        int size = Math.round(78 * d * 2) / 2 * 2;
+        Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas k = new Canvas(b);
+        boolean night = dark(c);
+        float stroke = 8 * d;
+        RectF box = new RectF(stroke / 2 + d, stroke / 2 + d, size - stroke / 2 - d, size - stroke / 2 - d);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(stroke);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setColor(night ? 0xFF4D3626 : 0xFFEADAC2);
+        k.drawArc(box, 0, 360, false, p);
+        float sweep = (float) Math.max(0, Math.min(100, pct)) * 3.6f;
+        p.setColor(color);
+        if (sweep > 0) k.drawArc(box, -90, sweep, false, p);
+        // The target, as a small notch on the ring.
+        double a = Math.toRadians(-90 + target * 3.6);
+        float cx = size / 2f, cy = size / 2f, r = box.width() / 2f;
+        Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+        t.setStrokeWidth(2.2f * d);
+        t.setStrokeCap(Paint.Cap.ROUND);
+        t.setColor(night ? 0xFFF6E7D2 : 0xFF3B2416);
+        k.drawLine((float) (cx + (r - stroke * 0.75) * Math.cos(a)), (float) (cy + (r - stroke * 0.75) * Math.sin(a)),
+                (float) (cx + (r + stroke * 0.75) * Math.cos(a)), (float) (cy + (r + stroke * 0.75) * Math.sin(a)), t);
+        Paint txt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        txt.setTextAlign(Paint.Align.CENTER);
+        txt.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        txt.setColor(night ? 0xFFF6E7D2 : 0xFF3B2416);
+        txt.setTextSize(21 * d);
+        k.drawText(Math.round(pct) + "%", cx, cy + 4 * d, txt);
+        if (under != null) {
+            txt.setTypeface(Typeface.DEFAULT);
+            txt.setTextSize(9.5f * d);
+            txt.setColor(night ? 0xFFBFA48C : 0xFF8A6A52);
+            k.drawText(under, cx, cy + 17 * d, txt);
+        }
+        return b;
+    }
+
+    static final int[] AVATAR_COLORS = {0xFFC0662A, 0xFF2F9E6B, 0xFF3D7BD9, 0xFF9B4DCA, 0xFFD64545, 0xFFD9952B, 0xFF00897B};
+
+    /** A round avatar: their photo when there is one, else their initials on a colour of their own. */
+    static Bitmap avatar(Context c, String name, String photo) {
+        float d = density(c);
+        int size = Math.round(36 * d);
+        Bitmap out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas k = new Canvas(out);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        Bitmap pic = image(photo);
+        if (pic != null) {
+            float scale = Math.max(size / (float) pic.getWidth(), size / (float) pic.getHeight());
+            Bitmap scaled = Bitmap.createScaledBitmap(pic, Math.max(1, Math.round(pic.getWidth() * scale)), Math.max(1, Math.round(pic.getHeight() * scale)), true);
+            BitmapShader sh = new BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.setTranslate((size - scaled.getWidth()) / 2f, (size - scaled.getHeight()) / 2f);
+            sh.setLocalMatrix(m);
+            p.setShader(sh);
+            k.drawCircle(size / 2f, size / 2f, size / 2f, p);
+            return out;
+        }
+        String n = name == null ? "?" : name.trim();
+        p.setColor(AVATAR_COLORS[Math.abs(n.hashCode()) % AVATAR_COLORS.length]);
+        k.drawCircle(size / 2f, size / 2f, size / 2f, p);
+        String[] parts = n.split("\\s+");
+        String ini = parts.length == 0 || parts[0].isEmpty() ? "?" : parts[0].substring(0, 1).toUpperCase(Locale.ROOT)
+                + (parts.length > 1 && !parts[1].isEmpty() ? parts[1].substring(0, 1).toUpperCase(Locale.ROOT) : "");
+        Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
+        t.setColor(0xFFFFFFFF);
+        t.setTextAlign(Paint.Align.CENTER);
+        t.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        t.setTextSize(14 * d);
+        Paint.FontMetrics fm = t.getFontMetrics();
+        k.drawText(ini, size / 2f, size / 2f - (fm.ascent + fm.descent) / 2f, t);
+        return out;
     }
 
     static Bitmap image(String dataUrl) {
-        if (dataUrl == null) return null;
+        if (dataUrl == null || dataUrl.isEmpty()) return null;
         int comma = dataUrl.indexOf(',');
         try {
             byte[] b = Base64.decode(comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl, Base64.DEFAULT);
@@ -160,6 +310,32 @@ final class Widgets {
         } catch (RuntimeException e) {
             return null;
         }
+    }
+
+    /** "2:05 pm" today, "Yesterday", or "23 Nov". */
+    static String ago(long at) {
+        if (at <= 0) return "";
+        Calendar k = Calendar.getInstance();
+        k.setTimeInMillis(at);
+        String day = String.format(Locale.US, "%04d-%02d-%02d", k.get(Calendar.YEAR), k.get(Calendar.MONTH) + 1, k.get(Calendar.DAY_OF_MONTH));
+        int diff = daysBetween(day, today());
+        if (diff == 0) return clock(String.format(Locale.US, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE)));
+        if (diff == 1) return "Yesterday";
+        return k.get(Calendar.DAY_OF_MONTH) + " " + MONTHS[k.get(Calendar.MONTH)];
+    }
+
+    static int minutes(String hm) {
+        try {
+            return Integer.parseInt(hm.substring(0, 2)) * 60 + Integer.parseInt(hm.substring(3, 5));
+        } catch (RuntimeException e) {
+            return 0;
+        }
+    }
+
+    /** "45 min", "1h 20m". */
+    static String span(int mins) {
+        if (mins < 60) return mins + " min";
+        return (mins / 60) + "h" + (mins % 60 == 0 ? "" : " " + (mins % 60) + "m");
     }
 
     /** The classes from now on (today's not yet over, then the next days'). */
@@ -180,19 +356,28 @@ final class Widgets {
         return out;
     }
 
-    /** Base: each widget draws itself from the summary. */
+    /** Base: each widget draws itself from the summary, at its current size. */
     abstract static class Base extends AppWidgetProvider {
-        abstract RemoteViews draw(Context c, JSONObject d);
+        abstract RemoteViews draw(Context c, JSONObject d, int heightDp);
 
         @Override
         public void onUpdate(Context c, AppWidgetManager m, int[] ids) {
             JSONObject d = data(c);
-            for (int id : ids) {
-                try {
-                    m.updateAppWidget(id, draw(c, d));
-                } catch (RuntimeException ignored) {
-                    // A widget that can't draw keeps its last picture.
-                }
+            for (int id : ids) redraw(c, m, id, d);
+            scheduleTick(c);
+        }
+
+        /** Resized on the home screen: show more (or less). */
+        @Override
+        public void onAppWidgetOptionsChanged(Context c, AppWidgetManager m, int id, Bundle options) {
+            redraw(c, m, id, data(c));
+        }
+
+        private void redraw(Context c, AppWidgetManager m, int id, JSONObject d) {
+            try {
+                m.updateAppWidget(id, draw(c, d, heightDp(m, id)));
+            } catch (RuntimeException ignored) {
+                // A widget that can't draw keeps its last picture.
             }
         }
     }

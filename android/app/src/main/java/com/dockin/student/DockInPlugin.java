@@ -61,6 +61,9 @@ public class DockInPlugin extends Plugin {
         // An update or a reboot can drop the hourly check; putting it back is free.
         CollegeJob.schedule(getContext());
         UpdateJob.schedule(getContext());
+        // Delivery receipts that couldn't go out when their pushes arrived.
+        final Context c = getContext();
+        new Thread(() -> Notes.flushAcks(c), "dockin-acks").start();
     }
 
     /** Where an in-app update is (downloading, confirm, done, failed), for the open app. */
@@ -740,6 +743,23 @@ public class DockInPlugin extends Plugin {
         } catch (JSONException e) {
             call.reject("Could not read what was saved.");
         }
+    }
+
+    /** What this build's push handling can do: 'data1' = shows chat pushes itself and sends ✓✓ receipts. */
+    @PluginMethod
+    public void pushCaps(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("caps", "data1");
+        call.resolve(o);
+    }
+
+    /** The chat on screen (null when none): it isn't notified, and its notification is cleared. */
+    @PluginMethod
+    public void setOpenChat(PluginCall call) {
+        String thread = call.getString("thread");
+        Notes.openChat = thread;
+        if (thread != null) Notes.clear(getContext(), thread);
+        call.resolve();
     }
 
     /** The summary home-screen widgets draw from (JSON text); they redraw at once. */

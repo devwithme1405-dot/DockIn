@@ -7,4 +7,5 @@ public abstract class Uri {
   public String getQuery() { return null; }
   public static Uri fromParts(String scheme, String ssp, String fragment) { return null; }
   public String getLastPathSegment() { return null; }
+  public static String encode(String s) { return s; }
 }

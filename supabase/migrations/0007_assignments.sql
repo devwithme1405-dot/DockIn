@@ -123,3 +123,5 @@ end $$;
 drop trigger if exists shares_forget_file on public.shares;
 create trigger shares_forget_file after delete on public.shares
   for each row execute function public.forget_assignment();
+
+

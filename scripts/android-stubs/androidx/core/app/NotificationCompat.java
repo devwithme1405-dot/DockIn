@@ -8,6 +8,13 @@ public class NotificationCompat {
   public static final int PRIORITY_DEFAULT = 0;
   public static abstract class Style {}
   public static class BigTextStyle extends Style { public BigTextStyle bigText(CharSequence t) { return this; } }
+  public static class InboxStyle extends Style {
+    public InboxStyle setBigContentTitle(CharSequence t) { return this; }
+    public InboxStyle addLine(CharSequence t) { return this; }
+    public InboxStyle setSummaryText(CharSequence t) { return this; }
+  }
+  public static final String CATEGORY_MESSAGE = "msg";
+  public static final int VISIBILITY_PRIVATE = 0;
   public static class Builder {
     public Builder(Context c, String channelId) {}
     public Builder setSmallIcon(int icon) { return this; }
@@ -27,6 +34,9 @@ public class NotificationCompat {
     public Builder setStyle(Style s) { return this; }
     public Builder setOngoing(boolean b) { return this; }
     public Builder setDefaults(int d) { return this; }
+    public Builder setNumber(int n) { return this; }
+    public Builder setVisibility(int v) { return this; }
+    public Builder setGroup(String g) { return this; }
     public Notification build() { return null; }
   }
   public static final int PRIORITY_MAX = 2;

@@ -75,7 +75,7 @@ import {
   inputCls,
   useToast,
 } from "@/components/ui";
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader, useScrolled } from "@/components/PageHeader";
 import { QrCode } from "@/components/QrCode";
 import { SignIn } from "@/components/SignIn";
 import { Bone, ListSkeleton } from "@/components/Skeleton";
@@ -152,6 +152,8 @@ function Circle() {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [bell, setBell] = useState(false);
+  // Past the title: the slim bar with title and buttons slides in.
+  const scrolledFar = useScrolled(70);
   const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -485,7 +487,43 @@ function Circle() {
 
   return (
     <div className="page-wash pb-4">
-      <header className="flex items-center gap-2 px-4 pt-[max(0.9rem,var(--sat))] pb-1">
+      {/* Scrolled down: a slim frosted bar with the title and the same buttons,
+          like Cafeteria and Tasks — nothing slides under the status bar. */}
+      <div className="sticky top-0 z-30 h-0">
+        <div
+          aria-hidden={!scrolledFar}
+          className={cx(
+            "absolute inset-x-0 top-0 flex items-center gap-1 border-b border-line bg-bg/80 px-3 pt-[max(0.5rem,var(--sat))] pb-1.5 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform] duration-200",
+            scrolledFar ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
+          )}
+        >
+          <p className="min-w-0 flex-1 truncate pl-2 text-[17px] leading-10 font-bold">Friends</p>
+          {/* Only while shown (the same buttons are in the header at the top). */}
+          {scrolledFar && (
+            <>
+          <button onClick={() => setBell(true)} aria-label="Friend requests" tabIndex={scrolledFar ? 0 : -1} className="relative grid size-10 place-items-center rounded-full active:bg-surface-2">
+            <Bell size={19} />
+            {requests.length > 0 && <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-orange" />}
+          </button>
+          <button
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              setSearching(true);
+            }}
+            aria-label="Search chats and people"
+            tabIndex={scrolledFar ? 0 : -1}
+            className="grid size-10 place-items-center rounded-full active:bg-surface-2"
+          >
+            <Search size={19} />
+          </button>
+          <button onClick={() => setScanning(true)} aria-label="Scan a QR" tabIndex={scrolledFar ? 0 : -1} className="grid size-10 place-items-center rounded-full active:bg-surface-2">
+            <ScanLine size={19} />
+          </button>
+            </>
+          )}
+        </div>
+      </div>
+      <header className="flex items-center gap-2 px-4 pt-[calc(var(--sat)+1.5rem)] pb-1">
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-[28px] leading-none font-extrabold tracking-[-0.03em]">Friends</h1>
           <svg viewBox="0 0 120 10" className="mt-1 h-2 w-[104px] text-orange" aria-hidden>
@@ -658,7 +696,7 @@ function Circle() {
       </div>
       )}
 
-      <nav className="glass-bar sticky top-0 z-10 mt-2 border-b-0 px-4 py-2" aria-label="Friends sections">
+      <nav className="glass-bar sticky top-[calc(max(0.5rem,var(--sat))+2.85rem)] z-20 mt-2 border-b-0 px-4 py-2" aria-label="Friends sections">
         <div className="glass-pill flex gap-1 rounded-2xl p-1">
           {TABS.map(([id, label]) => {
             const Icon = id === "chats" ? MessageCircle : Users;

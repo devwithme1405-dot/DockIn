@@ -81,6 +81,7 @@ import { Bone } from "./Skeleton";
 import { chatVars, useChatLook, useChatPhoto } from "@/lib/chatLook";
 import { ChatLookSheet } from "./ChatLook";
 import { ComparePanel } from "./ComparePanel";
+import { setOpenChat } from "@/lib/native";
 
 const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 const EDIT_WINDOW = 15 * 60_000;
@@ -157,6 +158,11 @@ export function ChatView({
   const deliveredTo = useDeliveredTo(thread);
   const pref = useLiveQuery(() => db.chatReads.get(thread), [thread]);
   const isGroup = thread.startsWith("g:");
+  // This chat is on screen: the phone doesn't notify about it, and clears its notification.
+  useEffect(() => {
+    setOpenChat(thread);
+    return () => setOpenChat(null);
+  }, [thread]);
   // A compare invite's button opens Compare over this chat (back comes back here).
   const [comparing, setComparing] = useState(false);
   const acceptedFriends = useLiveQuery(() => db.friends.filter((f) => f.status === "accepted").toArray(), []);

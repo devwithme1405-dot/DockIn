@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: class, assignment and exam reminders. -->
@@ -93,7 +94,11 @@
             </intent-filter>
         </receiver>
 
-        <!-- Home-screen widgets: attendance, next class, today, tasks, mess menu, mess pass. -->
+        <!-- Redraws the widgets as the clock moves (next class, serving now). -->
+        <receiver
+            android:name=".WidgetTick"
+            android:exported="false" />
+        <!-- Home-screen widgets: attendance, next class, today, tasks, mess menu, mess pass, friends. -->
         <receiver
             android:name=".AttendanceWidget"
             android:label="@string/widget_attendance"
@@ -150,6 +155,17 @@
                 android:resource="@xml/widget_mess_info" />
         </receiver>
         <receiver
+            android:name=".FriendsWidget"
+            android:label="@string/widget_friends"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_friends_info" />
+        </receiver>
+        <receiver
             android:name=".MessPassWidget"
             android:label="@string/widget_mess_pass"
             android:exported="false">
@@ -192,6 +208,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+        <!-- Every push lands in DockIn's own service (it still passes everything on
+             to Capacitor's): chat notifications shown by DockIn itself, with a
+             delivered ✓✓ receipt back to the sender. Capacitor's copy is removed. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".DockInMessaging"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
         <!-- Pushes that arrive while DockIn is closed use the Friends channel and
              DockIn's own small icon (not Android's grey square). -->
         <meta-data

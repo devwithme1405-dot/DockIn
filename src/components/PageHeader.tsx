@@ -6,7 +6,7 @@ import { ChevronLeft, type LucideIcon } from "lucide-react";
 import { cx } from "./ui";
 
 /** True once the page has been scrolled a little, so the bar can show its divider. */
-function useScrolled(threshold = 4): boolean {
+export function useScrolled(threshold = 4): boolean {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     let frame = 0;
@@ -92,12 +92,18 @@ export function HeroHeader({
   title,
   subtitle,
   icon: Icon,
+  art,
   right,
+  barRight,
 }: {
   title: string;
   subtitle?: ReactNode;
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  /** Drawn art in place of the icon tile (Cafeteria's cloche). */
+  art?: ReactNode;
   right?: ReactNode;
+  /** Buttons that stay reachable in the slim bar once the plate has scrolled away. */
+  barRight?: ReactNode;
 }) {
   const scrolled = useScrolled(90);
   return (
@@ -112,14 +118,21 @@ export function HeroHeader({
             scrolled ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
           )}
         >
-          <p className="truncate text-center text-[16px] leading-7 font-semibold">{title}</p>
+          <div className="relative flex min-h-7 items-center justify-center">
+            <p className="truncate px-12 text-center text-[16px] leading-7 font-semibold">{title}</p>
+            {barRight && <div className="absolute right-0 flex items-center gap-1">{barRight}</div>}
+          </div>
         </div>
       </div>
-      <div className="leather stitched relative mx-5 mt-[calc(var(--sat)+0.75rem)] mb-3 rounded-[26px] p-5">
+      {/* Every tab's plate starts at the same height under the status bar. */}
+      <div className="leather stitched relative mx-5 mt-[calc(var(--sat)+1.5rem)] mb-3 rounded-[26px] p-5">
         <div className="relative z-[1] flex items-center gap-4">
-          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-black/15 text-on-ink shadow-[inset_0_2px_4px_rgb(40_15_0/45%),0_1px_0_rgb(255_220_180/25%)]">
-            <Icon size={28} strokeWidth={2.1} />
-          </span>
+          {art ??
+            (Icon && (
+              <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-black/15 text-on-ink shadow-[inset_0_2px_4px_rgb(40_15_0/45%),0_1px_0_rgb(255_220_180/25%)]">
+                <Icon size={28} strokeWidth={2.1} />
+              </span>
+            ))}
           <div className="min-w-0">
             <h1 className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
               {title}

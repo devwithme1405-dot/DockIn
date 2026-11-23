@@ -2,7 +2,7 @@
 
 import { PushNotifications } from "@capacitor/push-notifications";
 import { getSupabase } from "./supabase";
-import { isNativeApp } from "./native";
+import { DockIn, isNativeApp } from "./native";
 
 /**
  * Push notifications (Firebase Cloud Messaging).
@@ -20,23 +20,103 @@ export type PushEvent =
   | { type: "friend"; to: string }
   | { type: "friend"; code: string };
 
-/** Fire-and-forget: a missed notification must never break the action itself. */
+/**
+ * Asks the server to notify people. On a weak line the request itself can fail,
+ * and then nobody hears about the message — so each request waits in a small
+ * queue on this phone and is retried until the server has it (the server only
+ * accepts it for ten minutes, so old ones are dropped).
+ */
 export function notifyPush(event: PushEvent): void {
+  const q = readQueue();
+  const key = JSON.stringify(event);
+  if (!q.some((x) => x.key === key)) q.push({ key, event, at: Date.now() });
+  writeQueue(q);
+  void flushPushes();
+}
+
+type Queued = { key: string; event: PushEvent; at: number };
+const PUSH_QUEUE = "dockin-push-queue";
+const PUSH_FOR = 10 * 60_000;
+
+function readQueue(): Queued[] {
+  try {
+    const q = JSON.parse(localStorage.getItem(PUSH_QUEUE) || "[]") as Queued[];
+    return Array.isArray(q) ? q.filter((x) => Date.now() - x.at < PUSH_FOR) : [];
+  } catch {
+    return [];
+  }
+}
+function writeQueue(q: Queued[]): void {
+  try {
+    localStorage.setItem(PUSH_QUEUE, JSON.stringify(q.slice(-50)));
+  } catch {
+    /* memory only then */
+  }
+}
+
+let pushing = false;
+let pushTimer: ReturnType<typeof setTimeout> | undefined;
+let pushTries = 0;
+
+/** Sends what's waiting; a network failure leaves it for the next try. */
+export async function flushPushes(): Promise<void> {
+  if (pushing) return;
   const sb = getSupabase();
   if (!sb) return;
-  void sb.auth
-    .getSession()
-    .then(({ data }) => {
-      const token = data.session?.access_token;
-      if (!token) return;
-      return fetch("/api/push", {
+  pushing = true;
+  clearTimeout(pushTimer);
+  try {
+    let token: string | undefined;
+    try {
+      token = (await sb.auth.getSession()).data.session?.access_token;
+    } catch {
+      token = undefined;
+    }
+    if (!token) throw new Error("no session yet");
+    for (const item of readQueue()) {
+      const res = await fetch("/api/push", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify(event),
+        body: JSON.stringify(item.event),
         keepalive: true,
       });
-    })
-    .catch(() => {});
+      // 5xx and 429: try again. Anything else is an answer (sent, or not allowed): done.
+      if (res.status >= 500 && res.status !== 503) throw new Error(String(res.status));
+      if (res.status === 429) throw new Error("busy");
+      writeQueue(readQueue().filter((x) => x.key !== item.key));
+    }
+    pushTries = 0;
+  } catch {
+    if (readQueue().length) pushTimer = setTimeout(() => void flushPushes(), [3_000, 8_000, 20_000, 45_000][Math.min(pushTries++, 3)]);
+  } finally {
+    pushing = false;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => void flushPushes());
+  window.addEventListener("dockin:back-online", () => void flushPushes());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void flushPushes();
+  });
+}
+
+/** What this phone's DockIn can do with pushes ('data1': shows chat pushes itself and sends ✓✓). Older app: null. */
+async function pushCaps(): Promise<string | null> {
+  try {
+    return (await DockIn.pushCaps()).caps ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Saves this phone's token for the account; works with a server not yet updated (no caps column). */
+async function saveToken(sb: NonNullable<ReturnType<typeof getSupabase>>, token: string, user: string): Promise<{ message: string } | null> {
+  const caps = await pushCaps();
+  const row: Record<string, string> = { token, user_id: user, updated_at: new Date().toISOString() };
+  const { error } = await sb.from("push_tokens").upsert(caps ? { ...row, caps } : row);
+  if (error && caps && /caps/.test(error.message)) return (await sb.from("push_tokens").upsert(row)).error;
+  return error;
 }
 
 let started = false;
@@ -84,7 +164,7 @@ export async function startPush(open: (path: string) => void): Promise<void> {
         if (!sb) return;
         const { data } = await sb.auth.getUser();
         if (!data.user) return;
-        const { error } = await sb.from("push_tokens").upsert({ token: value, user_id: data.user.id, updated_at: new Date().toISOString() });
+        const error = await saveToken(sb, value, data.user.id);
         if (error) {
           try {
             localStorage.setItem("dockin-push-error", `save: ${error.message}`);
@@ -138,7 +218,7 @@ export async function syncPushToken(): Promise<void> {
   if (!token || !sb) return;
   const { data } = await sb.auth.getUser();
   if (!data.user) return;
-  await sb.from("push_tokens").upsert({ token, user_id: data.user.id, updated_at: new Date().toISOString() });
+  await saveToken(sb, token, data.user.id);
 }
 
 /** Asks the server to send this phone a test notification; says what happened. */

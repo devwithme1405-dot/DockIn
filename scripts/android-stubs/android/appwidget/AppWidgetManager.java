@@ -5,4 +5,6 @@ public class AppWidgetManager {
   public static AppWidgetManager getInstance(android.content.Context c) { return null; }
   public int[] getAppWidgetIds(android.content.ComponentName n) { return null; }
   public void updateAppWidget(int id, android.widget.RemoteViews v) {}
+  public static final String OPTION_APPWIDGET_MAX_HEIGHT = "appWidgetMaxHeight";
+  public android.os.Bundle getAppWidgetOptions(int id) { return null; }
 }

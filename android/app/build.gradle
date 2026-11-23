@@ -75,6 +75,9 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
+    // DockInMessaging extends Capacitor's push service, so Firebase Messaging is needed here too
+    // (same version Capacitor's push plugin uses).
+    implementation "com.google.firebase:firebase-messaging:25.0.1"
 }
 
 apply from: 'capacitor.build.gradle'

@@ -7,48 +7,54 @@ import android.widget.RemoteViews;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** The next class (or the one on now), with the one after it. */
+/** The class on now (with how far through it is) or the next one, and the one after. */
 public class NextClassWidget extends Widgets.Base {
     @Override
-    RemoteViews draw(Context c, JSONObject d) {
+    RemoteViews draw(Context c, JSONObject d, int heightDp) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_next_class);
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/timetable", 102));
         JSONArray next = Widgets.upcoming(d);
         if (next.length() == 0) {
-            v.setTextViewText(R.id.w_name, "No classes coming up");
+            v.setTextViewText(R.id.w_label, "Next class");
+            v.setTextViewText(R.id.w_name, "No classes coming up 🎉");
             Widgets.text(v, R.id.w_when, "Enjoy the free time");
             Widgets.text(v, R.id.w_room, null);
-            Widgets.text(v, R.id.w_then, null);
-            v.setViewVisibility(R.id.w_badge, View.GONE);
+            Widgets.chip(v, R.id.w_chip, null, null);
+            v.setViewVisibility(R.id.w_prog, View.GONE);
+            v.setViewVisibility(R.id.w_thenbox, View.GONE);
             return v;
         }
         JSONObject k = next.optJSONObject(0);
         String today = Widgets.today();
         String now = Widgets.nowHm();
-        boolean on = today.equals(k.optString("date")) && k.optString("from").compareTo(now) <= 0;
+        String date = k.optString("date");
+        boolean isToday = today.equals(date);
+        boolean on = isToday && k.optString("from").compareTo(now) <= 0;
         v.setTextViewText(R.id.w_label, on ? "On now" : "Next class");
         v.setTextViewText(R.id.w_name, k.optString("name", "Class"));
-        String day = today.equals(k.optString("date")) ? "" : Widgets.tomorrow().equals(k.optString("date")) ? "Tomorrow · " : Widgets.due(k.optString("date"), null) + " · ";
-        Widgets.text(v, R.id.w_when, day + Widgets.clock(k.optString("from")) + " – " + Widgets.clock(k.optString("to")));
-        Widgets.text(v, R.id.w_room, k.optString("room"));
-        if (!on && today.equals(k.optString("date"))) {
-            int mins = minutes(k.optString("from")) - minutes(now);
-            v.setTextViewText(R.id.w_badge, mins < 60 ? "in " + mins + " min" : "in " + (mins / 60) + "h " + (mins % 60) + "m");
-            v.setViewVisibility(R.id.w_badge, View.VISIBLE);
+        String day = isToday ? "" : Widgets.tomorrow().equals(date) ? "Tomorrow · " : Widgets.due(date, null) + " · ";
+        Widgets.text(v, R.id.w_when, "⏰ " + day + Widgets.clock(k.optString("from")) + " – " + Widgets.clock(k.optString("to")));
+        String room = k.optString("room");
+        Widgets.text(v, R.id.w_room, room.isEmpty() ? null : "📍 " + room);
+
+        int from = Widgets.minutes(k.optString("from")), to = Widgets.minutes(k.optString("to")), nowM = Widgets.minutes(now);
+        if (on) {
+            Widgets.chip(v, R.id.w_chip, Widgets.span(Math.max(1, to - nowM)) + " left", "accent");
+            v.setViewVisibility(R.id.w_prog, View.VISIBLE);
+            v.setProgressBar(R.id.w_prog, 100, to > from ? Math.round(100f * (nowM - from) / (to - from)) : 0, false);
         } else {
-            v.setViewVisibility(R.id.w_badge, View.GONE);
+            v.setViewVisibility(R.id.w_prog, View.GONE);
+            if (isToday) {
+                int mins = from - nowM;
+                Widgets.chip(v, R.id.w_chip, "in " + Widgets.span(mins), mins <= 15 ? "danger" : mins <= 45 ? "warn" : "info");
+            } else {
+                Widgets.chip(v, R.id.w_chip, Widgets.tomorrow().equals(date) ? "Tomorrow" : null, "neutral");
+            }
         }
         JSONObject then = next.optJSONObject(1);
-        Widgets.text(v, R.id.w_then, then != null && then.optString("date").equals(k.optString("date"))
-                ? "Then " + then.optString("name") + " at " + Widgets.clock(then.optString("from")) : null);
+        boolean showThen = heightDp >= 150 && then != null && then.optString("date").equals(date);
+        v.setViewVisibility(R.id.w_thenbox, showThen ? View.VISIBLE : View.GONE);
+        if (showThen) v.setTextViewText(R.id.w_then, "Then  " + then.optString("name") + " · " + Widgets.clock(then.optString("from")));
         return v;
-    }
-
-    private static int minutes(String hm) {
-        try {
-            return Integer.parseInt(hm.substring(0, 2)) * 60 + Integer.parseInt(hm.substring(3, 5));
-        } catch (RuntimeException e) {
-            return 0;
-        }
     }
 }

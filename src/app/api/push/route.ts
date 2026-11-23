@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { account, googleToken } from "@/lib/fcm";
+import { deliveryTicket } from "@/lib/pushTicket";
 
 /**
  * Sends push notifications for social events.
@@ -21,7 +22,7 @@ type Event =
   | { type: "message"; id: string }
   | { type: "share"; id: string }
   | { type: "friend"; to?: string; code?: string };
-type Note = { title: string; body: string; path: string; tag: string };
+type Note = { title: string; body: string; path: string; tag: string; nid?: string; thread?: string; at?: string };
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -62,7 +63,8 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
     const { data: m } = await sb.from("messages").select("thread,author,body,kind,data,created_at").eq("id", e.id).maybeSingle();
     if (!m || m.author !== me) return null;
     // Only a message just sent: replaying an old id must not ring everyone again.
-    if (!fresh(Date.parse(String(m.created_at)), 3 * 60_000)) return null;
+    // (Ten minutes: a phone on a weak line may only get to ask a little later.)
+    if (!fresh(Date.parse(String(m.created_at)), 10 * 60_000)) return null;
     const thread = m.thread as string;
     const d = (m.data ?? {}) as { title?: string; question?: string; name?: string; solution?: { title?: string } };
     const sol = m.kind === "file" && d.solution?.title ? String(d.solution.title).slice(0, 80) : null;
@@ -82,11 +84,14 @@ async function plan(sb: SupabaseClient, me: string, e: Exclude<Event, { type: "t
       if (!members.includes(me)) return null;
       const { data: g } = await sb.from("groups").select("name,emoji").eq("id", gid).maybeSingle();
       const title = `${g?.emoji ? `${g.emoji} ` : ""}${g?.name ?? "Group"}`;
-      return { to: members.filter((u) => u !== me), note: { title, body: clip(`${who}: ${text}`, 180), path, tag: thread } };
+      return {
+        to: members.filter((u) => u !== me),
+        note: { title, body: clip(`${who}: ${text}`, 180), path, tag: thread, nid: e.id, thread, at: String(m.created_at) },
+      };
     }
     const [, a, b] = thread.split(":");
     if (me !== a && me !== b) return null;
-    return { to: [me === a ? b : a], note: { title: who, body: clip(text, 180), path, tag: thread } };
+    return { to: [me === a ? b : a], note: { title: who, body: clip(text, 180), path, tag: thread, nid: e.id, thread, at: String(m.created_at) } };
   }
 
   if (e.type === "share") {
@@ -169,8 +174,17 @@ export async function POST(req: Request): Promise<Response> {
     if (!p.to.length) return Response.json({ ok: true, sent: 0 });
   }
 
-  const { data: rows } = await sb.from("push_tokens").select("token").in("user_id", p.to.slice(0, 200));
-  const tokens = (rows ?? []).map((r) => r.token as string);
+  // Older rows (before the caps column) still work: select what exists.
+  let rows: { token: string; user_id: string; caps?: string | null }[] = [];
+  {
+    const withCaps = await sb.from("push_tokens").select("token,user_id,caps").in("user_id", p.to.slice(0, 200));
+    if (!withCaps.error) rows = (withCaps.data ?? []) as typeof rows;
+    else {
+      const plain = await sb.from("push_tokens").select("token,user_id").in("user_id", p.to.slice(0, 200));
+      rows = (plain.data ?? []) as typeof rows;
+    }
+  }
+  const tokens = rows.map((r) => r.token);
   if (!tokens.length) return Response.json({ ok: true, sent: 0, tokens: 0 });
 
   let access: string;
@@ -179,44 +193,64 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     return Response.json({ ok: false, sent: 0, tokens: tokens.length, errors: [`google auth: ${(e as Error).message}`] }, { status: 200 });
   }
+  const note = p.note;
+  /** What one phone gets. New app: the notification as data (shown by DockIn itself, with a ✓✓ receipt). Older app: a plain notification. */
+  const messageFor = (r: (typeof rows)[number]) => {
+    if (r.caps?.includes("data1")) {
+      const data: Record<string, string> = { kind: "note", title: note.title, body: note.body, path: note.path, tag: note.tag, nid: note.nid ?? note.tag };
+      if (note.thread && note.at) Object.assign(data, { uid: r.user_id, thread: note.thread, at: note.at, sig: deliveryTicket(SERVICE!, r.user_id, note.thread, note.at) });
+      return { token: r.token, data, android: { priority: "high", ttl: "86400s" } };
+    }
+    return {
+      token: r.token,
+      notification: { title: note.title, body: note.body },
+      data: { path: note.path },
+      android: {
+        priority: "high",
+        ttl: "86400s",
+        notification: {
+          channel_id: "social",
+          tag: note.tag,
+          icon: "ic_stat_dockin",
+          color: "#7C3D1B",
+          default_sound: true,
+          notification_priority: "PRIORITY_HIGH",
+          visibility: "PRIVATE",
+        },
+      },
+    };
+  };
   const dead: string[] = [];
   const errors: string[] = [];
   let sent = 0;
   await Promise.all(
-    tokens.map(async (token) => {
-      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${fb.project_id}/messages:send`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${access}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          message: {
-            token,
-            notification: { title: p.note.title, body: p.note.body },
-            data: { path: p.note.path },
-            android: {
-              priority: "high",
-              ttl: "86400s",
-              notification: {
-                channel_id: "social",
-                tag: p.note.tag,
-                icon: "ic_stat_dockin",
-                color: "#7C3D1B",
-                default_sound: true,
-                notification_priority: "PRIORITY_HIGH",
-                visibility: "PRIVATE",
-              },
-            },
-          },
-        }),
-      });
-      if (res.ok) {
-        sent += 1;
+    rows.map(async (r) => {
+      // Google's own hiccups (busy, internal error) are retried — a notification must not be lost to one.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt) await new Promise((ok) => setTimeout(ok, 300 * 3 ** (attempt - 1)));
+        let res: Response;
+        try {
+          res = await fetch(`https://fcm.googleapis.com/v1/projects/${fb.project_id}/messages:send`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${access}`, "content-type": "application/json" },
+            body: JSON.stringify({ message: messageFor(r) }),
+          });
+        } catch {
+          if (attempt === 3) errors.push("network");
+          continue;
+        }
+        if (res.ok) {
+          sent += 1;
+          return;
+        }
+        const j = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string; details?: { errorCode?: string }[] } } | null;
+        const code = j?.error?.details?.find((d) => d.errorCode)?.errorCode ?? j?.error?.status ?? String(res.status);
+        if ((res.status === 429 || res.status >= 500) && attempt < 3) continue;
+        errors.push(code);
+        // Only tokens FCM says are gone are dropped — a bad payload must never wipe good tokens.
+        if (code === "UNREGISTERED" || res.status === 404 || (code === "INVALID_ARGUMENT" && /registration token/i.test(j?.error?.message ?? ""))) dead.push(r.token);
         return;
       }
-      const j = (await res.json().catch(() => null)) as { error?: { status?: string; message?: string; details?: { errorCode?: string }[] } } | null;
-      const code = j?.error?.details?.find((d) => d.errorCode)?.errorCode ?? j?.error?.status ?? String(res.status);
-      errors.push(code);
-      // Only tokens FCM says are gone are dropped — a bad payload must never wipe good tokens.
-      if (code === "UNREGISTERED" || res.status === 404 || (code === "INVALID_ARGUMENT" && /registration token/i.test(j?.error?.message ?? ""))) dead.push(token);
     }),
   );
   if (dead.length) await sb.from("push_tokens").delete().in("token", dead);

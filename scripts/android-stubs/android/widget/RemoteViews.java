@@ -7,4 +7,6 @@ public class RemoteViews {
   public void setOnClickPendingIntent(int id, android.app.PendingIntent p) {}
   public void setImageViewBitmap(int id, android.graphics.Bitmap b) {}
   public void setInt(int id, String method, int v) {}
+  public void setProgressBar(int id, int max, int progress, boolean indeterminate) {}
+  public void setImageViewResource(int id, int res) {}
 }

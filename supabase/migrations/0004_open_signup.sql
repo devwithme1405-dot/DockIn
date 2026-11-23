@@ -53,3 +53,5 @@ begin
     raise notice 'Sign-up is limited to @% and anything in allowed_emails.', public.allowed_domain();
   end if;
 end $$;
+
+

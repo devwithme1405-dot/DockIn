@@ -175,6 +175,10 @@ interface DockInPlugin {
   /** A piece of a shared file, base64. */
   readShared(options: { path: string; offset: number; length: number }): Promise<{ data: string }>;
   clearShared(): Promise<void>;
+  /** What this build's push handling can do ('data1' = shows chat pushes itself, sends ✓✓). */
+  pushCaps(): Promise<{ caps?: string }>;
+  /** The chat on screen (null: none) — not notified, and its notification cleared. */
+  setOpenChat(options: { thread: string | null }): Promise<void>;
   /** The numbers home-screen widgets show (JSON text); the phone redraws them. */
   setWidgets(options: { data: string }): Promise<void>;
   addListener(event: "share", fn: () => void): Promise<PluginListenerHandle>;
@@ -295,4 +299,10 @@ export function clearShared(): void {
 export function setWidgets(data: unknown): void {
   if (!isNativeApp()) return;
   DockIn.setWidgets({ data: JSON.stringify(data) }).catch(() => {});
+}
+
+/** Tells the phone which chat is on screen, so it isn't notified about it (null: none). */
+export function setOpenChat(thread: string | null): void {
+  if (!isNativeApp()) return;
+  DockIn.setOpenChat({ thread }).catch(() => {});
 }

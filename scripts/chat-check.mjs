@@ -352,7 +352,7 @@ await step("Task in chat can make a brand-new task", async () => {
   await page.screenshot({ path: `${SHOTS}/chat-newtask.png` });
   await page.waitForTimeout(600);
   await page.getByLabel("Back", { exact: true }).click();
-  await page.getByLabel("Scan a QR").waitFor({ timeout: 3000 });
+  await page.getByLabel("Scan a QR").first().waitFor({ timeout: 3000 });
   await page.waitForTimeout(300);
 });
 
@@ -505,7 +505,7 @@ await step("Compare: attendance board, shared tasks, trip planner, free now", as
 });
 
 await step("the scanner opens smoothly and can flip to My QR", async () => {
-  await page.getByLabel("Scan a QR").click();
+  await page.getByLabel("Scan a QR").first().click();
   await page.getByText("Point at a friend").waitFor({ timeout: 6000 });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${SHOTS}/chat-scanner.png` });
@@ -733,6 +733,20 @@ await step("a task kept to myself can be sent later from the task", async () => 
   await pick.getByRole("button", { name: /Send to 1/ }).click();
   await page.waitForTimeout(800);
   if (!messages.some((m) => m.kind === "task" && m.data?.title === "Physics lab file")) throw new Error("not sent");
+});
+
+await step("Friends: scrolled down, a slim bar keeps the title and buttons (nothing under the status bar)", async () => {
+  await page.goto(`${BASE}/circle`, { waitUntil: "networkidle" });
+  await page.evaluate(() => {
+    document.body.style.minHeight = "3000px";
+    window.scrollTo(0, 600);
+  });
+  await page.waitForTimeout(600);
+  const bar = page.locator('[aria-hidden="false"]', { hasText: "Friends" }).first();
+  await bar.waitFor({ timeout: 3000 });
+  await page.screenshot({ path: `${SHOTS}/friends-scrolled.png` });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
 });
 
 await step("a new group starts with no emoji picked", async () => {

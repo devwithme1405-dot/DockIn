@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="page">#1C140E</color>
-    <color name="widget_bg">#2A1C12</color>
-    <color name="widget_line">#4A3424</color>
+
+    <!-- Home-screen widgets. -->
+    <color name="widget_bg_top">#3A281C</color>
+    <color name="widget_bg_bottom">#231710</color>
+    <color name="widget_line">#4D3626</color>
     <color name="widget_ink">#F6E7D2</color>
     <color name="widget_muted">#BFA48C</color>
     <color name="widget_accent">#F0A35E</color>
-    <color name="widget_chip">#3D2A1C</color>
+    <color name="widget_tile">#4A3322</color>
+    <color name="widget_card">#2E2016</color>
+    <color name="widget_track">#4D3626</color>
+    <color name="widget_highlight">#46301F</color>
 </resources>

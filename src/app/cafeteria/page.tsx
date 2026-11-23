@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Bone } from "@/components/Skeleton";
 import { CalendarDays, Coffee, Cookie, Moon, Pencil, ScanLine, Soup, Sparkles, type LucideIcon } from "lucide-react";
-import { StickyBar } from "@/components/PageHeader";
+import { HeroHeader } from "@/components/PageHeader";
 import { getProfile, saveProfile } from "@/lib/repo";
 import { MEALS, type Meal, currentMeal, dayHasFood, menuForDay } from "@/lib/mess";
 import { useCollege, syncCollege } from "@/lib/college";
@@ -192,45 +192,24 @@ export default function CafeteriaPage() {
 
   return (
     <div className="page-wash min-h-dvh">
-      {/* A tab, so no back arrow: the leather plate below is the title, and the
-          name slides into this bar only once it has scrolled away. */}
-      <StickyBar className="px-5 pb-1.5">
-        {(scrolled) => (
-          <div className="relative flex h-11 items-center justify-end">
-            <p
-              aria-hidden={!scrolled}
-              className={cx(
-                "pointer-events-none absolute inset-x-12 truncate text-center text-[16px] font-semibold transition-opacity duration-150",
-                scrolled ? "opacity-100" : "opacity-0",
-              )}
+      {/* The leather plate is the title (same place as every tab's); the name
+          slides into a slim bar once it has scrolled away. */}
+      <HeroHeader
+        title="Cafeteria"
+        art={<Cloche />}
+        subtitle={fromCamu ? camuLine(camuMeals, nowMin) : mealLine(nowHm)}
+        right={
+          !fromCamu ? (
+            <button
+              onClick={() => setMenuSheet(true)}
+              aria-label="Edit the mess menu"
+              className="grid size-10 place-items-center rounded-full bg-black/15 text-on-ink active:scale-95"
             >
-              Cafeteria
-            </p>
-            {!fromCamu && (
-              <button
-                onClick={() => setMenuSheet(true)}
-                aria-label="Edit the mess menu"
-                className="grid size-10 place-items-center rounded-full text-mess active:scale-95"
-              >
-                <Pencil size={18} />
-              </button>
-            )}
-          </div>
-        )}
-      </StickyBar>
-
-      {/* hero: a stitched leather plate, the same hide as the tab bar */}
-      <div className="leather stitched mx-5 mt-1 rounded-[26px] p-5">
-        <div className="relative z-[1] flex items-center gap-4">
-          <Cloche />
-          <div className="min-w-0">
-            <p className="font-display text-[26px] leading-none font-extrabold tracking-tight text-on-ink [text-shadow:0_1px_1px_rgb(50_20_5/55%)]">
-              Cafeteria
-            </p>
-            <p className="mt-1.5 text-[13.5px] font-semibold text-ink-muted">{fromCamu ? camuLine(camuMeals, nowMin) : mealLine(nowHm)}</p>
-          </div>
-        </div>
-      </div>
+              <Pencil size={18} />
+            </button>
+          ) : undefined
+        }
+      />
 
       {native && !fromCamu && !state.camu?.connected && (
         <div className="mt-4 px-5">

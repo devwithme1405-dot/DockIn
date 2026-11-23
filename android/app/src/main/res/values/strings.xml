@@ -26,4 +26,6 @@
     <string name="widget_mess_about">What the mess is serving now, or next.</string>
     <string name="widget_mess_pass">Mess pass</string>
     <string name="widget_mess_pass_about">Your cafeteria QR on the home screen.</string>
+    <string name="widget_friends">Friends</string>
+    <string name="widget_friends_about">Your latest chats, unread messages and who\'s free now.</string>
 </resources>
