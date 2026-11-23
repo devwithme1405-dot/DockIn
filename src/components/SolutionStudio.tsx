@@ -578,7 +578,7 @@ export function CopyStudio({
     setFail(null);
     const t0 = clock();
     try {
-      const r = await submitToLms(instance, copy.blob, copy.name);
+      const r = await submitToLms(instance, copy.blob, copy.name, { url: task.url, title: task.title });
       const rest = 2200 - (clock() - t0);
       if (rest > 0) await sleep(rest);
       await setTaskDone(task.id, true);

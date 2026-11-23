@@ -80,3 +80,16 @@ describe("finding whose name to swap, when the sender got it wrong", () => {
     expect(theirDetails("Roll: E23CSEU0155", { name: "", roll: "" }, me).roll).toBe("");
   });
 });
+
+import { cmidOf } from "@/lib/lmsSubmit";
+describe("the assignment page's id, for submitting to the right assignment", () => {
+  it("reads it from the LMS link", () => {
+    expect(cmidOf("https://lms.bennett.edu.in/mod/assign/view.php?id=8123")).toBe(8123);
+    expect(cmidOf("https://lms.bennett.edu.in/mod/assign/view.php?action=view&id=77#top")).toBe(77);
+  });
+  it("nothing for other links or none", () => {
+    expect(cmidOf("https://lms.bennett.edu.in/mod/quiz/view.php?id=5")).toBeNull();
+    expect(cmidOf(undefined)).toBeNull();
+    expect(cmidOf("")).toBeNull();
+  });
+});

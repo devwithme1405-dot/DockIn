@@ -27,11 +27,25 @@ export class DraftOnly extends Error {
  * Resolves only once the LMS says it is in. "checked" is false on older app
  * builds, which upload fine but cannot ask the LMS afterwards.
  */
-export async function submitToLms(instance: number, blob: Blob, name: string): Promise<{ checked: boolean }> {
+export async function submitToLms(
+  instance: number,
+  blob: Blob,
+  name: string,
+  /** The task's LMS link and title: the phone uses them to be sure it is the right assignment. */
+  hint: { url?: string | null; title?: string | null } = {},
+): Promise<{ checked: boolean }> {
   if (!isNativeApp()) throw new Error("Submitting works in the DockIn app.");
   let res: { status?: string } | void;
+  const cmid = cmidOf(hint.url);
   try {
-    res = await DockIn.lmsSubmit({ instance, name, mime: mimeOf(name, blob.type), data: await toBase64(blob) });
+    res = await DockIn.lmsSubmit({
+      instance,
+      ...(cmid ? { cmid } : {}),
+      ...(hint.title ? { title: hint.title } : {}),
+      name,
+      mime: mimeOf(name, blob.type),
+      data: await toBase64(blob),
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/WEB_ONLY/.test(msg)) throw new WebOnlyLms();
@@ -44,4 +58,10 @@ export async function submitToLms(instance: number, blob: Blob, name: string): P
   const status = (res && res.status) || "";
   if (status === "draft" || status === "new" || status === "reopened") throw new DraftOnly();
   return { checked: status === "submitted" };
+}
+
+/** ".../mod/assign/view.php?id=1234" → 1234 (the assignment page's course-module id). */
+export function cmidOf(url: string | null | undefined): number | null {
+  const m = /\/mod\/assign\/view\.php\?(?:[^#]*&)?id=(\d+)/.exec(url ?? "");
+  return m ? Number(m[1]) : null;
 }

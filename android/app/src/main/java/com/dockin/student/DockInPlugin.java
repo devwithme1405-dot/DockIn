@@ -571,6 +571,9 @@ public class DockInPlugin extends Plugin {
         final String name = call.getString("name");
         final String mime = call.getString("mime", "application/octet-stream");
         final String b64 = call.getString("data");
+        // The assignment page's id (from its link) and its title: to find the right assignment for sure.
+        final Long cmid = longArg(call, "cmid", null);
+        final String title = call.getString("title");
         if (instance == null || name == null || b64 == null) {
             call.reject("Missing the assignment or the file.");
             return;
@@ -582,7 +585,7 @@ public class DockInPlugin extends Plugin {
                 try {
                     byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
                     JSObject res = new JSObject();
-                    res.put("status", Lms.submitAssignment(c, instance, name, mime, data));
+                    res.put("status", Lms.submitAssignment(c, instance, cmid == null ? 0 : cmid, title, name, mime, data));
                     call.resolve(res);
                 } catch (Lms.WebOnly e) {
                     call.reject("WEB_ONLY");

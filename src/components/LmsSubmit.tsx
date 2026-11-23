@@ -69,7 +69,7 @@ export function LmsSubmitSheet({
     if (!file || instance === null) return;
     setBusy(true);
     try {
-      await submitToLms(instance, file.blob, file.name);
+      await submitToLms(instance, file.blob, file.name, { url: lmsUrl, title });
       setDone(true);
       onSubmitted?.();
       toast.show("Submitted on the LMS ✓");
