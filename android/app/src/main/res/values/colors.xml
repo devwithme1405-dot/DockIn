@@ -10,7 +10,8 @@
     <color name="colorPrimaryDark">#7C3D1B</color>
     <color name="colorAccent">#6A3DE8</color>
 
-    <!-- Home-screen widgets (the app's own paper, cards and leather). -->
+    <!-- Home-screen widgets: the app's paper, cards and leather. Light unless the
+         person picks Dark (or System) for widgets in Appearance. -->
     <color name="widget_paper">#F2E4CB</color>
     <color name="widget_card">#FCF5E7</color>
     <color name="widget_line">#E6D2B2</color>
@@ -19,4 +20,12 @@
     <color name="widget_accent">#B85D1C</color>
     <color name="widget_track">#EADAC2</color>
     <color name="widget_highlight">#F5E1C2</color>
+    <color name="widget_paper_dark">#1C140E</color>
+    <color name="widget_card_dark">#2A1F16</color>
+    <color name="widget_line_dark">#3D2C1F</color>
+    <color name="widget_ink_dark">#F6E7D2</color>
+    <color name="widget_muted_dark">#BFA48C</color>
+    <color name="widget_accent_dark">#F0A35E</color>
+    <color name="widget_track_dark">#46331F</color>
+    <color name="widget_highlight_dark">#3D2A1C</color>
 </resources>

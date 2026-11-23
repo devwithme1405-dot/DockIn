@@ -11,7 +11,7 @@ import org.json.JSONObject;
 public class NextClassWidget extends Widgets.Base {
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_next_class);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_next_class, R.layout.widget_next_class_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/timetable", 102));
         JSONArray next = Widgets.upcoming(d);
         if (next.length() == 0) {

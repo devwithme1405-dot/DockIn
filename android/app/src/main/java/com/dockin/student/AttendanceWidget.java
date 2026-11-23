@@ -24,11 +24,11 @@ public class AttendanceWidget extends Widgets.Base {
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_attendance);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_attendance, R.layout.widget_attendance_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/attendance", 101));
         JSONObject a = d.optJSONObject("att");
         if (a == null || a.isNull("pct")) {
-            v.setImageViewBitmap(R.id.w_ring, Widgets.ring(c, 0, 75, Widgets.NEUTRAL, null));
+            v.setImageViewBitmap(R.id.w_ring, Widgets.ring(c, Widgets.dark(c, d), 0, 75, Widgets.NEUTRAL, null));
             v.setTextViewText(R.id.w_big, "No classes yet");
             Widgets.text(v, R.id.w_sub, "Open DockIn to set up attendance");
             Widgets.chip(v, R.id.w_chip, null, null);
@@ -38,7 +38,7 @@ public class AttendanceWidget extends Widgets.Base {
         }
         String tone = a.optString("tone");
         int target = a.optInt("target", 75);
-        v.setImageViewBitmap(R.id.w_ring, Widgets.ring(c, a.optDouble("pct"), target, Widgets.tone(c, tone),
+        v.setImageViewBitmap(R.id.w_ring, Widgets.ring(c, Widgets.dark(c, d), a.optDouble("pct"), target, Widgets.tone(c, tone),
                 a.optInt("present") + "/" + a.optInt("total")));
         Widgets.chip(v, R.id.w_chip, "danger".equals(tone) ? "Below " + target + "%" : "warn".equals(tone) ? "Close call" : "Safe", tone);
         v.setTextViewText(R.id.w_big, a.optString("line"));

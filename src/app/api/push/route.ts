@@ -163,7 +163,19 @@ export async function POST(req: Request): Promise<Response> {
   const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
   const p =
     event.type === "test"
-      ? { to: [me], note: { title: "DockIn notifications work ✓", body: "Messages, shared tasks and requests will show up like this.", path: "/settings", tag: "test" } }
+      ? {
+          to: [me],
+          note: {
+            title: "DockIn notifications work ✓",
+            body: "Messages, shared tasks and requests will show up like this.",
+            path: "/settings",
+            tag: "test",
+            // A receipt too, so the test can tell whether this phone sends ✓✓ back.
+            nid: `test-${Date.now()}`,
+            thread: `test:${me}`,
+            at: new Date().toISOString(),
+          },
+        }
       : await plan(sb, me, event);
   if (!p || p.to.length === 0) return Response.json({ ok: true, sent: 0 });
   // People who muted this chat are not told about its messages.
@@ -254,5 +266,7 @@ export async function POST(req: Request): Promise<Response> {
     }),
   );
   if (dead.length) await sb.from("push_tokens").delete().in("token", dead);
-  return Response.json({ ok: true, sent, tokens: tokens.length, errors: [...new Set(errors)] });
+  // Phones on the new notification system (they show pushes themselves and send ✓✓ receipts).
+  const instant = rows.filter((r) => r.caps?.includes("data1")).length;
+  return Response.json({ ok: true, sent, tokens: tokens.length, instant, errors: [...new Set(errors)] });
 }

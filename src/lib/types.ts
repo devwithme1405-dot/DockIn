@@ -19,6 +19,8 @@ export interface Profile {
   /** What friends may see on the Compare screen. Everything is off until switched on. */
   shareStats?: { attendance: boolean; tasks: boolean; schedule: boolean };
   theme: ThemePref;
+  /** Home-screen widgets: light (the default), dark, or follow the phone. */
+  widgetTheme?: ThemePref;
   onboarded: boolean;
   /** Monthly spending budget in rupees (0 or missing = not set). */
   budget?: number;

@@ -21,12 +21,12 @@ public class FriendsWidget extends Widgets.Base {
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_friends);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_friends, R.layout.widget_friends_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/circle", 107));
         JSONObject f = d.optJSONObject("friends");
         JSONArray chats = f == null ? null : f.optJSONArray("chats");
-        int ink = c.getResources().getColor(R.color.widget_ink, null);
-        int muted = c.getResources().getColor(R.color.widget_muted, null);
+        int ink = Widgets.ink(c, d);
+        int muted = Widgets.muted(c, d);
         int fit = Math.max(1, Math.min(ROWS.length, (heightDp - 70) / 46));
         int n = 0;
         if (chats != null) {

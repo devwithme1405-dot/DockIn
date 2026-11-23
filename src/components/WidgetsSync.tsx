@@ -204,6 +204,8 @@ export function WidgetsSync() {
 
     return {
       v: 1,
+      // Light unless chosen otherwise (Profile → Appearance).
+      theme: profile?.widgetTheme ?? "light",
       att,
       classes,
       tasks: { pending: tasks.length, list: list.map((t) => ({ title: t.title, kind: t.kind, date: t.dueDate, time: t.dueTime })) },

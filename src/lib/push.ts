@@ -229,12 +229,13 @@ export async function testPush(): Promise<string> {
   const token = data.session?.access_token;
   if (!token) return "Sign in first — notifications are tied to your account.";
   try {
+    const sentAt = Date.now();
     const res = await fetch("/api/push", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ type: "test" }),
     });
-    const j = (await res.json().catch(() => ({}))) as { sent?: number; tokens?: number; reason?: string; errors?: string[] };
+    const j = (await res.json().catch(() => ({}))) as { sent?: number; tokens?: number; instant?: number; reason?: string; errors?: string[] };
     if (res.status === 503) return "The server isn't set up for notifications yet (Firebase key missing on Vercel).";
     if (!res.ok) return `The server said ${res.status}.`;
     if (!j.tokens) {
@@ -242,7 +243,18 @@ export async function testPush(): Promise<string> {
       return d.error ? `This phone isn't registered: ${d.error}` : "This phone isn't registered yet — allow notifications and reopen the app.";
     }
     if (!j.sent) return `Couldn't deliver (${(j.errors ?? []).join(", ") || "unknown"}).`;
-    return "Sent! It should pop up in a moment.";
+    if (!j.instant) {
+      return "Sent! But this phone is on the old notification system: friends see ✓✓ only when you open DockIn. Install the latest DockIn and open it once.";
+    }
+    // Wait for this phone's own ✓✓ receipt to reach the server.
+    const me = data.session?.user.id;
+    for (let i = 0; i < 14 && me; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const { data: row } = await sb.from("thread_reads").select("delivered_at").eq("user_id", me).eq("thread", `test:${me}`).maybeSingle();
+      const at = row?.delivered_at ? Date.parse(row.delivered_at as string) : 0;
+      if (at >= sentAt - 60_000) return "Sent! And this phone sent its ✓✓ receipt back — instant double ticks work here.";
+    }
+    return "Sent, but this phone's ✓✓ receipt didn't come back within 20 s. Set DockIn's battery to Unrestricted, and make sure the latest DockIn is installed.";
   } catch {
     return "No internet right now.";
   }

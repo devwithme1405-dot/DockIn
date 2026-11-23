@@ -18,13 +18,14 @@ public class TodayWidget extends Widgets.Base {
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_today);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_today, R.layout.widget_today_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/timetable", 103));
         JSONArray all = d.optJSONArray("classes");
         String today = Widgets.today();
         String now = Widgets.nowHm();
-        int ink = c.getResources().getColor(R.color.widget_ink, null);
-        int muted = c.getResources().getColor(R.color.widget_muted, null);
+        boolean night = Widgets.dark(c, d);
+        int ink = Widgets.ink(c, d);
+        int muted = Widgets.muted(c, d);
         // As many rows as fit.
         int fit = Math.max(2, Math.min(ROWS.length, (heightDp - 62) / 30));
         int n = 0, total = 0, left = 0;
@@ -41,10 +42,10 @@ public class TodayWidget extends Widgets.Base {
                 v.setTextViewText(TIMES[n], Widgets.clock(k.optString("from")));
                 v.setTextViewText(NAMES[n], k.optString("name", "Class"));
                 Widgets.text(v, ROOMS[n], k.optString("room"));
-                v.setImageViewResource(DOTS[n], over ? R.drawable.dot_past : on ? R.drawable.dot_accent : R.drawable.dot_info);
+                v.setImageViewResource(DOTS[n], over ? (night ? R.drawable.dot_past_dark : R.drawable.dot_past) : on ? R.drawable.dot_accent : R.drawable.dot_info);
                 v.setTextColor(NAMES[n], over ? muted : ink);
                 v.setTextColor(TIMES[n], on ? Widgets.ACCENT : muted);
-                v.setInt(ROWS[n], "setBackgroundResource", on ? R.drawable.widget_row_now : 0);
+                v.setInt(ROWS[n], "setBackgroundResource", on ? (night ? R.drawable.widget_row_now_dark : R.drawable.widget_row_now) : 0);
                 n++;
             }
         }

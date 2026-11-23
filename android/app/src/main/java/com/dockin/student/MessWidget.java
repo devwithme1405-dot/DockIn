@@ -20,7 +20,7 @@ public class MessWidget extends Widgets.Base {
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_mess);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_mess, R.layout.widget_mess_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/cafeteria", 105));
         JSONObject mess = d.optJSONObject("mess");
         JSONArray meals = mess == null || !Widgets.today().equals(mess.optString("date")) ? null : mess.optJSONArray("meals");

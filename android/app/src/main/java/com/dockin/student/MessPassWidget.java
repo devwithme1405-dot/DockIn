@@ -16,7 +16,7 @@ import org.json.JSONObject;
 public class MessPassWidget extends Widgets.Base {
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_mess_pass);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_mess_pass, R.layout.widget_mess_pass_dark));
         Intent open = new Intent(c, PassActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         v.setOnClickPendingIntent(R.id.w_root, PendingIntent.getActivity(c, 106, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         String who = d.optString("passName", "");

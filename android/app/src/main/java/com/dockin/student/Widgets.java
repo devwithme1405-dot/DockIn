@@ -212,8 +212,27 @@ final class Widgets {
         return DAYS[k.get(Calendar.DAY_OF_WEEK) - 1] + " " + k.get(Calendar.DAY_OF_MONTH) + " " + MONTHS[k.get(Calendar.MONTH)];
     }
 
-    static boolean dark(Context c) {
+    /**
+     * Widgets are light unless the person chose Dark — or System, and the phone
+     * is in dark mode (Profile → Appearance → Home-screen widgets).
+     */
+    static boolean dark(Context c, JSONObject d) {
+        String t = d.optString("theme", "light");
+        if ("dark".equals(t)) return true;
+        if (!"system".equals(t)) return false;
         return (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    static int layout(Context c, JSONObject d, int light, int dark) {
+        return dark(c, d) ? dark : light;
+    }
+
+    static int ink(Context c, JSONObject d) {
+        return dark(c, d) ? 0xFFF6E7D2 : 0xFF3B2416;
+    }
+
+    static int muted(Context c, JSONObject d) {
+        return dark(c, d) ? 0xFFBFA48C : 0xFF8A6A52;
     }
 
     static float density(Context c) {
@@ -235,12 +254,11 @@ final class Widgets {
      * The attendance ring: the track, the coloured arc, a tick at the target,
      * the percentage in the middle and "of N" under it.
      */
-    static Bitmap ring(Context c, double pct, int target, int color, String under) {
+    static Bitmap ring(Context c, boolean night, double pct, int target, int color, String under) {
         float d = density(c);
         int size = Math.round(78 * d * 2) / 2 * 2;
         Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas k = new Canvas(b);
-        boolean night = dark(c);
         float stroke = 8 * d;
         RectF box = new RectF(stroke / 2 + d, stroke / 2 + d, size - stroke / 2 - d, size - stroke / 2 - d);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);

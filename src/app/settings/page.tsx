@@ -425,6 +425,30 @@ export default function ProfilePage() {
         </div>
         <p className="mt-2 text-[12.5px] text-muted">System follows your phone and switches on its own.</p>
 
+        {isNativeApp() && (
+          <>
+            <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Home-screen widgets</p>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Widget theme">
+              {THEMES.map(({ id, label, icon: Icon }) => {
+                const on = (profile.widgetTheme ?? "light") === id;
+                return (
+                  <button
+                    key={id}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => void saveProfile({ widgetTheme: id })}
+                    className={cx("lip-sm flex h-11 items-center justify-center gap-1.5 rounded-full text-sm", on ? "btn-leather" : "btn-paper")}
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[12.5px] text-muted">Light by default. System makes them dark when your phone is in dark mode.</p>
+          </>
+        )}
+
         <p className="mt-5 mb-1.5 text-[13px] font-medium text-muted">Text size</p>
         <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Text size">
           {TEXT_SCALES.map((scale, i) => (

@@ -25,7 +25,7 @@ public class TasksWidget extends Widgets.Base {
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
-        RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_tasks);
+        RemoteViews v = new RemoteViews(c.getPackageName(), Widgets.layout(c, d, R.layout.widget_tasks, R.layout.widget_tasks_dark));
         v.setOnClickPendingIntent(R.id.w_root, Widgets.open(c, "/tasks", 104));
         JSONObject t = d.optJSONObject("tasks");
         JSONArray list = t == null ? null : t.optJSONArray("list");
