@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The pressed-in tile for the icon on the leather plate. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/widget_tile" />
-    <corners android:radius="11dp" />
+    <solid android:color="#2E000000" />
+    <corners android:radius="12dp" />
+    <stroke android:width="1dp" android:color="#26FFD2A0" />
 </shape>

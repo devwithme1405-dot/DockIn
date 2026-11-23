@@ -94,6 +94,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- The mess pass full screen, opened from its widget: instant, works offline,
+             its own little task so Back goes straight home. -->
+        <activity
+            android:name=".PassActivity"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:taskAffinity="com.dockin.student.pass"
+            android:excludeFromRecents="true"
+            android:screenOrientation="portrait"
+            android:exported="false" />
+
         <!-- Redraws the widgets as the clock moves (next class, serving now). -->
         <receiver
             android:name=".WidgetTick"

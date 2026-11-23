@@ -181,23 +181,35 @@ final class Widgets {
         return NEUTRAL;
     }
 
-    /** A rounded pill in the header: "Safe", "in 20 min", "3 unread". Null hides it. */
+    /** A pill on the leather plate: "Safe", "in 20 min", "3 unread". Null hides it. */
     static void chip(RemoteViews v, int id, String label, String tone) {
         if (label == null || label.isEmpty()) {
             v.setViewVisibility(id, View.GONE);
             return;
         }
         int bg = R.drawable.chip_neutral;
-        int fg = NEUTRAL;
-        if ("safe".equals(tone)) { bg = R.drawable.chip_safe; fg = SAFE; }
-        else if ("warn".equals(tone)) { bg = R.drawable.chip_warn; fg = WARN; }
-        else if ("danger".equals(tone)) { bg = R.drawable.chip_danger; fg = DANGER; }
-        else if ("accent".equals(tone)) { bg = R.drawable.chip_accent; fg = ACCENT; }
-        else if ("info".equals(tone)) { bg = R.drawable.chip_info; fg = 0xFF3D7BD9; }
+        if ("safe".equals(tone)) bg = R.drawable.chip_safe;
+        else if ("warn".equals(tone)) bg = R.drawable.chip_warn;
+        else if ("danger".equals(tone)) bg = R.drawable.chip_danger;
+        else if ("accent".equals(tone)) bg = R.drawable.chip_accent;
+        else if ("info".equals(tone)) bg = R.drawable.chip_info;
         v.setInt(id, "setBackgroundResource", bg);
-        v.setTextColor(id, fg);
+        v.setTextColor(id, bg == R.drawable.chip_neutral ? 0xFFFFF1DD : 0xFFFFFFFF);
         v.setTextViewText(id, label);
         v.setViewVisibility(id, View.VISIBLE);
+    }
+
+    /** The small line under the title on the leather plate. */
+    static void sub(RemoteViews v, String s) {
+        text(v, R.id.w_hsub, s);
+    }
+
+    static final String[] DAYS = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+    /** "Mon 23 Nov". */
+    static String todayLabel() {
+        Calendar k = Calendar.getInstance();
+        return DAYS[k.get(Calendar.DAY_OF_WEEK) - 1] + " " + k.get(Calendar.DAY_OF_MONTH) + " " + MONTHS[k.get(Calendar.MONTH)];
     }
 
     static boolean dark(Context c) {

@@ -107,7 +107,7 @@ export function WidgetsSync() {
   useEffect(() => {
     if (!qrValue || pass?.value === qrValue) return;
     let alive = true;
-    QRCode.toDataURL(qrValue, { width: 360, margin: 1, errorCorrectionLevel: "M" })
+    QRCode.toDataURL(qrValue, { width: 720, margin: 2, errorCorrectionLevel: "M" })
       .then((png) => alive && setPass({ value: qrValue, png }))
       .catch(() => {});
     return () => {
@@ -209,7 +209,11 @@ export function WidgetsSync() {
       tasks: { pending: tasks.length, list: list.map((t) => ({ title: t.title, kind: t.kind, date: t.dueDate, time: t.dueTime })) },
       friends: friendsPart,
       mess: { date: today, meals },
+      // The pass opens full screen from its widget, offline too: the QR big, and whose it is.
       pass: pass && pass.value === qrValue ? pass.png : null,
+      passName: profile?.name?.trim() ?? "",
+      passSub: profile?.roll?.trim() ?? "",
+      passPlace: camu?.cafeteria?.facility || "Cafeteria",
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tick: re-work "free now" as time passes
   }, [profile, tasks, data, target, subjects, slots, camu, today, pass, qrValue, threads, recent, people, groups, friendRows, stats, smallPhotos, photoVersion, tick]);

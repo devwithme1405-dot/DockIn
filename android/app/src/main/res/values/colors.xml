@@ -10,15 +10,13 @@
     <color name="colorPrimaryDark">#7C3D1B</color>
     <color name="colorAccent">#6A3DE8</color>
 
-    <!-- Home-screen widgets. -->
-    <color name="widget_bg_top">#FFFAF2</color>
-    <color name="widget_bg_bottom">#F5E3C8</color>
-    <color name="widget_line">#E8D2B0</color>
+    <!-- Home-screen widgets (the app's own paper, cards and leather). -->
+    <color name="widget_paper">#F2E4CB</color>
+    <color name="widget_card">#FCF5E7</color>
+    <color name="widget_line">#E6D2B2</color>
     <color name="widget_ink">#3B2416</color>
     <color name="widget_muted">#8A6A52</color>
     <color name="widget_accent">#B85D1C</color>
-    <color name="widget_tile">#F2DCBD</color>
-    <color name="widget_card">#FFFDF8</color>
     <color name="widget_track">#EADAC2</color>
-    <color name="widget_highlight">#F6E2C4</color>
+    <color name="widget_highlight">#F5E1C2</color>
 </resources>

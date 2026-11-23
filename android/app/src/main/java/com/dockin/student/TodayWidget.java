@@ -7,7 +7,6 @@ import android.widget.RemoteViews;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.Calendar;
 
 /** Today's classes as a timeline: done ones faded, the one on now highlighted. */
 public class TodayWidget extends Widgets.Base {
@@ -16,7 +15,6 @@ public class TodayWidget extends Widgets.Base {
     static final int[] DOTS = {R.id.w_d1, R.id.w_d2, R.id.w_d3, R.id.w_d4, R.id.w_d5, R.id.w_d6};
     static final int[] NAMES = {R.id.w_a1, R.id.w_a2, R.id.w_a3, R.id.w_a4, R.id.w_a5, R.id.w_a6};
     static final int[] ROOMS = {R.id.w_b1, R.id.w_b2, R.id.w_b3, R.id.w_b4, R.id.w_b5, R.id.w_b6};
-    static final String[] DAYS = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
     @Override
     RemoteViews draw(Context c, JSONObject d, int heightDp) {
@@ -51,10 +49,9 @@ public class TodayWidget extends Widgets.Base {
             }
         }
         for (int i = n; i < ROWS.length; i++) v.setViewVisibility(ROWS[i], View.GONE);
-        Calendar k = Calendar.getInstance();
-        String date = DAYS[k.get(Calendar.DAY_OF_WEEK) - 1] + " " + k.get(Calendar.DAY_OF_MONTH) + " " + Widgets.MONTHS[k.get(Calendar.MONTH)];
+        Widgets.sub(v, Widgets.todayLabel());
         if (total == 0) {
-            Widgets.chip(v, R.id.w_chip, date, "neutral");
+            Widgets.chip(v, R.id.w_chip, null, null);
             Widgets.text(v, R.id.w_empty, "No classes today 🎉  Enjoy!");
         } else {
             Widgets.chip(v, R.id.w_chip, left == 0 ? "All done ✓" : left + " of " + total + " left", left == 0 ? "safe" : "accent");

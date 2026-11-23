@@ -54,6 +54,7 @@ public class TasksWidget extends Widgets.Base {
         Widgets.chip(v, R.id.w_chip, pending > 0 ? pending + " pending" : null, "accent");
         Widgets.chip(v, R.id.w_chip2, overdue > 0 ? overdue + " overdue" : null, "danger");
         Widgets.text(v, R.id.w_empty, n == 0 ? "All clear — nothing pending ✨" : null);
+        Widgets.sub(v, n == 0 ? "Nothing due" : overdue > 0 ? "Overdue first, then soonest" : "Soonest first");
         return v;
     }
 }

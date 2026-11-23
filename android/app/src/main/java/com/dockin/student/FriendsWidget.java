@@ -55,6 +55,7 @@ public class FriendsWidget extends Widgets.Base {
         for (int i = n; i < ROWS.length; i++) v.setViewVisibility(ROWS[i], View.GONE);
         int unread = f == null ? 0 : f.optInt("unread");
         Widgets.chip(v, R.id.w_chip, unread > 0 ? unread + " unread" : null, "accent");
+        Widgets.sub(v, unread > 0 ? "New messages waiting" : "Your chats and groups");
         Widgets.text(v, R.id.w_empty, n == 0 ? (f == null ? "Sign in to Friends in DockIn" : "No chats yet — say hi to a friend 👋") : null);
         String free = f == null ? "" : f.optString("free", "");
         boolean showFree = !free.isEmpty() && heightDp >= 170;

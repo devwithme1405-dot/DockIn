@@ -16,6 +16,7 @@ public class NextClassWidget extends Widgets.Base {
         JSONArray next = Widgets.upcoming(d);
         if (next.length() == 0) {
             v.setTextViewText(R.id.w_label, "Next class");
+            Widgets.sub(v, Widgets.todayLabel());
             v.setTextViewText(R.id.w_name, "No classes coming up 🎉");
             Widgets.text(v, R.id.w_when, "Enjoy the free time");
             Widgets.text(v, R.id.w_room, null);
@@ -31,6 +32,7 @@ public class NextClassWidget extends Widgets.Base {
         boolean isToday = today.equals(date);
         boolean on = isToday && k.optString("from").compareTo(now) <= 0;
         v.setTextViewText(R.id.w_label, on ? "On now" : "Next class");
+        Widgets.sub(v, isToday ? "Today · " + Widgets.todayLabel() : Widgets.tomorrow().equals(date) ? "Tomorrow" : Widgets.due(date, null));
         v.setTextViewText(R.id.w_name, k.optString("name", "Class"));
         String day = isToday ? "" : Widgets.tomorrow().equals(date) ? "Tomorrow · " : Widgets.due(date, null) + " · ";
         Widgets.text(v, R.id.w_when, "⏰ " + day + Widgets.clock(k.optString("from")) + " – " + Widgets.clock(k.optString("to")));

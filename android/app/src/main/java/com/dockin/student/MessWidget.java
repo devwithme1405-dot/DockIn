@@ -56,7 +56,8 @@ public class MessWidget extends Widgets.Base {
         boolean serving = from.isEmpty() || from.compareTo(now) <= 0;
         v.setTextViewText(R.id.w_icon, emoji(meal));
         v.setTextViewText(R.id.w_label, meal);
-        Widgets.chip(v, R.id.w_chip, serving ? (to.isEmpty() ? "Serving now" : "Till " + Widgets.clock(to)) : "From " + Widgets.clock(from), serving ? "safe" : "info");
+        Widgets.sub(v, (serving ? "Serving now" : "Next up") + " · " + Widgets.todayLabel());
+        Widgets.chip(v, R.id.w_chip, serving ? (to.isEmpty() ? "Now" : "Till " + Widgets.clock(to)) : "From " + Widgets.clock(from), serving ? "safe" : "info");
         StringBuilder items = new StringBuilder();
         int max = Math.max(2, (heightDp - 80) / 20);
         int lines = 0;

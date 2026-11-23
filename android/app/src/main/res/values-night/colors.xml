@@ -2,15 +2,13 @@
 <resources>
     <color name="page">#1C140E</color>
 
-    <!-- Home-screen widgets. -->
-    <color name="widget_bg_top">#3A281C</color>
-    <color name="widget_bg_bottom">#231710</color>
-    <color name="widget_line">#4D3626</color>
+    <!-- Home-screen widgets (the app's own paper, cards and leather). -->
+    <color name="widget_paper">#1C140E</color>
+    <color name="widget_card">#2A1F16</color>
+    <color name="widget_line">#3D2C1F</color>
     <color name="widget_ink">#F6E7D2</color>
     <color name="widget_muted">#BFA48C</color>
     <color name="widget_accent">#F0A35E</color>
-    <color name="widget_tile">#4A3322</color>
-    <color name="widget_card">#2E2016</color>
-    <color name="widget_track">#4D3626</color>
-    <color name="widget_highlight">#46301F</color>
+    <color name="widget_track">#46331F</color>
+    <color name="widget_highlight">#3D2A1C</color>
 </resources>

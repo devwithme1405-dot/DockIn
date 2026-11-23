@@ -32,6 +32,7 @@ public class AttendanceWidget extends Widgets.Base {
             v.setTextViewText(R.id.w_big, "No classes yet");
             Widgets.text(v, R.id.w_sub, "Open DockIn to set up attendance");
             Widgets.chip(v, R.id.w_chip, null, null);
+            Widgets.sub(v, null);
             v.setViewVisibility(R.id.w_subjects, View.GONE);
             return v;
         }
@@ -41,7 +42,8 @@ public class AttendanceWidget extends Widgets.Base {
                 a.optInt("present") + "/" + a.optInt("total")));
         Widgets.chip(v, R.id.w_chip, "danger".equals(tone) ? "Below " + target + "%" : "warn".equals(tone) ? "Close call" : "Safe", tone);
         v.setTextViewText(R.id.w_big, a.optString("line"));
-        Widgets.text(v, R.id.w_sub, "Target " + target + "% · " + a.optInt("total") + " classes so far");
+        Widgets.sub(v, "Target " + target + "%");
+        Widgets.text(v, R.id.w_sub, a.optInt("present") + " of " + a.optInt("total") + " classes attended");
 
         // The subjects nearest the line, when there's room.
         JSONArray subs = a.optJSONArray("subjects");
