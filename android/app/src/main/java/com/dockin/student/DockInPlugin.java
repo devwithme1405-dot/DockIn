@@ -564,7 +564,10 @@ public class DockInPlugin extends Plugin {
     /** Submits a file to this student's own LMS assignment, with their saved login. */
     @PluginMethod
     public void lmsSubmit(final PluginCall call) {
-        final Long instance = call.getLong("instance");
+        // Not call.getLong: a small number arrives from JavaScript as an Integer,
+        // and Capacitor's getLong only accepts a Long — every hand-in failed with
+        // "Missing the assignment" because of it.
+        final Long instance = longArg(call, "instance", null);
         final String name = call.getString("name");
         final String mime = call.getString("mime", "application/octet-stream");
         final String b64 = call.getString("data");
@@ -770,6 +773,20 @@ public class DockInPlugin extends Plugin {
         call.resolve();
     }
 
+    /** A whole number from JavaScript, however the bridge typed it (Integer, Long, Double or text). */
+    static Long longArg(PluginCall call, String name, Long fallback) {
+        Object v = call.getData() == null ? null : call.getData().opt(name);
+        if (v instanceof Number) return ((Number) v).longValue();
+        if (v instanceof String) {
+            try {
+                return Long.parseLong(((String) v).trim());
+            } catch (NumberFormatException ignored) {
+                // fall through
+            }
+        }
+        return fallback;
+    }
+
     /** What was shared into DockIn (text, subject, files copied into the cache), once. */
     @PluginMethod
     public void takeShare(PluginCall call) {
@@ -789,7 +806,7 @@ public class DockInPlugin extends Plugin {
     @PluginMethod
     public void readShared(final PluginCall call) {
         final String path = call.getString("path");
-        final long offset = call.getLong("offset", 0L);
+        final long offset = longArg(call, "offset", 0L);
         final int length = Math.max(1, Math.min(call.getInt("length", 1 << 20), 4 << 20));
         if (path == null) {
             call.reject("No file.");

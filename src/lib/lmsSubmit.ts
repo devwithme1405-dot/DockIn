@@ -35,6 +35,10 @@ export async function submitToLms(instance: number, blob: Blob, name: string): P
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/WEB_ONLY/.test(msg)) throw new WebOnlyLms();
+    // Older DockIn builds misread the assignment number and refuse every hand-in.
+    if (/Missing the assignment or the file/i.test(msg)) {
+      throw new Error("This needs the latest DockIn. Update the app and try again — or Save file and upload it on the LMS.");
+    }
     throw new Error(msg || "Could not submit.");
   }
   const status = (res && res.status) || "";
