@@ -25,6 +25,7 @@ export const RELEASES: Release[] = [
     app: true,
     items: [
       "Submitting to the LMS first confirms the assignment with the LMS itself, so the file always goes to the right one (fixes “Can't find data record in database table assign”).",
+      "When the LMS won't take a file — closed, wrong file type, too big, already submitted — DockIn says exactly why, before uploading (no more bare “Could not save submission”).",
       "If the network drops half-way, the hand-in is retried by itself.",
       "Forwarded documents now open for the people you forward them to.",
       "Name swap in PDFs never writes the new name in a guessed place, and course codes like CSET207 are never mistaken for an enrollment number.",

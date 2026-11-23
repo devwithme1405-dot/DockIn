@@ -83,6 +83,37 @@ public final class LmsResolveTest {
         }
     }
 
+    static void checkS(String what, String got, String want) {
+        if (got == null ? want == null : got.equals(want)) System.out.println("ok   " + what);
+        else {
+            failed++;
+            System.out.println("FAIL " + what + ": got " + got + ", want " + want);
+        }
+    }
+
+    static String startsWith(String s, String head) {
+        return s != null && s.startsWith(head) ? "yes" : String.valueOf(s);
+    }
+
+    /** One assignment (id 502) with these file settings, and this student's submission state. */
+    static Lms.Ws settings(String types, String filesOn, long cutoff, long maxBytes, boolean canEdit, String status) {
+        return (fn, args) -> {
+            if ("mod_assign_get_assignments".equals(fn)) {
+                JSONArray cfg = new JSONArray()
+                        .put(new JSONObject().put("plugin", "file").put("subtype", "assignsubmission").put("name", "enabled").put("value", filesOn))
+                        .put(new JSONObject().put("plugin", "file").put("subtype", "assignsubmission").put("name", "filetypeslist").put("value", types))
+                        .put(new JSONObject().put("plugin", "file").put("subtype", "assignsubmission").put("name", "maxsubmissionsizebytes").put("value", String.valueOf(maxBytes)));
+                JSONObject a = new JSONObject().put("id", 502L).put("cmid", 9002L).put("cutoffdate", cutoff).put("configs", cfg);
+                return new JSONObject().put("courses", new JSONArray().put(new JSONObject().put("assignments", new JSONArray().put(a))));
+            }
+            if ("mod_assign_get_submission_status".equals(fn)) {
+                return new JSONObject().put("lastattempt", new JSONObject().put("canedit", canEdit)
+                        .put("submission", new JSONObject().put("status", status)));
+            }
+            throw new IOException("unknown " + fn);
+        };
+    }
+
     static Fake moodle() {
         return new Fake(new long[][] {{501, 9001}, {502, 9002}, {503, 9003}},
                 new String[] {"Assignment 9", "assignment 10", "Lab report"});
@@ -131,6 +162,24 @@ public final class LmsResolveTest {
 
         check("Lms.cmidOf link", Lms.cmidOf("https://lms.bennett.edu.in/mod/assign/view.php?action=editsubmission&id=42"), 42);
         check("Lms.cmidOf other", Lms.cmidOf("https://lms.bennett.edu.in/mod/quiz/view.php?id=42"), 0);
+
+        // --- Will the LMS take this file? Asked before uploading.
+        checkS("open, pdf allowed", Lms.cannotTake(settings(".pdf,.docx", "1", 0, 0, true, "new"), 502, "a.pdf", 1000), null);
+        checkS("docx where only pdf", Lms.cannotTake(settings(".pdf", "1", 0, 0, true, "new"), 502, "a.docx", 1000),
+                "The LMS only takes .pdf files for this assignment. Choose PDF in DockIn and submit again.");
+        checkS("group type: let the LMS judge", Lms.cannotTake(settings("document", "1", 0, 0, true, "new"), 502, "a.zip", 1000), null);
+        checkS("closed by cut-off", startsWith(Lms.cannotTake(settings("", "1", System.currentTimeMillis() / 1000 - 60, 0, true, "new"), 502, "a.pdf", 10), "The LMS has closed"), "yes");
+        checkS("files off", startsWith(Lms.cannotTake(settings("", "0", 0, 0, true, "new"), 502, "a.pdf", 10), "This assignment doesn't take a file"), "yes");
+        checkS("too big", startsWith(Lms.cannotTake(settings("", "1", 0, 1048576, true, "new"), 502, "a.pdf", 2_000_000), "The LMS takes files up to 1 MB"), "yes");
+        checkS("already submitted, no changes", startsWith(Lms.cannotTake(settings("", "1", 0, 0, false, "submitted"), 502, "a.pdf", 10), "You've already submitted"), "yes");
+
+        // --- Moodle's save warning: the reason is in "item".
+        JSONArray w = new JSONArray().put(new JSONObject().put("item", "Nothing was submitted").put("itemid", 502)
+                .put("warningcode", "couldnotsavesubmission").put("message", "Could not save submission."));
+        checkS("save refusal shows the reason", Lms.saveRefusal(w), "The LMS didn't save it: Nothing was submitted.");
+        JSONArray bare = new JSONArray().put(new JSONObject().put("item", "assignment").put("warningcode", "couldnotsavesubmission")
+                .put("message", "Could not save submission."));
+        checkS("save refusal without a reason", startsWith(Lms.saveRefusal(bare), "The LMS didn't save it (couldnotsavesubmission)"), "yes");
 
         if (failed > 0) {
             System.out.println(failed + " failed");

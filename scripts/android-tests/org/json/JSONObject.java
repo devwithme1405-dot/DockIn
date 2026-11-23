@@ -19,8 +19,8 @@ public class JSONObject {
   public int length() { return 0; }
   public String optString(String k) { return optString(k, ""); }
   public String optString(String k, String d) { Object v = m.get(k); return v == null ? d : String.valueOf(v); }
-  public boolean optBoolean(String k) { return false; }
-  public boolean optBoolean(String k, boolean d) { return d; }
+  public boolean optBoolean(String k) { return optBoolean(k, false); }
+  public boolean optBoolean(String k, boolean d) { Object v = m.get(k); return v instanceof Boolean ? (Boolean) v : d; }
   public int optInt(String k) { return 0; }
   public int optInt(String k, int d) { return d; }
   public long optLong(String k) { return optLong(k, 0); }

@@ -191,6 +191,9 @@ final class Lms {
             }
         };
         long id = resolveAssign(ws, assignId, cmid, title);
+        // Ask before uploading: a file the LMS will refuse is told now, in words.
+        String why = cannotTake(ws, id, fileName, data.length);
+        if (why != null) throw new IOException(why);
         try {
             return submitWithToken(token, id, fileName, mime, data);
         } catch (java.net.SocketTimeoutException | java.net.UnknownHostException | java.net.ConnectException
@@ -199,6 +202,142 @@ final class Lms {
             // submission per student and the new file replaces the draft.
             return submitWithToken(token, id, fileName, mime, data);
         }
+    }
+
+    /**
+     * Why the LMS would refuse this file for this assignment — closed, already
+     * handed in and locked, wrong file type, too big — or null when it should
+     * take it (or the LMS won't say). Read from Moodle's own settings for the
+     * assignment and this student's submission, before anything is uploaded.
+     */
+    static String cannotTake(Ws ws, long id, String fileName, long size) throws Refused, JSONException {
+        JSONObject a = null;
+        try {
+            JSONArray courses = ws.call("mod_assign_get_assignments", new LinkedHashMap<String, String>()).optJSONArray("courses");
+            for (int i = 0; a == null && courses != null && i < courses.length(); i++) {
+                JSONObject c = courses.optJSONObject(i);
+                JSONArray list = c == null ? null : c.optJSONArray("assignments");
+                for (int k = 0; list != null && k < list.length(); k++) {
+                    JSONObject x = list.optJSONObject(k);
+                    if (x != null && x.optLong("id", 0) == id) {
+                        a = x;
+                        break;
+                    }
+                }
+            }
+        } catch (IOException ignored) {
+            // Settings not readable here: the status below still helps.
+        }
+        long now = System.currentTimeMillis() / 1000;
+        if (a != null) {
+            long opens = a.optLong("allowsubmissionsfromdate", 0);
+            long cutoff = a.optLong("cutoffdate", 0);
+            if (opens > now) return "This assignment isn't open for submissions on the LMS yet.";
+            if (cutoff > 0 && cutoff < now) return "The LMS has closed this assignment (the last date to submit has passed). Ask your teacher, or Save file.";
+
+            boolean filesOn = true;
+            String types = "";
+            long maxBytes = 0;
+            JSONArray configs = a.optJSONArray("configs");
+            boolean sawFile = false;
+            for (int i = 0; configs != null && i < configs.length(); i++) {
+                JSONObject cf = configs.optJSONObject(i);
+                if (cf == null || !"file".equals(cf.optString("plugin", "")) || !"assignsubmission".equals(cf.optString("subtype", ""))) continue;
+                sawFile = true;
+                String name = cf.optString("name", "");
+                String value = cf.optString("value", "");
+                if ("enabled".equals(name)) filesOn = "1".equals(value);
+                else if ("filetypeslist".equals(name)) types = value;
+                else if ("maxsubmissionsizebytes".equals(name)) maxBytes = parseLong(value);
+            }
+            if (sawFile && !filesOn) return "This assignment doesn't take a file on the LMS (only typed text). Open the LMS to answer it there.";
+            String bad = wrongType(types, fileName);
+            if (bad != null) return bad;
+            if (maxBytes > 0 && size > maxBytes) {
+                return "The LMS takes files up to " + (maxBytes >= 1048576 ? (maxBytes / 1048576) + " MB" : (maxBytes / 1024) + " KB")
+                        + " here, and this one is bigger. Save as PDF or make it smaller.";
+            }
+        }
+        try {
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put("assignid", String.valueOf(id));
+            JSONObject st = ws.call("mod_assign_get_submission_status", q);
+            JSONObject last = st.optJSONObject("lastattempt");
+            if (last != null) {
+                JSONObject sub = last.optJSONObject("submission");
+                if ((sub == null || sub.optString("status", "").isEmpty())) sub = last.optJSONObject("teamsubmission");
+                String status = sub == null ? "" : sub.optString("status", "");
+                if (last.optBoolean("locked", false)) return "Your teacher has locked submissions for this assignment on the LMS.";
+                if (last.has("canedit") && !last.optBoolean("canedit", true)) {
+                    if ("submitted".equals(status)) {
+                        return "You've already submitted this on the LMS, and it doesn't allow changing it. Open the LMS to check.";
+                    }
+                    if ("graded".equals(last.optString("gradingstatus", ""))) return "This assignment is already graded, so the LMS won't take a new file.";
+                    return "The LMS isn't taking submissions for this assignment right now (closed or past the due date). Open the LMS to check.";
+                }
+            }
+        } catch (IOException ignored) {
+            // Can't ask: try, and show what the LMS answers.
+        }
+        return null;
+    }
+
+    /** "The LMS only takes .pdf here" when the list is plain extensions and this file isn't one. */
+    static String wrongType(String types, String fileName) {
+        if (types == null || types.trim().isEmpty() || fileName == null) return null;
+        String name = fileName.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<String> exts = new java.util.ArrayList<>();
+        for (String t : types.split("[,;\\s]+")) {
+            t = t.trim().toLowerCase(java.util.Locale.ROOT);
+            if (t.isEmpty()) continue;
+            if (t.equals("*")) return null;
+            // A group name ("document", "web_file") or a MIME type: can't judge it here, let the LMS decide.
+            if (!t.startsWith(".")) return null;
+            exts.add(t);
+            if (name.endsWith(t)) return null;
+        }
+        if (exts.isEmpty()) return null;
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < exts.size(); i++) b.append(i == 0 ? "" : i == exts.size() - 1 ? " or " : ", ").append(exts.get(i));
+        boolean pdf = exts.contains(".pdf");
+        return "The LMS only takes " + b + " files for this assignment." + (pdf ? " Choose PDF in DockIn and submit again." : "");
+    }
+
+    private static long parseLong(String v) {
+        try {
+            return Long.parseLong(v.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Moodle's save warnings say "Could not save submission." in `message` and
+     * keep the real reason (its own notice) in `item`. Show the reason.
+     */
+    static String saveRefusal(JSONArray warnings) {
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < warnings.length(); i++) {
+            JSONObject w = warnings.optJSONObject(i);
+            if (w == null) continue;
+            String item = w.optString("item", "").trim();
+            String msg = w.optString("message", "").trim();
+            String why = item.isEmpty() || "assignment".equalsIgnoreCase(item) || "assign".equalsIgnoreCase(item) ? "" : item;
+            // Some versions put the reason in the message instead.
+            if (why.isEmpty() && !msg.isEmpty() && !msg.toLowerCase(java.util.Locale.ROOT).startsWith("could not save submission")) why = msg;
+            if (why.isEmpty()) continue;
+            if (b.indexOf(why) >= 0) continue;
+            if (b.length() > 0) b.append(' ');
+            b.append(why.endsWith(".") ? why : why + ".");
+        }
+        String reason = b.toString().replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+        if (reason.isEmpty()) {
+            JSONObject w = warnings.optJSONObject(0);
+            String code = w == null ? "" : w.optString("warningcode", "");
+            return "The LMS didn't save it" + (code.isEmpty() ? "" : " (" + code + ")")
+                    + ". It may be closed or already submitted — open the LMS to check, or Save file.";
+        }
+        return "The LMS didn't save it: " + reason;
     }
 
     /** One Moodle web-service call. Kept apart so the assignment finder can be tested without a network. */
@@ -389,10 +528,7 @@ final class Lms {
         save.put("assignmentid", String.valueOf(assignId));
         save.put("plugindata[files_filemanager]", String.valueOf(itemId));
         JSONArray warnings = call(token, "mod_assign_save_submission", save).optJSONArray("list");
-        if (warnings != null && warnings.length() > 0) {
-            JSONObject w = warnings.optJSONObject(0);
-            throw new IOException(w == null ? "The LMS did not save it" : w.optString("message", "The LMS did not save it"));
-        }
+        if (warnings != null && warnings.length() > 0) throw new IOException(saveRefusal(warnings));
 
         Map<String, String> submit = new LinkedHashMap<>();
         submit.put("assignmentid", String.valueOf(assignId));
