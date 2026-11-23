@@ -699,8 +699,43 @@ export async function forwardMessage(m: ChatMessage, to: ThreadId): Promise<void
   await sendMessage(to, m.body, {
     task: m.kind === "task" ? d : undefined,
     poll: m.kind === "poll" ? (d as ChatPoll) : undefined,
-    file: m.kind === "file" ? (d as ChatFile) : undefined,
+    file: m.kind === "file" && d ? await fileFor(to, d as ChatFile) : undefined,
   });
+}
+
+/** The storage folder of a chat: "g:…" → "g_…". Only its members can open what is in it. */
+export const threadFolder = (thread: ThreadId) => thread.replace(/:/g, "_");
+
+/**
+ * A document only opens for the members of the chat whose folder it is in. So
+ * forwarding one puts a copy in the other chat's folder — otherwise the people
+ * there get a card they can never open ("That file is no longer there").
+ */
+export async function fileFor(to: ThreadId, f: ChatFile): Promise<ChatFile> {
+  const folder = threadFolder(to);
+  if (f.path.startsWith(`${folder}/`)) return f;
+  const sb = getSupabase();
+  if (!sb || !(await ensureMe()) || !myId) throw new Error("Sign in to forward files.");
+  const path = `${folder}/${crypto.randomUUID()}/${f.path.split("/").pop() || f.name}`;
+  // A copy on the server: nothing passes through the phone.
+  let copied = false;
+  for (let attempt = 0; attempt < 3 && !copied; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 1200 * attempt));
+    const { error } = await sb.storage.from("chat-files").copy(f.path, path);
+    copied = !error;
+    if (error && !networkish(error.message)) break;
+  }
+  if (copied) {
+    const hit = await db.fileCache.get(f.path).catch(() => undefined);
+    if (hit) void db.fileCache.put({ path, blob: hit.blob, at: Date.now() }).catch(() => {});
+    return { ...f, path };
+  }
+  // No server copy (older server rules): send the file again from this phone.
+  const blob = await downloadChatFile(f);
+  const sent = await uploadChatFile(to, new File([blob], f.name, { type: f.type }));
+  const out: ChatFile = { ...f, ...sent, name: f.name };
+  if (!sent.gz) delete out.gz;
+  return out;
 }
 
 /** When each other person last read this chat — for the blue ✓✓. */
@@ -831,7 +866,7 @@ export async function uploadChatFile(thread: ThreadId, file: File): Promise<Chat
   const body: Blob = small ?? file;
   if (body.size > CHAT_MAX) throw new Error("That file is over 50 MB, even compressed.");
   const clean = file.name.normalize("NFKD").replace(/[^\w.\- ]+/g, "").replace(/\s+/g, " ").trim().slice(-80) || "document";
-  const path = `${thread.replace(/:/g, "_")}/${crypto.randomUUID()}/${clean}`;
+  const path = `${threadFolder(thread)}/${crypto.randomUUID()}/${clean}`;
   const contentType = mimeOf(file.name, file.type);
   // A weak line drops uploads: try again a few times before giving up.
   let error: { message: string } | null = null;
@@ -880,7 +915,10 @@ export async function downloadChatFile(f: ChatFile): Promise<Blob> {
   const sb = getSupabase();
   if (!sb) throw new Error("Offline.");
   const { data, error } = await sb.storage.from("chat-files").download(f.path);
-  if (error || !data) throw new Error("That file is no longer there.");
+  if (error || !data) {
+    if (error && networkish(error.message)) throw new Error("The network is too weak to open this file right now — try again in a bit.");
+    throw new Error("This file can't be opened here — it may have been deleted. Ask them to send it again.");
+  }
   const blob = f.gz ? await unsqueeze(data, f.type) : data;
   await db.fileCache.put({ path: f.path, blob, at: Date.now() }).catch(() => {});
   void trimFileCache().catch(() => {});

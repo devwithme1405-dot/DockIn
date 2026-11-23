@@ -158,9 +158,10 @@ final class Lms {
 
     /**
      * Puts a file into this student's OWN submission for an assignment and hands
-     * it in, with their own saved login. Moodle's app web services: upload the
-     * file to a draft area, attach that draft to the submission, then submit for
-     * grading (ignored when the assignment has no separate submit step).
+     * it in, with their own saved login. Moodle's app web services: find the
+     * assignment for sure, upload the file to a draft area, attach that draft to
+     * the submission, then submit for grading (ignored when the assignment has
+     * no separate submit step), and finally ask the LMS what it now holds.
      *
      * Only the app door (a token) can do this; on the website door it answers
      * {@link WebOnly} and the app opens the assignment page instead.
@@ -172,57 +173,189 @@ final class Lms {
         String token = Vault.get(c, V_TOKEN);
         if (token == null) throw new WebOnly();
         try {
-            return submitWithToken(token, resolveAssign(token, assignId, cmid, title), fileName, mime, data);
+            return handIn(token, assignId, cmid, title, fileName, mime, data);
         } catch (Refused e) {
+            // The token ran out: get a fresh one with the saved login, once.
             token = appToken(user, savedPassword(c));
             Vault.put(c, V_TOKEN, token);
-            return submitWithToken(token, resolveAssign(token, assignId, cmid, title), fileName, mime, data);
+            return handIn(token, assignId, cmid, title, fileName, mime, data);
+        }
+    }
+
+    private static String handIn(final String token, long assignId, long cmid, String title, String fileName, String mime, byte[] data)
+            throws IOException, Refused, JSONException {
+        Ws ws = new Ws() {
+            @Override
+            public JSONObject call(String fn, Map<String, String> args) throws IOException, Refused, JSONException {
+                return Lms.call(token, fn, args);
+            }
+        };
+        long id = resolveAssign(ws, assignId, cmid, title);
+        try {
+            return submitWithToken(token, id, fileName, mime, data);
+        } catch (java.net.SocketTimeoutException | java.net.UnknownHostException | java.net.ConnectException
+                 | javax.net.ssl.SSLException e) {
+            // A network wobble half-way. Handing in again is safe: Moodle keeps one
+            // submission per student and the new file replaces the draft.
+            return submitWithToken(token, id, fileName, mime, data);
+        }
+    }
+
+    /** One Moodle web-service call. Kept apart so the assignment finder can be tested without a network. */
+    interface Ws {
+        JSONObject call(String fn, Map<String, String> args) throws IOException, Refused, JSONException;
+    }
+
+    /** No assignment on the LMS matches: every candidate was checked and refused. */
+    static final class NoSuchAssignment extends IOException {
+        NoSuchAssignment() {
+            super("DockIn could not find this assignment on your LMS. It may have been removed or closed. "
+                    + "Open the LMS to hand it in, or Save file.");
         }
     }
 
     /**
-     * The assignment's own id, the one Moodle's submit calls want — worked out
-     * from what is surest: the assignment page's link (its course-module id),
-     * then the student's own list of assignments. The id the to-do list gave
-     * can be a different kind of id on some setups, and Moodle then answers
-     * "Can't find data record in database table assign".
+     * The assignment's own id, the one Moodle's submit calls want. The id the
+     * to-do list gave is usually it, but a task can carry a page (course-module)
+     * id instead, or an old id, and Moodle then answers "Can't find data record
+     * in database table assign". So every likely id is collected — from the
+     * page link, the student's own assignment list, the title, the to-do list —
+     * and each is checked against the LMS before anything is uploaded. The
+     * first one the LMS confirms wins.
      */
-    static long resolveAssign(String token, long given, long cmid, String title) throws IOException, Refused, JSONException {
-        if (cmid > 0) {
-            try {
-                Map<String, String> q = new LinkedHashMap<>();
-                q.put("cmid", String.valueOf(cmid));
-                JSONObject cm = call(token, "core_course_get_course_module", q).optJSONObject("cm");
-                if (cm != null && "assign".equals(cm.optString("modname")) && cm.optLong("instance") > 0) return cm.optLong("instance");
-            } catch (IOException ignored) {
-                // Not allowed on this LMS: the list below.
-            }
-        }
+    static long resolveAssign(Ws ws, long given, long cmid, String title) throws IOException, Refused, JSONException {
+        java.util.LinkedHashSet<Long> ids = new java.util.LinkedHashSet<>();
+        String want = norm(title);
+
+        // 1. The page link names the course module; Moodle says which assignment it is.
+        if (cmid > 0) addCm(ws, cmid, ids);
+
+        // 2. The student's own assignments: match on page id, the given id, then the title.
+        long byCmid = 0, byGiven = 0, byGivenAsPage = 0, byName = 0;
+        int nameHits = 0;
         try {
-            JSONArray courses = call(token, "mod_assign_get_assignments", new LinkedHashMap<String, String>()).optJSONArray("courses");
-            long byName = 0, byPage = 0;
-            boolean givenIsReal = false;
-            String want = title == null ? "" : title.trim().toLowerCase(java.util.Locale.ROOT);
+            JSONArray courses = ws.call("mod_assign_get_assignments", new LinkedHashMap<String, String>()).optJSONArray("courses");
             for (int i = 0; courses != null && i < courses.length(); i++) {
-                JSONArray list = courses.optJSONObject(i) == null ? null : courses.optJSONObject(i).optJSONArray("assignments");
+                JSONObject course = courses.optJSONObject(i);
+                JSONArray list = course == null ? null : course.optJSONArray("assignments");
                 for (int k = 0; list != null && k < list.length(); k++) {
                     JSONObject a = list.optJSONObject(k);
                     if (a == null) continue;
-                    long id = a.optLong("id");
-                    if (cmid > 0 && a.optLong("cmid") == cmid) return id;
-                    if (id == given) givenIsReal = true;
-                    // The to-do list's number may be the page's (course-module) id.
-                    if (a.optLong("cmid") == given) byPage = id;
-                    if (!want.isEmpty() && want.equals(a.optString("name", "").trim().toLowerCase(java.util.Locale.ROOT))) byName = id;
+                    long id = a.optLong("id", 0);
+                    long cm = a.optLong("cmid", 0);
+                    if (id <= 0) continue;
+                    if (cmid > 0 && cm == cmid) byCmid = id;
+                    if (id == given) byGiven = id;
+                    if (given > 0 && cm == given) byGivenAsPage = id;
+                    if (!want.isEmpty() && want.equals(norm(a.optString("name", "")))) {
+                        byName = id;
+                        nameHits++;
+                    }
                 }
             }
-            if (givenIsReal) return given;
-            if (byPage > 0) return byPage;
-            if (byName > 0) return byName;
         } catch (IOException ignored) {
-            // Can't list them: try with what we were given.
+            // This LMS won't list them: the other ways still work.
         }
-        return given;
+        if (byCmid > 0) ids.add(byCmid);
+        if (byGiven > 0) ids.add(byGiven);
+        if (byGivenAsPage > 0) ids.add(byGivenAsPage);
+        // A title is only trusted when exactly one assignment has it.
+        if (nameHits == 1) ids.add(byName);
+
+        // 3. The to-do list, asked again: the same item's page link, by id or title.
+        if (ids.isEmpty()) {
+            try {
+                Map<String, String> q = new LinkedHashMap<>();
+                q.put("timesortfrom", String.valueOf(System.currentTimeMillis() / 1000 - 60L * 24 * 3600));
+                q.put("limitnum", "50");
+                JSONArray events = ws.call(TODO, q).optJSONArray("events");
+                JSONObject byId = null, named = null;
+                int namedHits = 0;
+                for (int i = 0; events != null && i < events.length(); i++) {
+                    JSONObject e = events.optJSONObject(i);
+                    if (e == null || !"assign".equals(e.optString("modulename", ""))) continue;
+                    if (given > 0 && e.optLong("instance", 0) == given) byId = e;
+                    if (!want.isEmpty() && want.equals(norm(e.optString("activityname", e.optString("name", ""))))) {
+                        named = e;
+                        namedHits++;
+                    }
+                }
+                // Again, a title counts only when it is unique.
+                JSONObject e = byId != null ? byId : namedHits == 1 ? named : null;
+                if (e != null) {
+                    long cm = cmidOf(e.optString("url", ""));
+                    if (cm > 0 && cm != cmid) addCm(ws, cm, ids);
+                    if (e.optLong("instance", 0) > 0) ids.add(e.optLong("instance", 0));
+                }
+            } catch (IOException ignored) {
+                // Fall through to the given id.
+            }
+        }
+
+        // 4. Last: the given id as it is, and the given id read as a page id.
+        if (given > 0) {
+            ids.add(given);
+            if (given != cmid) addCm(ws, given, ids);
+        }
+
+        // Check each with the LMS before uploading anything.
+        long unsure = 0;
+        for (long id : ids) {
+            Boolean ok = assignExists(ws, id);
+            if (Boolean.TRUE.equals(ok)) return id;
+            if (ok == null && unsure == 0) unsure = id;
+        }
+        if (unsure > 0) return unsure;
+        throw new NoSuchAssignment();
+    }
+
+    /** The assignment a course-module (page) id belongs to, if it is one. */
+    private static void addCm(Ws ws, long cm, java.util.Set<Long> ids) throws Refused, JSONException {
+        try {
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put("cmid", String.valueOf(cm));
+            JSONObject got = ws.call("core_course_get_course_module", q).optJSONObject("cm");
+            if (got != null && "assign".equals(got.optString("modname", "")) && got.optLong("instance", 0) > 0) {
+                ids.add(got.optLong("instance", 0));
+            }
+        } catch (IOException ignored) {
+            // Not a page id, or not allowed here.
+        }
+    }
+
+    /** TRUE when the LMS knows this assignment and lets him see it, FALSE when it doesn't, null when it won't say. */
+    private static Boolean assignExists(Ws ws, long id) throws Refused, JSONException {
+        try {
+            Map<String, String> q = new LinkedHashMap<>();
+            q.put("assignid", String.valueOf(id));
+            ws.call("mod_assign_get_submission_status", q);
+            return Boolean.TRUE;
+        } catch (IOException e) {
+            String m = e.getMessage() == null ? "" : e.getMessage().toLowerCase(java.util.Locale.ROOT);
+            if (m.contains("data record") || m.contains("invalidrecord") || m.contains("course_modules")
+                    || m.contains("not enrolled") || m.contains("requireloginerror") || m.contains("nopermission")) {
+                return Boolean.FALSE;
+            }
+            return null;
+        }
+    }
+
+    /** ".../mod/assign/view.php?id=1234" → 1234; 0 when the link is something else. */
+    static long cmidOf(String url) {
+        if (url == null) return 0;
+        Matcher m = CMID.matcher(url);
+        if (!m.find()) return 0;
+        try {
+            return Long.parseLong(m.group(1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static final Pattern CMID = Pattern.compile("/mod/assign/view\\.php\\?(?:[^#]*&)?id=(\\d+)");
+
+    private static String norm(String s) {
+        return s == null ? "" : s.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     /** The LMS only lets this login in through the website, where DockIn cannot upload. */
@@ -364,8 +497,13 @@ final class Lms {
         JSONObject j = new JSONObject(body);
         if (j.has("exception")) {
             String code = j.optString("errorcode", "");
-            if ("invalidtoken".equals(code) || "accessexception".equals(code)) throw new Refused("Sign in to the LMS again.");
-            throw new IOException(j.optString("message", code));
+            // Only a dead token is fixed by signing in again. "accessexception" means this
+            // one call is not allowed (or not for this item) — signing in again would not
+            // change that, and treating it as a dead token used to turn every such answer
+            // into a pointless re-login and "Sign in to the LMS again".
+            if ("invalidtoken".equals(code)) throw new Refused("Sign in to the LMS again.");
+            String msg = j.optString("message", "");
+            throw new IOException(msg.isEmpty() ? code : msg + (code.isEmpty() ? "" : " [" + code + "]"));
         }
         return j;
     }

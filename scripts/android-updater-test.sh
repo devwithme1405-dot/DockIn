@@ -9,8 +9,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 javac -nowarn -d "$out" \
-  "$here/android-tests/org/json/JSONObject.java" \
-  $(find "$here/android-stubs" -name '*.java' | grep -v 'org/json/JSONObject.java') \
+  "$here/android-tests/org/json/JSONObject.java" "$here/android-tests/org/json/JSONArray.java" \
+  $(find "$here/android-stubs" -name '*.java' | grep -v 'org/json/JSONObject.java\|org/json/JSONArray.java') \
   $(find "$here/../android/app/src/main/java" -name '*.java') \
   "$here/android-tests/com/dockin/student/UpdaterTest.java" 2>&1 | grep -v 'deprecated API\|Recompile with' || true
 java -cp "$out" com.dockin.student.UpdaterTest

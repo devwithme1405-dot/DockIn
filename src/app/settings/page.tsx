@@ -22,6 +22,7 @@ import {
   Pencil,
   School,
   ShieldCheck,
+  Sparkles,
   Sun,
   Trash2,
   type LucideIcon,
@@ -64,6 +65,8 @@ import { clearSocial, ensureProfile, publishProfile } from "@/lib/social";
 import { FRIENDS } from "@/lib/features";
 import { clearChat } from "@/lib/chat";
 import { forgetPushToken } from "@/lib/push";
+import { UpdatesSheet } from "@/components/UpdatesSheet";
+import { LATEST, RELEASES } from "@/lib/changelog";
 
 type SheetName =
   | "details"
@@ -77,8 +80,32 @@ type SheetName =
   | "college"
   | "backup"
   | "about"
+  | "updates"
   | null;
 type BackupCheck = "idle" | "checking" | "ok" | "failed";
+
+// Which release the Updates row last showed as read ("New: …" until opened).
+const SEEN_KEY = "dockin-updates-seen";
+const seenListeners = new Set<() => void>();
+function readSeen(): string {
+  try {
+    return localStorage.getItem(SEEN_KEY) ?? "";
+  } catch {
+    return LATEST;
+  }
+}
+function markUpdatesSeen() {
+  try {
+    localStorage.setItem(SEEN_KEY, LATEST);
+  } catch {
+    /* private mode */
+  }
+  seenListeners.forEach((f) => f());
+}
+function subscribeSeen(f: () => void) {
+  seenListeners.add(f);
+  return () => seenListeners.delete(f);
+}
 
 const THEMES: { id: ThemePref; label: string; icon: typeof Sun }[] = [
   { id: "system", label: "System", icon: Monitor },
@@ -91,6 +118,7 @@ export default function ProfilePage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { session, configured } = useAuth();
   const sync = useSyncExternalStore(subscribeSync, getSyncStatus, getSyncStatus);
+  const seenUpdates = useSyncExternalStore(subscribeSeen, readSeen, () => LATEST);
 
   const [sheet, setSheet] = useState<SheetName>(null);
   const phone = usePhoneStatus();
@@ -374,6 +402,15 @@ export default function ProfilePage() {
             />
           )}
           <MenuRow
+            icon={Sparkles}
+            title="Updates"
+            sub={seenUpdates === LATEST ? "What's new and what's coming" : `New: ${RELEASES[0].title}`}
+            onClick={() => {
+              markUpdatesSeen();
+              setSheet("updates");
+            }}
+          />
+          <MenuRow
             icon={Info}
             title="About DockIn"
             sub={phone.status?.version ? `Version ${phone.status.version}` : "Made for students"}
@@ -508,6 +545,17 @@ export default function ProfilePage() {
         <Button variant="secondary" className="mt-4 mb-2 w-full" onClick={download}>
           <Download size={17} /> Download a copy of my data
         </Button>
+      </Sheet>
+
+      <Sheet open={sheet === "updates"} onClose={close} title="Updates">
+        <UpdatesSheet
+          version={phone.status?.version}
+          onUpdate={() => {
+            close();
+            // AppUpdate listens for this and opens its Update popup at once.
+            window.dispatchEvent(new CustomEvent("dockin-open", { detail: "/?update=1" }));
+          }}
+        />
       </Sheet>
 
       <Sheet open={sheet === "about"} onClose={close} title="About DockIn">

@@ -269,6 +269,12 @@ interface Glyph {
   font: string;
   color: [number, number, number];
   render: number;
+  /**
+   * False when text in a font we can't measure came earlier on this line
+   * without a fresh position since: this glyph's place is then a guess, and a
+   * name is never written at a guessed place.
+   */
+  sure: boolean;
 }
 
 interface StrTok {
@@ -297,6 +303,9 @@ interface PageText {
   /** Text with spaces / newlines inferred from positions, and what each char is. */
   text: string;
   owner: number[]; // glyph index, or -1 for an inferred space / newline
+  /** q left open at the end (or Q with no q: negative), so new drawing starts from a clean state. */
+  openQ: number;
+  underQ: number;
 }
 
 function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
@@ -304,7 +313,11 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
   const strings: StrTok[] = [];
   let ctm: Mat = ID;
   let fill: [number, number, number] = [0, 0, 0];
-  const stack: { ctm: Mat; fill: [number, number, number] }[] = [];
+  // q / Q save and restore the whole graphics state, text state included.
+  type Saved = { ctm: Mat; fill: [number, number, number]; fontKey: string; size: number; tc: number; tw: number; th: number; tl: number; rise: number; render: number };
+  const stack: Saved[] = [];
+  let underQ = 0;
+  let drift = false;
   let tm: Mat = ID;
   let tlm: Mat = ID;
   let fontKey = "";
@@ -322,7 +335,10 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
   const show = (tok: Tok & { t: "str" }, how: StrTok["how"], op: StrTok["op"]) => {
     const font = fonts.get(fontKey);
     if (!font) {
-      // Unknown font: still move along, so later positions stay right.
+      // A font we can't read: move along by a rough width, and remember that
+      // whatever follows on this line (until the next fresh position) is a guess.
+      tm = mul([1, 0, 0, 1, (tok.v.length * 0.5 * size + tc) * th, 0], tm);
+      drift = true;
       return;
     }
     const st: StrTok = { tok, font, how, op, size, hscale: th, remove: new Set(), extra: new Map(), adv: [], fresh, firstGlyph: glyphs.length };
@@ -337,7 +353,7 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
       const adv = (w * size + tc + (isSpace ? tw : 0)) * th;
       const m = mul(tm, ctm);
       const ch = font.toUni.get(code) ?? (font.twoByte ? "" : String.fromCharCode(code));
-      glyphs.push({ ch, str: idx, code: ci, adv, m, size, hscale: th, rise, font: fontKey, color: fill, render });
+      glyphs.push({ ch, str: idx, code: ci, adv, m, size, hscale: th, rise, font: fontKey, color: fill, render, sure: !drift });
       st.adv.push(adv);
       tm = mul([1, 0, 0, 1, adv, 0], tm);
     }
@@ -347,11 +363,12 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
     const v = nums(args);
     switch (op) {
       case "q":
-        stack.push({ ctm, fill });
+        stack.push({ ctm, fill, fontKey, size, tc, tw, th, tl, rise, render });
         break;
       case "Q": {
         const top = stack.pop();
-        if (top) ({ ctm, fill } = top);
+        if (top) ({ ctm, fill, fontKey, size, tc, tw, th, tl, rise, render } = top);
+        else underQ++;
         break;
       }
       case "cm":
@@ -374,6 +391,7 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
       case "BT":
         tm = ID;
         tlm = ID;
+        drift = false;
         break;
       case "Tf": {
         const nm = args.find((a) => a.t === "name") as { v: string } | undefined;
@@ -403,24 +421,28 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
         tlm = mul([1, 0, 0, 1, v[0] ?? 0, v[1] ?? 0], tlm);
         tm = tlm;
         fresh = true;
+        drift = false;
         break;
       case "TD":
         tl = -(v[1] ?? 0);
         tlm = mul([1, 0, 0, 1, v[0] ?? 0, v[1] ?? 0], tlm);
         tm = tlm;
         fresh = true;
+        drift = false;
         break;
       case "Tm":
         if (v.length === 6) {
           tlm = v as Mat;
           tm = tlm;
-        fresh = true;
+          fresh = true;
+          drift = false;
         }
         break;
       case "T*":
         tlm = mul([1, 0, 0, 1, 0, -tl], tlm);
         tm = tlm;
         fresh = true;
+        drift = false;
         break;
       case "Tj": {
         const str = args.find((a) => a.t === "str") as (Tok & { t: "str" }) | undefined;
@@ -436,6 +458,7 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
         tlm = mul([1, 0, 0, 1, 0, -tl], tlm);
         tm = tlm;
         fresh = true;
+        drift = false;
         const str = args.find((a) => a.t === "str") as (Tok & { t: "str" }) | undefined;
         if (str) show(str, op, { s, e, args });
         break;
@@ -477,7 +500,7 @@ function readPage(src: string, fonts: Map<string, FontInfo>): PageText {
       owner.push(i);
     }
   });
-  return { glyphs, strings, text, owner };
+  return { glyphs, strings, text, owner, openQ: stack.length, underQ };
 }
 
 // ---------------------------------------------------------------------------
@@ -561,7 +584,27 @@ async function pageSources(lib: Lib, doc: PDFDocumentT, page: PDFPage) {
         const widths = arr ? arr.asArray().map((x) => (ctx.lookup(x) as PDFNumberT)?.asNumber?.() ?? 0) : [];
         const missing =
           (f.lookupMaybe(PDFName.of("FontDescriptor"), PDFDict)?.lookupMaybe(PDFName.of("MissingWidth"), PDFNumber)?.asNumber() ?? 0) || 500;
-        width = (c) => widths[c - fc] ?? missing;
+        if (widths.length) width = (c) => widths[c - fc] ?? missing;
+        else {
+          // The 14 standard fonts (and files that lean on them) give no widths:
+          // use the standard metrics, not a flat guess that drifts along the line.
+          const std = lib.StandardFontEmbedder.for(
+            standardFor(lib, base.replace(/^\/?([A-Z]{6}\+)?/, "")) as unknown as Parameters<typeof lib.StandardFontEmbedder.for>[0],
+          );
+          const cache = new Map<number, number>();
+          width = (c) => {
+            let w = cache.get(c);
+            if (w === undefined) {
+              try {
+                w = std.widthOfTextAtSize(String.fromCharCode(c), 1000) || missing;
+              } catch {
+                w = missing;
+              }
+              cache.set(c, w);
+            }
+            return w;
+          };
+        }
       }
       fonts.set(key.asString().slice(1), { twoByte, toUni, width, baseName: base });
     }
@@ -639,6 +682,13 @@ export async function replaceInPdf(file: Blob | ArrayBuffer | Uint8Array, swaps:
       continue;
     }
     const pt = readPage(parsed.src, parsed.fonts);
+    let box: { x: number; y: number; w: number; h: number } | null = null;
+    try {
+      const mb = page.getMediaBox();
+      box = { x: Math.min(mb.x, mb.x + mb.width), y: Math.min(mb.y, mb.y + mb.height), w: Math.abs(mb.width), h: Math.abs(mb.height) };
+    } catch {
+      box = null;
+    }
 
     type Hit = { at: number; len: number; replace: string };
     const hits: Hit[] = [];
@@ -664,6 +714,10 @@ export async function replaceInPdf(file: Blob | ArrayBuffer | Uint8Array, swaps:
       if (!idx.length) continue;
       // A name broken over two lines is left alone rather than half-changed.
       if (pt.text.slice(h.at, h.at + h.len).includes("\n")) continue;
+      // Where it sits must be known for sure: a new name is never written at a guessed place.
+      if (idx.some((gi) => !pt.glyphs[gi].sure)) continue;
+      const at0 = apply(pt.glyphs[idx[0]].m, 0, 0);
+      if (box && (at0.x < box.x - 2 || at0.x > box.x + box.w + 2 || at0.y < box.y - 2 || at0.y > box.y + box.h + 2)) continue;
       const first = pt.glyphs[idx[0]];
       const lastIdx = idx[idx.length - 1];
       const last = pt.glyphs[lastIdx];
@@ -823,8 +877,13 @@ export async function replaceInPdf(file: Blob | ArrayBuffer | Uint8Array, swaps:
         `${m.map(fmt).join(" ")} Tm ${font.encodeText(text).toString()} Tj ET Q`;
     }
 
-    // Original drawing wrapped in q/Q so its state can't leak into ours.
-    const bytes = new Uint8Array([...("q\n" + src + "\nQ" + extra + "\n")].map((c) => c.charCodeAt(0) & 255));
+    // Original drawing wrapped in q/Q so its state can't leak into ours — and
+    // balanced first: a page that leaves a "q … cm" open (or closes more than
+    // it opened) would otherwise have the new name drawn through its leftover
+    // transform, landing somewhere else on the page.
+    const head = "q\n".repeat(pt.underQ + 1);
+    const tail = "\nQ".repeat(pt.openQ) + "\nQ".repeat(pt.underQ + 1);
+    const bytes = new Uint8Array([...(head + src + tail + extra + "\n")].map((c) => c.charCodeAt(0) & 255));
     const stream = doc.context.flateStream(bytes);
     page.node.set(L.PDFName.of("Contents"), doc.context.register(stream));
   }
@@ -888,4 +947,28 @@ export async function shrinkPdf(file: Blob, target: number): Promise<Blob> {
     if (out.size <= target) return out;
   }
   return new Blob([(await doc.save()) as BlobPart], { type: "application/pdf" });
+}
+
+/** Where a piece of text starts on each page (bottom-left origin, points). For checks and tests. */
+export async function whereIs(file: Blob | ArrayBuffer | Uint8Array, find: string): Promise<{ page: number; x: number; y: number }[]> {
+  const { L, doc } = await open(file);
+  const out: { page: number; x: number; y: number }[] = [];
+  const re = matcher(find);
+  if (!re) return out;
+  const pages = doc.getPages();
+  for (let p = 0; p < pages.length; p++) {
+    try {
+      const { src, fonts } = await pageSources(L, doc, pages[p]);
+      const pt = readPage(src, fonts);
+      for (const m of pt.text.matchAll(re)) {
+        const gi = pt.owner.slice(m.index!, m.index! + m[0].length).find((x) => x >= 0);
+        if (gi === undefined) continue;
+        const at = apply(pt.glyphs[gi].m, 0, 0);
+        out.push({ page: p, x: at.x, y: at.y });
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
 }

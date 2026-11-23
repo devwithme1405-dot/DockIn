@@ -53,7 +53,11 @@ export async function submitToLms(
     if (/Missing the assignment or the file/i.test(msg)) {
       throw new Error("This needs the latest DockIn. Update the app and try again — or Save file and upload it on the LMS.");
     }
-    throw new Error(msg || "Could not submit.");
+    // Only builds older than 2.0.x (23 Nov) send the hand-in to a guessed assignment id.
+    if (/database table assign\b/i.test(msg)) {
+      throw new Error("This copy of DockIn could not find the assignment on the LMS. Update DockIn and try again — or Save file and upload it on the LMS.");
+    }
+    throw new Error(lmsWords(msg) || "Could not submit.");
   }
   const status = (res && res.status) || "";
   if (status === "draft" || status === "new" || status === "reopened") throw new DraftOnly();
@@ -64,4 +68,9 @@ export async function submitToLms(
 export function cmidOf(url: string | null | undefined): number | null {
   const m = /\/mod\/assign\/view\.php\?(?:[^#]*&)?id=(\d+)/.exec(url ?? "");
   return m ? Number(m[1]) : null;
+}
+
+/** Moodle's own error text, without its "[errorcode]" tail and trailing dot noise. */
+export function lmsWords(msg: string): string {
+  return msg.replace(/\s*\[[a-z_]+\]\s*$/i, "").trim();
 }

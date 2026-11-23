@@ -113,13 +113,26 @@ export function countIn(text: string, find: string): number {
  * to recognise it rather than type it, and a typo cannot slip through.
  */
 export function guessRolls(text: string): string[] {
-  const tally = new Map<string, number>();
+  const tally = new Map<string, { n: number; score: number }>();
   for (const m of text.matchAll(/\b(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)[A-Z0-9]{6,16}\b/gi)) {
     const token = m[0].toUpperCase();
-    // A word that is all digits or all letters is a year or an acronym, not a roll.
-    tally.set(token, (tally.get(token) ?? 0) + 1);
+    // Shaped like an enrollment (E23CSEU0155): letter(s), year, branch, number.
+    const shaped = /^[A-Z]{1,2}\d{2}[A-Z]{2,6}\d{2,6}$/.test(token);
+    // Or written right after "Roll" / "Enrollment" / "Reg".
+    const before = text.slice(Math.max(0, m.index! - 40), m.index!);
+    const labelled = /(?:roll|enrol+(?:ment)?|reg(?:istration)?|sap|admission|student\s*id)\b[^\n]{0,25}$/i.test(before);
+    // Anything else (a course code like CSET207, "Assignment10") is not a roll:
+    // offering it would swap the subject code for his enrollment.
+    const score = shaped ? 2 : labelled ? 1 : 0;
+    if (!score) continue;
+    const t = tally.get(token) ?? { n: 0, score };
+    t.n++;
+    t.score = Math.max(t.score, score);
+    tally.set(token, t);
   }
-  return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+  return [...tally.entries()]
+    .sort((a, b) => b[1].score - a[1].score || b[1].n - a[1].n || a[0].localeCompare(b[0]))
+    .map(([t]) => t);
 }
 
 /**

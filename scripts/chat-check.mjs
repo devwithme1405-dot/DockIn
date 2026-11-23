@@ -124,6 +124,8 @@ const problems = [];
 /** The chat's network: drop every send, as a dead campus Wi-Fi would. */
 const net = { dropSends: false };
 const requested = [];
+/** Server-side file copies asked for (a forwarded document must land in the new chat's folder). */
+const copies = [];
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
@@ -133,6 +135,10 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
   const req = route.request();
   const url = new URL(req.url());
   const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  if (url.pathname === "/storage/v1/object/copy") {
+    copies.push(JSON.parse(req.postData() || "{}"));
+    return json({ Key: "chat-files/copied" });
+  }
   if (url.pathname.startsWith("/storage/v1/object/")) {
     if (req.method() === "GET") return route.fulfill({ status: 200, contentType: "application/pdf", body: readFileSync(new URL("../tests/fixtures/solution-chrome.pdf", import.meta.url)) });
     return json({ Key: url.pathname.split("/object/")[1], Id: "x" });
@@ -472,6 +478,32 @@ await step("chat themes, jumbo emoji, links and starring", async () => {
   await page.waitForTimeout(300);
   // back to the default look for the rest of the run
   await page.evaluate(() => localStorage.removeItem("dockin-chat-look"));
+  await page.getByLabel("Back", { exact: true }).click();
+  await page.waitForTimeout(400);
+});
+
+await step("forwarding a document copies it into the other chat, so they can open it", async () => {
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva|example)/ }).first().click();
+  const chat = page.getByRole("dialog", { name: /Chat with/ });
+  const card = chat.getByText("DBMS_Lab7_question.pdf").first();
+  await card.scrollIntoViewIfNeeded();
+  const box = await card.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 10);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Forward", exact: true }).click();
+  const to = page.getByRole("dialog", { name: "Forward to" });
+  await to.getByText("CSE E1").first().click();
+  await page.getByText(/Forwarded to/).first().waitFor({ timeout: 6000 });
+  const folder = `g_${G}/`;
+  const copy = copies.find((c) => c.sourceKey === "x/y/DBMS_Lab7_question.pdf");
+  if (!copy) throw new Error("no server copy was made: " + JSON.stringify(copies));
+  if (!String(copy.destinationKey).startsWith(folder)) throw new Error("copied to the wrong folder: " + copy.destinationKey);
+  for (let i = 0; i < 20 && !messages.some((m) => m.thread === `g:${G}` && m.kind === "file" && m.data?.name === "DBMS_Lab7_question.pdf"); i++) await page.waitForTimeout(250);
+  const sent = messages.find((m) => m.thread === `g:${G}` && m.kind === "file" && m.data?.name === "DBMS_Lab7_question.pdf");
+  if (!sent) throw new Error("the forwarded message never reached the server");
+  if (sent.data.path !== copy.destinationKey) throw new Error("forwarded card points at " + sent.data.path);
   await page.getByLabel("Back", { exact: true }).click();
   await page.waitForTimeout(400);
 });

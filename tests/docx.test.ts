@@ -191,4 +191,11 @@ describe("finding the name the way a document really holds it", () => {
   it("offers the roll that appears most often first", () => {
     expect(guessRolls("E23CSEU0155 ... AB12CD34 ... E23CSEU0155")[0]).toBe("E23CSEU0155");
   });
+
+  it("never takes a course code for a roll", () => {
+    expect(guessRolls("CSET207 DBMS Assignment10 — Name: Sachin Kumar")).toEqual([]);
+    expect(guessRolls("Course CSET207\nEnrollment: E24CSEU0001")[0]).toBe("E24CSEU0001");
+    // A roll in another shape still counts when it is labelled as one.
+    expect(guessRolls("Roll No.: 2401CS77")).toEqual(["2401CS77"]);
+  });
 });

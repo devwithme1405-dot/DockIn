@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { readPdfText, replaceInPdf } from "../src/lib/pdfSwap";
+import { readPdfText, replaceInPdf, whereIs } from "../src/lib/pdfSwap";
 
 const SWAPS = [
   { find: "Vaibhav Sharma", replace: "Harshit Singh Chauhan" },
@@ -61,5 +61,61 @@ describe("names in a Word-made PDF (LibreOffice export)", () => {
     expect(text).toMatch(/, declare that this work is my own\./);
     expect(text).toMatch(/Student \( \)/);
     expect(text.match(/Harshit Singh Chauhan/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("the new name lands exactly where the old one was", () => {
+  async function rawPdf(content: string, fontKey = "F1") {
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([400, 300]);
+    const f = await doc.embedFont(StandardFonts.Helvetica);
+    // Draw nothing with pdf-lib: just register the font, then use our own stream.
+    const key = page.node.newFontDictionary(fontKey, f.ref).asString();
+    page.node.set(
+      (await import("pdf-lib")).PDFName.of("Contents"),
+      doc.context.register(doc.context.flateStream(content.replaceAll("/F1", key))),
+    );
+    return doc.save();
+  }
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs(a.x - b.x) < 1.5 && Math.abs(a.y - b.y) < 1.5;
+
+  it("on a page that leaves a transform open (q … cm with no Q)", async () => {
+    const src = await rawPdf("q 1 0 0 1 60 40 cm BT /F1 12 Tf 10 100 Td (Name: Sachin Kumar   Subject: DBMS) Tj ET");
+    const [before] = await whereIs(src, "Sachin Kumar");
+    const { blob, count } = await replaceInPdf(src, [{ find: "Sachin Kumar", replace: "Harshit Jain" }]);
+    expect(count).toBe(1);
+    const out = new Uint8Array(await blob.arrayBuffer());
+    const [after] = await whereIs(out, "Harshit Jain");
+    expect(near(before, after)).toBe(true);
+    // DBMS stays where it was and stays DBMS.
+    const text = await readPdfText(out);
+    expect(text).toMatch(/Subject:\s*DBMS/);
+    expect(text).not.toMatch(/Sachin/);
+  });
+
+  it("mid-line in a standard font with no widths table", async () => {
+    const src = await rawPdf("BT /F1 12 Tf 20 200 Td (Course: DBMS  Name: Sachin Kumar  Roll: E24CSEU0001) Tj ET");
+    const [before] = await whereIs(src, "Sachin Kumar");
+    // Helvetica metrics: "Course: DBMS  Name: " is about 117pt wide, not 20 × 6 = 120 nor anything wild.
+    expect(before.x).toBeGreaterThan(20 + 100);
+    expect(before.x).toBeLessThan(20 + 135);
+    const { blob } = await replaceInPdf(src, [{ find: "Sachin Kumar", replace: "Harshit Jain" }]);
+    const [after] = await whereIs(new Uint8Array(await blob.arrayBuffer()), "Harshit Jain");
+    expect(near(before, after)).toBe(true);
+  });
+
+  it("never writes a name at a guessed place (text after an unreadable font)", async () => {
+    // /F9 is not in the page's fonts, so where "Sachin" starts is unknown.
+    const src = await rawPdf("BT /F9 12 Tf 20 200 Td (Subject: DBMS ) Tj /F1 12 Tf (Sachin Kumar) Tj ET");
+    const { count } = await replaceInPdf(src, [{ find: "Sachin Kumar", replace: "Harshit Jain" }]);
+    expect(count).toBe(0);
+  });
+
+  it("text state comes back after Q", async () => {
+    // Character spacing set inside q…Q must not stretch the line drawn after it.
+    const src = await rawPdf("q 5 Tc Q BT /F1 12 Tf 20 200 Td (Name: Sachin Kumar) Tj ET");
+    const [before] = await whereIs(src, "Sachin Kumar");
+    expect(before.x).toBeLessThan(20 + 40);
   });
 });
