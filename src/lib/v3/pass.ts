@@ -152,22 +152,25 @@ export function notePath(n: CamuNote): string {
 }
 
 const READS = /\/(get|list|fetch|search|count|view)[^/]*\/?$|getall|config|dashboard|summary/i;
-/** MyCamu's own server (relative URLs, or *.camu.in) — not analytics and the like. */
-const isCamu = (n: CamuNote) => n.url.startsWith("/") || /^https?:\/\/[^/]*camu\.in\//i.test(n.url);
+/** Hosts that only count visits — never part of making a pass. */
+const ANALYTICS = /google-analytics|googletagmanager|doubleclick|facebook\.|clarity\.ms|hotjar|sentry|mixpanel|segment\.io/i;
+/** Anything but analytics: MyCamu's server, and wherever it uploads files to. */
+const isCamu = (n: CamuNote) => !!n.url && !ANALYTICS.test(n.url);
 /** Was this MyCamu sending something (not just reading)? Also for APKs that don't keep `writes`. */
-export const isWrite = (n: CamuNote) => !!n.url && isCamu(n) && !READS.test(n.url);
+export const isWrite = (n: CamuNote) => isCamu(n) && !READS.test(n.url);
 
-/** One line per distinct send: the newest of each kind (same URL and same leave type). */
-function distinctSends(n: CamuNotes): CamuNote[] {
+/** Every distinct send, newest first: the same request twice counts once. */
+function distinctSends(n: CamuNotes, max = 10): CamuNote[] {
   const all = [...n.writes, ...n.picked, ...n.recent].filter(isWrite).sort((a, b) => b.at - a.at);
   const seen = new Set<string>();
-  return all.filter((w) => {
-    const kind = w.body.match(/"(?:LvTy|passTy|PassTy)"\s*:\s*"([^"]*)"/)?.[1] ?? "";
-    const k = `${notePath(w)}|${kind}`;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
+  return all
+    .filter((w) => {
+      const k = `${w.url}|${w.body}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .slice(0, max);
 }
 
 /**

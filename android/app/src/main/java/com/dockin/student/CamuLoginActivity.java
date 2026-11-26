@@ -107,10 +107,12 @@ public class CamuLoginActivity extends Activity {
     private static final String CAPTURE =
             "(function(){if(window.__dockinCap)return;window.__dockinCap=1;"
                     + "function body(b){try{if(!b)return '';if(typeof b==='string')return b.slice(0,6000);"
+                    + "if(typeof Blob!=='undefined'&&b instanceof Blob)return JSON.stringify({blob:b.type,size:b.size,name:b.name||''});"
                     + "if(b instanceof FormData){var o={};b.forEach(function(v,k){o[k]=(v&&v.name!==undefined&&v.size!==undefined)"
                     + "?{file:v.name,type:v.type,size:v.size}:String(v).slice(0,2000);});return JSON.stringify({formData:o});}"
                     + "return String(b).slice(0,2000);}catch(e){return '?'}}"
-                    + "function note(m,u,b,st,r){try{DockInCapture.note(JSON.stringify({at:Date.now(),page:location.pathname+location.hash,"
+                    + "var AN=/google-analytics|googletagmanager|doubleclick|facebook\\.|clarity\\.ms|hotjar|sentry|mixpanel|segment\\.io/i;"
+                    + "function note(m,u,b,st,r){try{if(AN.test(String(u)))return;DockInCapture.note(JSON.stringify({at:Date.now(),page:location.pathname+location.hash,"
                     + "method:m,url:String(u),body:body(b),status:st,answer:String(r||'').slice(0,3000)}));}catch(e){}}"
                     + "var O=XMLHttpRequest.prototype.open,S=XMLHttpRequest.prototype.send;"
                     + "XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return O.apply(this,arguments);};"
@@ -128,6 +130,10 @@ public class CamuLoginActivity extends Activity {
     /** URLs that only read (lists, configs) — not the request that makes a pass. */
     static final java.util.regex.Pattern READS =
             java.util.regex.Pattern.compile("(?i)/(get|list|fetch|search|count|view)[^/]*/?$|getall|config|dashboard|summary");
+
+    /** Hosts that only count visits — never part of making a pass. */
+    static final java.util.regex.Pattern ANALYTICS = java.util.regex.Pattern.compile(
+            "(?i)google-analytics|googletagmanager|doubleclick|facebook\\.|clarity\\.ms|hotjar|sentry|mixpanel|segment\\.io");
 
     /** Appends one noted request to a capped list under {@code key}. */
     static void keepIn(SharedPreferences p, SharedPreferences.Editor e, String key, String json, int max) {
@@ -157,6 +163,14 @@ public class CamuLoginActivity extends Activity {
 
         @JavascriptInterface
         public void note(String json) {
+            String url = "";
+            try {
+                url = new JSONObject(json).optString("url", "");
+            } catch (JSONException x) {
+                return;
+            }
+            // Analytics beacons are long and constant; they only push the real requests out.
+            if (ANALYTICS.matcher(url).find()) return;
             SharedPreferences p = app.getSharedPreferences(PREFS_CAPTURE, MODE_PRIVATE);
             JSONArray list;
             try {
@@ -175,16 +189,12 @@ public class CamuLoginActivity extends Activity {
             // Camu sends plenty of other requests; the leave / gate-pass ones are
             // the point, so they are also kept in a list of their own.
             if (PASSY.matcher(json).find()) {
+                // (the page path is in the JSON, so a storage upload made from the
+                // leave page counts too, whatever its host)
                 keepIn(p, e, "picked", json, 12);
                 // MyCamu re-reads the pass list every few seconds; what it *sends*
                 // (the submit, the upload) is kept apart so those reads can't push it out.
-                String url = "";
-                try {
-                    url = new JSONObject(json).optString("url", "");
-                } catch (JSONException x) {
-                    // checked above
-                }
-                if (!url.isEmpty() && !READS.matcher(url).find()) keepIn(p, e, "writes", json, 10);
+                if (!url.isEmpty() && !READS.matcher(url).find()) keepIn(p, e, "writes", json, 20);
             }
             e.apply();
         }
