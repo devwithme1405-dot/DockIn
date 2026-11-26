@@ -44,7 +44,8 @@ import java.util.Set;
 @CapacitorPlugin(
         name = "DockIn",
         permissions = {
-                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS})
+                @Permission(alias = "notifications", strings = {Manifest.permission.POST_NOTIFICATIONS}),
+                @Permission(alias = "microphone", strings = {Manifest.permission.RECORD_AUDIO})
         }
 )
 public class DockInPlugin extends Plugin {
@@ -889,6 +890,93 @@ public class DockInPlugin extends Plugin {
         JSObject d = new JSObject();
         d.put("path", path);
         notifyListeners("open", d, true);
+    }
+
+    // ---- DockIn 3: which build this is, and the assistant's ears and voice ----
+
+    /** "preview" for the DockIn 3 test APK, "stable" for everyone else's. */
+    @PluginMethod
+    public void channel(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("channel", BuildConfig.DOCKIN_CHANNEL);
+        o.put("speech", Voice.canListen(getContext()));
+        call.resolve(o);
+    }
+
+    private Voice voice;
+
+    private Voice voice() {
+        if (voice == null) voice = new Voice(getContext(), (event, data) -> notifyListeners(event, data));
+        return voice;
+    }
+
+    /** Listen once (results arrive as "speech" events). Asks for the microphone the first time. */
+    @PluginMethod
+    public void listen(PluginCall call) {
+        if (getPermissionState("microphone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("microphone", call, "microphoneAnswered");
+            return;
+        }
+        startListening(call);
+    }
+
+    @PermissionCallback
+    private void microphoneAnswered(PluginCall call) {
+        if (getPermissionState("microphone") == PermissionState.GRANTED) startListening(call);
+        else call.reject("Allow the microphone to talk to DockIn.", "MIC_DENIED");
+    }
+
+    private void startListening(PluginCall call) {
+        final String lang = call.getString("lang", "en-IN");
+        getActivity().runOnUiThread(() -> {
+            if (!Voice.canListen(getContext())) {
+                call.reject("This phone has no speech recognition (Google app missing or off).", "NO_SPEECH");
+                return;
+            }
+            try {
+                voice().listen(lang);
+                call.resolve();
+            } catch (RuntimeException e) {
+                call.reject("Couldn't start listening.", "ERROR");
+            }
+        });
+    }
+
+    /** Done talking: keep what was heard. */
+    @PluginMethod
+    public void finishListening(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            if (voice != null) voice.finish();
+            call.resolve();
+        });
+    }
+
+    /** Cancel listening, throw it away. */
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            if (voice != null) voice.stopListening();
+            call.resolve();
+        });
+    }
+
+    /** Read text aloud ("speak" events: start / done / error). */
+    @PluginMethod
+    public void speak(PluginCall call) {
+        final String text = call.getString("text", "");
+        final String lang = call.getString("lang", "en-IN");
+        getActivity().runOnUiThread(() -> {
+            voice().speak(text, lang);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void stopSpeaking(PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            if (voice != null) voice.stopSpeaking();
+            call.resolve();
+        });
     }
 
     /** Back from Settings: the web side re-reads the switches. */

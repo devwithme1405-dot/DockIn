@@ -4,6 +4,7 @@ public class PluginCall {
   public void resolve(JSObject data) {}
   public void resolve() {}
   public void reject(String msg) {}
+  public void reject(String msg, String code) {}
   public JSArray getArray(String name) { return null; }
   public String getString(String name) { return null; }
   public Boolean getBoolean(String name, Boolean def) { return def; }

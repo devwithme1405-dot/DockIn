@@ -18,6 +18,7 @@ import { SocialSync } from "./SocialSync";
 import { AppUpdate } from "./AppUpdate";
 import { ShareInbox } from "./ShareInbox";
 import { WidgetsSync } from "./WidgetsSync";
+import { V3Host } from "./v3/V3Host";
 import { useAuth } from "@/lib/auth";
 import { DockIn, appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -403,6 +404,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isNativeApp() && <AppUpdate />}
         {isNativeApp() && ready && !onboarding && FRIENDS && <ShareInbox />}
         {isNativeApp() && ready && !onboarding && <WidgetsSync />}
+        {ready && !onboarding && <V3Host />}
         <CropHost />
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second

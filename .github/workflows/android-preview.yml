@@ -1,0 +1,118 @@
+name: Build DockIn 3 preview APK
+
+# The DockIn 3 test build (assistant, outpass). Shared by link only:
+#   https://github.com/devwithme1405-dot/DockIn/releases/download/apk-v3-preview/DockIn.apk
+# It updates only from its own release (Updater.BASE), and no one is notified —
+# the everyday app never offers it. Runs when a pushed commit's message has
+# "[preview]" in it, or from the Actions tab (Run workflow).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[preview]')
+    runs-on: ubuntu-latest
+    env:
+      DOCKIN_CHANNEL: preview
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Capacitor's Android library ships inside its npm package, and `cap sync`
+      # writes the config and plugin list the app reads at start.
+      - name: Install and sync Capacitor
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync android
+
+      # Every screen and script, built and packed into the APK, so the app opens
+      # from the phone itself (android Bundled.java) and never waits on the
+      # network for its first screen. Public config only (URL + publishable key).
+      - name: Bundle the screens into the APK
+        run: |
+          set -a; . capacitor/bundle.env; set +a
+          npx next build
+          W=android/app/src/main/assets/web
+          rm -rf "$W"; mkdir -p "$W/_next"
+          cp -r .next/static "$W/_next/static"
+          cp .next/server/app/*.html "$W/"
+          cp public/*.png public/*.webp "$W/" 2>/dev/null || true
+          ls "$W" | head -40
+          du -sh "$W"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
+
+      - name: Check the Java against stubs and the payment rules
+        run: bash scripts/android-compile.sh && bash scripts/android-updater-test.sh
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DOCKIN_KEYSTORE_B64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "DOCKIN_KEYSTORE_B64 secret is missing"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/dockin.jks"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          DOCKIN_KEYSTORE: ${{ runner.temp }}/dockin.jks
+          DOCKIN_KEYSTORE_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_ALIAS: dockin
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Check the signature and what is inside
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" DockIn.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/apksigner" verify --print-certs DockIn.apk
+          "$BT/aapt2" dump badging DockIn.apk | head -5
+          echo "--- the listener and the plugin made it in"
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml DockIn.apk | grep -E "PayWatchService|POST_NOTIFICATIONS|MainActivity"
+          unzip -p DockIn.apk assets/capacitor.config.json
+          unzip -l DockIn.apk | grep -E "assets/public/offline.html"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DockIn-v3-preview-apk
+          path: DockIn.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The app reads this to know a newer APK exists (in-app update).
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          LINE=$("$BT/aapt2" dump badging DockIn.apk | head -1)
+          CODE=$(echo "$LINE" | sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p")
+          NAME=$(echo "$LINE" | sed -nE "s/.*versionName='([^']+)'.*/\1/p")
+          # Size and SHA-256 let the app prove the download is whole before installing it.
+          SHA256=$(sha256sum DockIn.apk | cut -d' ' -f1)
+          SIZE=$(stat -c%s DockIn.apk)
+          printf '{"versionCode":%s,"versionName":"%s","sha":"%s","sha256":"%s","size":%s}\n' "$CODE" "$NAME" "${GITHUB_SHA::7}" "$SHA256" "$SIZE" > version.json
+          cat version.json
+          gh release delete apk-v3-preview --cleanup-tag -y || true
+          gh release create apk-v3-preview DockIn.apk version.json \
+            --title "DockIn 3 preview (test build)" \
+            --notes "Test build of DockIn 3 (assistant + outpass). Not for everyone: share the link only with testers. Installs over the normal app; updates only from this release." \
+            --prerelease --latest=false

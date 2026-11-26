@@ -181,6 +181,17 @@ interface DockInPlugin {
   setOpenChat(options: { thread: string | null }): Promise<void>;
   /** The numbers home-screen widgets show (JSON text); the phone redraws them. */
   setWidgets(options: { data: string }): Promise<void>;
+  /** "preview" on the DockIn 3 test APK; missing on builds before it. */
+  channel(): Promise<{ channel: string; speech?: boolean }>;
+  /** Listen once in a language ("en-IN", "hi-IN"…): results come as "speech" events. Rejects MIC_DENIED / NO_SPEECH. */
+  listen(options: { lang: string }): Promise<void>;
+  /** Done talking: keep what was heard. */
+  finishListening(): Promise<void>;
+  stopListening(): Promise<void>;
+  speak(options: { text: string; lang: string }): Promise<void>;
+  stopSpeaking(): Promise<void>;
+  addListener(event: "speech", fn: (e: SpeechEvent) => void): Promise<PluginListenerHandle>;
+  addListener(event: "speak", fn: (e: { type: "start" | "done" | "error" }) => void): Promise<PluginListenerHandle>;
   addListener(event: "share", fn: () => void): Promise<PluginListenerHandle>;
   addListener(event: "open", fn: (d: { path: string }) => void): Promise<PluginListenerHandle>;
   addListener(event: "resume", fn: () => void): Promise<PluginListenerHandle>;
@@ -188,6 +199,13 @@ interface DockInPlugin {
   addListener(event: "updateProgress", fn: (p: { percent: number }) => void): Promise<PluginListenerHandle>;
   addListener(event: "updateState", fn: (p: { state: UpdateState; message?: string }) => void): Promise<PluginListenerHandle>;
 }
+
+/** What the phone's speech recogniser reports while listening. */
+export type SpeechEvent =
+  | { type: "state"; state: "ready" | "speaking" | "processing" }
+  | { type: "level"; level: number }
+  | { type: "partial" | "final"; text: string }
+  | { type: "error"; code: string };
 
 /** Text, a link or documents shared into DockIn from another app. */
 export interface SharedIn {

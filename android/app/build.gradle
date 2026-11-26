@@ -9,6 +9,9 @@ def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
 // version stays the build number, which is what a person quotes back to you.
 def minutesSince2020 = (long) ((System.currentTimeMillis() - 1577836800000L) / 60000L)
 def keystorePath = System.getenv("DOCKIN_KEYSTORE")
+// "preview" builds (the DockIn 3 test APK, shared by link only) show the new
+// screens and update only from their own release; everything else is "stable".
+def channel = (System.getenv("DOCKIN_CHANNEL") ?: "stable").trim()
 
 android {
     namespace = "com.dockin.student"
@@ -19,6 +22,9 @@ android {
         disable 'ExactAlarm'
     }
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig true
+    }
     defaultConfig {
         // The same identity and signing key as the app already on the phone,
         // so this installs over it as an update instead of beside it.
@@ -26,7 +32,8 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode minutesSince2020.intValue()
-        versionName "2.0.${runNumber}"
+        versionName channel == "preview" ? "3.0-preview.${runNumber}" : "2.0.${runNumber}"
+        buildConfigField "String", "DOCKIN_CHANNEL", "\"${channel}\""
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

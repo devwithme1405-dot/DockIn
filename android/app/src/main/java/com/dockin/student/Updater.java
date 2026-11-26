@@ -48,7 +48,12 @@ import java.util.Locale;
  *    otherwise Android asks once, "Update DockIn?", and that's it.
  */
 final class Updater {
-    static final String BASE = "https://github.com/devwithme1405-dot/DockIn/releases/download/apk-latest/";
+    /**
+     * The release this build updates from. The DockIn 3 preview has its own, so
+     * it is never offered the everyday APK and the everyday app never sees it.
+     */
+    static final String BASE = "https://github.com/devwithme1405-dot/DockIn/releases/download/"
+            + ("preview".equals(BuildConfig.DOCKIN_CHANNEL) ? "apk-v3-preview" : "apk-latest") + "/";
     static final String CHANNEL = "updates";
     /** Same tag as the update push from the server, so the two never stack up. */
     static final String TAG = "dockin-update";
