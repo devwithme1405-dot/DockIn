@@ -1,0 +1,67 @@
+name: Build DockIn Admin APK
+
+# The founder's app (opens dock-in.vercel.app/admin). Its own package
+# (com.dockin.admin), so it installs next to DockIn, never over it.
+# Download: https://github.com/devwithme1405-dot/DockIn/releases/download/apk-admin/DockInAdmin.apk
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android-admin/**"
+      - ".github/workflows/android-admin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.DOCKIN_KEYSTORE_B64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "DOCKIN_KEYSTORE_B64 secret is missing"; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/dockin.jks"
+
+      - name: Build signed release APK
+        working-directory: android-admin
+        env:
+          DOCKIN_KEYSTORE: ${{ runner.temp }}/dockin.jks
+          DOCKIN_KEYSTORE_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_PASSWORD: ${{ secrets.DOCKIN_KEYSTORE_PASSWORD }}
+          DOCKIN_KEY_ALIAS: dockin
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Check it
+        run: |
+          APK=$(ls android-admin/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$APK" DockInAdmin.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          "$BT/apksigner" verify --print-certs DockInAdmin.apk
+          "$BT/aapt2" dump badging DockInAdmin.apk | head -5
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-admin --cleanup-tag -y || true
+          gh release create apk-admin DockInAdmin.apk \
+            --title "DockIn Admin (founder app)" \
+            --notes "The DockIn Admin dashboard as an app. For the DockIn team only — it needs an admin account." \
+            --prerelease --latest=false

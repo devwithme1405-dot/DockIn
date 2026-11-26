@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Leather brown behind everything until the dashboard paints. -->
+    <style name="Admin" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorPrimary">#7C3D1B</item>
+        <item name="android:colorPrimaryDark">#5C2A10</item>
+        <item name="android:colorAccent">#F2871F</item>
+        <item name="android:statusBarColor">#5C2A10</item>
+        <item name="android:navigationBarColor">#5C2A10</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

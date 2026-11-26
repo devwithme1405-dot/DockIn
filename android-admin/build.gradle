@@ -1,0 +1,18 @@
+// DockIn Admin: a small Android app that opens the founder's dashboard
+// (dock-in.vercel.app/admin). No Capacitor, no libraries — just a WebView.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.13.0'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

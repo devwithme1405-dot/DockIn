@@ -19,7 +19,7 @@ export default function Privacy() {
     <main className="page-wash min-h-dvh px-5 pt-10 pb-16">
       <article className="mx-auto w-full max-w-md">
         <h1 className="text-[30px] font-semibold leading-tight tracking-tight">Privacy</h1>
-        <p className="mt-2 text-[13px] text-muted">Last updated 7 November 2026</p>
+        <p className="mt-2 text-[13px] text-muted">Last updated 26 November 2026</p>
 
         <p className="mt-5 text-[15px]">
           DockIn is made by a student for students. It keeps as little as it can, and everything it
@@ -69,10 +69,24 @@ export default function Privacy() {
           </ul>
         </Section>
 
+        <Section title="What the DockIn team sees">
+          <p>
+            To keep DockIn working, the team can see for each account: when it last opened DockIn
+            and on which days, the app version and whether it&rsquo;s the Android app or the
+            website, and whether Camu, the LMS and notifications are set up. If the app crashes, the
+            error message is sent too. That&rsquo;s all — never your attendance, timetable, tasks,
+            chats or files.
+          </p>
+          <p className="mt-2">
+            If someone reports a message you sent, that one message is shown to the team with the
+            report. Accounts that break the rules can be suspended, and you&rsquo;ll see why.
+          </p>
+        </Section>
+
         <Section title="What is never collected">
           <p>
-            No advertising, no analytics about you, no location, no contacts, no selling anything to
-            anyone. There is no tracking of what you do in the app.
+            No advertising, no ad tracking, no location, no contacts, no selling anything to anyone,
+            and nothing about what you look at or type in the app beyond what is listed above.
           </p>
         </Section>
 

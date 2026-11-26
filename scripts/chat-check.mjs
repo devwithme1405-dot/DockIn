@@ -126,6 +126,8 @@ const net = { dropSends: false };
 const requested = [];
 /** Server-side file copies asked for (a forwarded document must land in the new chat's folder). */
 const copies = [];
+/** Messages reported to the DockIn team. */
+const reported = [];
 const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
@@ -194,6 +196,7 @@ await page.route(`https://${REF}.supabase.co/**`, async (route) => {
     else votes.push(b);
     return json([b], 201);
   }
+  if (req.method() === "POST" && name === "reports") reported.push(JSON.parse(req.postData() || "{}"));
   if (req.method() !== "GET") return json([], 200);
   // One row by id (e.g. the server's copy of a message just sent).
   const byId = url.searchParams.get("id");
@@ -504,6 +507,28 @@ await step("forwarding a document copies it into the other chat, so they can ope
   const sent = messages.find((m) => m.thread === `g:${G}` && m.kind === "file" && m.data?.name === "DBMS_Lab7_question.pdf");
   if (!sent) throw new Error("the forwarded message never reached the server");
   if (sent.data.path !== copy.destinationKey) throw new Error("forwarded card points at " + sent.data.path);
+  await page.getByLabel("Back", { exact: true }).click();
+  await page.waitForTimeout(400);
+});
+
+await step("report a friend's message to the DockIn team", async () => {
+  await page.getByRole("button", { name: /Yash.*(You:|Bhai|DBMS_|OS viva|example|notes)/ }).first().click();
+  const chat = page.getByRole("dialog", { name: /Chat with/ });
+  const msg = chat.getByText("Bhai DBMS lab 7 kiya?");
+  await msg.scrollIntoViewIfNeeded();
+  const box = await msg.boundingBox();
+  await page.mouse.move(box.x + 20, box.y + 10);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Report", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Report message" });
+  await sheet.getByRole("button", { name: /Spam or scam/ }).click();
+  await page.screenshot({ path: `${SHOTS}/chat-report.png` });
+  await sheet.getByRole("button", { name: "Report", exact: true }).click();
+  await page.getByText(/Reported\. The DockIn team/).waitFor({ timeout: 4000 });
+  const r = reported[0];
+  if (!r || r.target !== YASH || r.reason !== "Spam or scam" || r.excerpt !== "Bhai DBMS lab 7 kiya?") throw new Error(JSON.stringify(r));
   await page.getByLabel("Back", { exact: true }).click();
   await page.waitForTimeout(400);
 });

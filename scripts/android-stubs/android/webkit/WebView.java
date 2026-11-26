@@ -5,6 +5,9 @@ public class WebView extends View {
   public class WebViewTransport { public void setWebView(WebView w) {} }
   public boolean canGoBack() { return false; }
   public void goBack() {}
+  public android.os.Bundle saveState(android.os.Bundle b) { return null; }
+  public android.os.Bundle restoreState(android.os.Bundle b) { return null; }
+  public void setBackgroundColor(int c) {}
   public WebSettings getSettings() { return null; }
   public void loadUrl(String url) {}
   public void loadDataWithBaseURL(String baseUrl, String data, String mimeType, String encoding, String historyUrl) {}

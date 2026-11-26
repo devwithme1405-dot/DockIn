@@ -15,5 +15,6 @@ public class Activity extends Context {
   public void runOnUiThread(Runnable r) {}
   public void onBackPressed() {}
   protected void onDestroy() {}
+  protected void onSaveInstanceState(android.os.Bundle out) {}
   public android.content.res.Resources getResources() { return null; }
 }

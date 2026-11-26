@@ -15,7 +15,7 @@ log="$out/javac.log"
 set +e
 javac -nowarn -d "$out" \
   $(find "$here/android-stubs" -name '*.java') \
-  $(find "$here/../android/app/src/main/java" -name '*.java') >"$log" 2>&1
+  $(find "$here/../android/app/src/main/java" "$here/../android-admin/app/src/main/java" -name '*.java') >"$log" 2>&1
 code=$?
 set -e
 grep -v 'uses or overrides a deprecated API' "$log" | grep -v 'Recompile with -Xlint' || true

@@ -15,6 +15,7 @@ import {
   Download,
   EyeOff,
   Files,
+  Flag,
   Forward,
   ListChecks,
   Paperclip,
@@ -72,6 +73,7 @@ import { TaskForm } from "./TaskParts";
 import { fmtDay, fmtTime, toDateStr } from "@/lib/dates";
 import type { Group, Task } from "@/lib/types";
 import { Avatar, Sheet, cx, useToast } from "./ui";
+import { ReportMessage } from "./AccountNotices";
 import { getSupabase } from "@/lib/supabase";
 import { whileVisible } from "@/lib/visible";
 import { addTask } from "@/lib/repo";
@@ -179,6 +181,7 @@ export function ChatView({
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [holding, setHolding] = useState<ChatMessage | null>(null);
+  const [reporting, setReporting] = useState<ChatMessage | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
   const [adding, setAdding] = useState(false);
@@ -842,6 +845,9 @@ export function ChatView({
               }}
             />
           )}
+          {holding && holding.author !== me && !holding.deleted && (
+            <SheetRow icon={Flag} danger label="Report" onClick={() => { setReporting(holding); setHolding(null); }} />
+          )}
           {holding && (
             <SheetRow icon={EyeOff} label="Delete for me" onClick={() => { void hideMessage(holding.id); setHolding(null); }} />
           )}
@@ -849,6 +855,10 @@ export function ChatView({
             <SheetRow icon={Trash2} danger label="Delete for everyone" onClick={() => { void unsendMessage(holding.id); setHolding(null); }} />
           )}
         </div>
+      </Sheet>
+
+      <Sheet open={!!reporting} onClose={() => setReporting(null)} title="Report message">
+        {reporting && <ReportMessage message={reporting} onDone={() => setReporting(null)} />}
       </Sheet>
 
       <Sheet open={!!forwarding} onClose={() => setForwarding(null)} title="Forward to">

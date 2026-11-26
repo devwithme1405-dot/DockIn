@@ -19,6 +19,10 @@ import { AppUpdate } from "./AppUpdate";
 import { ShareInbox } from "./ShareInbox";
 import { WidgetsSync } from "./WidgetsSync";
 import { V3Host } from "./v3/V3Host";
+import { BannedScreen } from "./AccountNotices";
+import { installErrorReports, startPresence, useBan } from "@/lib/presence";
+import { forgetPushToken } from "@/lib/push";
+import { signOutCloud } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
 import { DockIn, appReady, isNativeApp, onPhone } from "@/lib/native";
 import { setupSeen } from "@/lib/setup";
@@ -69,7 +73,7 @@ const TABS = [
  * the privacy page Google Play needs, and the password-reset link, which a
  * phone that has never run DockIn must be able to open.
  */
-const BARE = new Set(["/privacy", "/reset"]);
+const BARE = new Set(["/privacy", "/reset", "/admin"]);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -80,14 +84,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // The welcome, sign-in and setup screens are designed in light: they never
   // follow a dark phone (and nothing flashes dark while logging out).
-  const firstRun = pathname === "/onboarding" || pathname === "/setup" || profile === null;
+  // DockIn Admin keeps its own theme and size: none of the student app's appearance applies.
+  const admin = pathname === "/admin";
+  const firstRun = !admin && (pathname === "/onboarding" || pathname === "/setup" || profile === null);
   useEffect(() => {
     if (!firstRun) return;
     applyTheme("light", false);
   }, [firstRun]);
 
   useEffect(() => {
-    if (!profile || firstRun) return;
+    if (!profile || firstRun || admin) return;
     applyTheme(profile.theme);
     applyTextScale(profile.textScale);
     if (profile.theme !== "system") return;
@@ -96,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     const onChange = () => applyTheme("system");
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [profile, firstRun]);
+  }, [profile, firstRun, admin]);
 
   // Cloud sync runs in the background for signed-in students.
   const { session, loading: authLoading } = useAuth();
@@ -105,9 +111,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => {
     const sb = getSupabase();
-    if (!sb || !userId) return;
+    if (!sb || !userId || admin) return;
     return startSync(sb, userId);
-  }, [userId]);
+  }, [userId, admin]);
   useEffect(() => {
     // Never keep someone waiting on a slow network: open the app regardless
     // after a few seconds.
@@ -142,6 +148,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     void ensureCategories();
   }, []);
+
+  // DockIn Admin: that this student opened the app (version, setup health) and any crash.
+  useEffect(() => {
+    if (bare || !userId) return;
+    const stop = startPresence();
+    const stopErrors = installErrorReports();
+    return () => {
+      stop();
+      stopErrors();
+    };
+  }, [bare, userId]);
+  const ban = useBan(bare ? null : userId);
 
   // Offline mode: watch the network from the start (see lib/net).
   useEffect(() => {
@@ -362,6 +380,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A bare page (privacy, password reset) draws on its own, with no tabs, no
   // launch screen and no sign-in gate — it may be the first DockIn page a phone
   // ever opens.
+  // DockIn Admin draws its own full-width layout (sidebar on a laptop).
+  if (pathname === "/admin") return <>{children}</>;
   if (bare) {
     return (
       <ToastProvider>
@@ -405,6 +425,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isNativeApp() && ready && !onboarding && FRIENDS && <ShareInbox />}
         {isNativeApp() && ready && !onboarding && <WidgetsSync />}
         {ready && !onboarding && <V3Host />}
+        {ban && (
+          <BannedScreen
+            ban={ban}
+            onSignOut={() => {
+              void (async () => {
+                await forgetPushToken().catch(() => {});
+                await signOutCloud().catch(() => {});
+                window.location.replace("/settings");
+              })();
+            }}
+          />
+        )}
         <CropHost />
       </div>
       {/* In the app the phone's own launch splash covers the load, so a second

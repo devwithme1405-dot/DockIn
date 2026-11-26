@@ -1,5 +1,6 @@
 "use client";
 
+import { AnnouncementBar } from "@/components/AccountNotices";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -171,6 +172,8 @@ export default function TodayPage() {
           </div>
         </div>
       </StickyBar>
+
+      <AnnouncementBar className="mx-5 mt-2" />
 
       <div className="flex items-end justify-between gap-3 px-5 pt-3">
         <div className="min-w-0">

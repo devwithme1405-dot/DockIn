@@ -1,0 +1,43 @@
+apply plugin: 'com.android.application'
+
+def runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+// Only ever rises, so every build installs over the last (see the main app).
+def minutesSince2020 = (long) ((System.currentTimeMillis() - 1577836800000L) / 60000L)
+def keystorePath = System.getenv("DOCKIN_KEYSTORE")
+
+android {
+    namespace = "com.dockin.admin"
+    compileSdk = 36
+    defaultConfig {
+        applicationId "com.dockin.admin"
+        minSdkVersion 24
+        targetSdkVersion 36
+        versionCode minutesSince2020.intValue()
+        versionName "1.0.${runNumber}"
+    }
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("DOCKIN_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("DOCKIN_KEY_ALIAS") ?: "dockin"
+                keyPassword System.getenv("DOCKIN_KEY_PASSWORD")
+            }
+            v1SigningEnabled true
+            v2SigningEnabled true
+            enableV3Signing true
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

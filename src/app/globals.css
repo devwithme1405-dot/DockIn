@@ -1625,3 +1625,24 @@ html.lite .bot-fab::after, html.lite .ask-halo, html.lite .voice-ring { animatio
   .dockbot svg, .dockbot .bot-all, .dockbot .bot-shadow, .dockbot .bot-bulb, .dockbot .bot-eye, .dockbot .bot-head,
   .dockbot .bot-eyes, .dockbot .bot-mouth, .bot-fab, .bot-fab::after, .ask-halo, .voice-ring, .ask-in, .ask-card-in, .ask-screen { animation: none !important; }
 }
+
+/* ===================== DockIn Admin ===================== */
+.adm-bg { background: var(--bg); min-height: 100dvh; }
+[data-theme="light"] .adm-bg { background: #f6ecdc; }
+.adm-card { box-shadow: 0 1px 0 rgb(var(--shadow-ink) / 0.06), 0 8px 24px -16px rgb(var(--shadow-ink) / 0.35); }
+.adm-side {
+  background-color: var(--leather-lo);
+  background-image: var(--leather), linear-gradient(180deg, #7a3c1b 0%, #5c2a10 100%);
+  box-shadow: inset -1px 0 0 rgb(0 0 0 / 0.25);
+}
+.adm-top { background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+[data-theme="light"] .adm-top { background: color-mix(in srgb, #f6ecdc 86%, transparent); }
+.adm-bottom { background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.adm-icon-btn:active { transform: translateY(1px); }
+.adm-link { font-size: 12.5px; font-weight: 700; color: var(--accent); padding: 6px 10px; border-radius: 99px; background: var(--accent-soft); }
+.adm-enter { animation: adm-enter .28s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes adm-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.adm-drawer { animation: adm-drawer .3s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes adm-drawer { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+html.lite .adm-top, html.lite .adm-bottom { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--card); }
+@media (prefers-reduced-motion: reduce) { .adm-enter, .adm-drawer { animation: none; } }
