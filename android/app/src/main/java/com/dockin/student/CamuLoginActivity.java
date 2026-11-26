@@ -171,6 +171,7 @@ public class CamuLoginActivity extends Activity {
             }
             // Analytics beacons are long and constant; they only push the real requests out.
             if (ANALYTICS.matcher(url).find()) return;
+            Camu.learnLoginId(app, json);
             SharedPreferences p = app.getSharedPreferences(PREFS_CAPTURE, MODE_PRIVATE);
             JSONArray list;
             try {

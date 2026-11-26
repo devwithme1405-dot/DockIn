@@ -85,13 +85,13 @@ const PNG = Buffer.from(
   "base64",
 );
 
-async function phone({ channel = "preview", theme = "light" } = {}) {
+async function phone({ channel = "preview", theme = "light", direct = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => problems.push(`uncaught: ${e.message}`));
   await page.addInitScript(
-    ({ channel, camu }) => {
-      const phone = { calls: [], notes: [], spoken: [] };
+    ({ channel, camu, direct }) => {
+      const phone = { calls: [], notes: [], spoken: [], sentDayOuts: [] };
       const listeners = {};
       let nextId = 1;
       const fire = (event, data) => {
@@ -126,6 +126,13 @@ async function phone({ channel = "preview", theme = "light" } = {}) {
           ]),
         }),
         clearCamuCaptured: () => ({}),
+        camuCanMakePass: () => ({ ok: direct }),
+        camuDayOut: (o) => {
+          phone.sentDayOuts.push(o);
+          if (o.reason === "Bank work") return { made: false, code: "DUP_GATEPASS_EXISTS" };
+          return { made: true, record: JSON.stringify({ _id: "camu-pass-1", passTyCode: "DOP", prntAp: "SUB", status: "SUB" }) };
+        },
+        camuPasses: () => ({ items: JSON.stringify([{ _id: "camu-pass-1", passTyCode: "DOP", prntAp: "APPRVD", status: "SUB" }]) }),
         listen: (o) => {
           phone.lang = o.lang;
           setTimeout(() => fire("speech", { type: "state", state: "ready" }), 100);
@@ -178,7 +185,7 @@ async function phone({ channel = "preview", theme = "light" } = {}) {
         },
       };
     },
-    { channel, camu: camuFixture() },
+    { channel, camu: camuFixture(), direct },
   );
   await page.goto(`${BASE}/onboarding`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
@@ -312,6 +319,40 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await page.waitForTimeout(700);
     if (await pass(page).count()) throw new Error("still open");
     await page.getByRole("region", { name: "Outpass" }).getByText(/Leave ·|Day out ·/).waitFor({ timeout: 3000 });
+  });
+  await ctx.close();
+}
+
+{
+  const { ctx, page } = await phone({ direct: true });
+  await step("taught phone: a day out goes straight into MyCamu", async () => {
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    await line(page, "kal 4 baje market");
+    await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
+    await pass(page).getByText("Sent to MyCamu").waitFor({ timeout: 4000 });
+    await pass(page).getByText("Submitted in MyCamu").waitFor({ timeout: 2000 });
+    const st = await phoneState(page);
+    const sent = st.sentDayOuts.at(-1);
+    if (!sent || sent.from !== "16:00" || sent.to !== "19:00" || sent.reason !== "Market") throw new Error(`sent ${JSON.stringify(sent)}`);
+    if (st.notes.length) throw new Error("opened MyCamu too");
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${SHOTS}/op-sent.png` });
+  });
+
+  await step("MyCamu's refusal is shown in words, nothing saved", async () => {
+    await pass(page).getByRole("button", { name: "New pass" }).last().click();
+    await line(page, "kal 3 baje bank");
+    await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
+    await pass(page).getByRole("alert").getByText(/already has a pass for this time/).waitFor({ timeout: 3000 });
+    await page.screenshot({ path: `${SHOTS}/op-refused.png` });
+    if ((await page.evaluate(() => window.__phone.get().notes.length)) !== 0) throw new Error("opened MyCamu");
+  });
+
+  await step("a leave still opens MyCamu; History brings approval in from MyCamu", async () => {
+    await line(page, "kal se 2 din ghar");
+    if (!(await pass(page).getByRole("button", { name: "Make the pass" }).count())) throw new Error("leave says submit");
+    await pass(page).getByRole("tab", { name: /History/ }).or(pass(page).getByRole("radio", { name: /History/ })).or(pass(page).getByText(/^History/)).first().click();
+    await pass(page).getByText("Approved").first().waitFor({ timeout: 4000 });
   });
   await ctx.close();
 }

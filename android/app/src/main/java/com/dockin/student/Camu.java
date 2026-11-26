@@ -28,6 +28,8 @@ final class Camu {
     static final String PREFS = "dockin-college";
     static final String K_IDS = "camu.ids";
     static final String K_UA = "camu.ua";
+    /** MyCamu's own id for the signed-in login (sent as `loggedInId` with a pass). */
+    static final String K_LOGIN = "camu.loginId";
     static final String V_COOKIE = "camu.cookie";
 
     /** Camu ended the session; signing in again is the only fix. */
@@ -177,6 +179,111 @@ final class Camu {
         out.put("periods", periods);
         out.put("holidays", holidays);
         return out;
+    }
+
+    // ------------------------------------------------------------- outpass
+
+    /** No login id yet: the student has to make one pass in MyCamu through DockIn first. */
+    static final class NeedsTeaching extends Exception {}
+
+    /**
+     * MyCamu sends the login's id with every pass, and it is not among the ids
+     * DockIn reads at sign-in. It is learned from a pass the student made in
+     * MyCamu inside DockIn (see CamuLoginActivity.Capture) — only when that
+     * pass is this same student's.
+     */
+    static void learnLoginId(Context c, String noteJson) {
+        try {
+            String body = new JSONObject(noteJson).optString("body", "");
+            if (!body.contains("loggedInId")) return;
+            JSONObject b = new JSONObject(body);
+            String login = b.optString("loggedInId", "");
+            JSONObject id = ids(c);
+            if (login.isEmpty() || id == null || !b.optString("PerId", "").equals(id.optString("StuID", ""))) return;
+            prefs(c).edit().putString(K_LOGIN, login).apply();
+        } catch (JSONException e) {
+            // not a pass
+        }
+    }
+
+    static boolean canMakePass(Context c) {
+        if (!connected(c)) return false;
+        if (prefs(c).getString(K_LOGIN, "").isEmpty()) learnFromNotes(c);
+        return !prefs(c).getString(K_LOGIN, "").isEmpty();
+    }
+
+    /** Passes noted before this build knew to look (they stay on the phone). */
+    private static void learnFromNotes(Context c) {
+        SharedPreferences p = c.getApplicationContext()
+                .getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE);
+        for (String key : new String[] {"writes", "picked", "items"}) {
+            try {
+                JSONArray a = new JSONArray(p.getString(key, "[]"));
+                for (int i = a.length() - 1; i >= 0; i--) {
+                    Object o = a.opt(i);
+                    if (o != null) learnLoginId(c, o.toString());
+                    if (!prefs(c).getString(K_LOGIN, "").isEmpty()) return;
+                }
+            } catch (JSONException e) {
+                // nothing usable
+            }
+        }
+    }
+
+    private static final java.util.regex.Pattern DAY = java.util.regex.Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    private static final java.util.regex.Pattern TIME = java.util.regex.Pattern.compile("([01]\\d|2[0-3]):[0-5]\\d");
+
+    /**
+     * The body MyCamu's own form sends for a Day Out Pass (captured from it):
+     * one day, the times as Indian wall-clock written with a Z.
+     */
+    static JSONObject dayOutBody(JSONObject id, String login, String day, String from, String to, String reason) throws JSONException {
+        if (!DAY.matcher(day).matches() || !TIME.matcher(from).matches() || !TIME.matcher(to).matches())
+            throw new IllegalArgumentException("Pick a date and both times.");
+        if (from.compareTo("06:00") < 0 || to.compareTo("19:00") > 0 || from.compareTo(to) >= 0)
+            throw new IllegalArgumentException("A day out runs between 6:00 am and 7:00 pm.");
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty() || why.length() > 200) throw new IllegalArgumentException("Give a reason.");
+        String midnight = day + "T00:00:00.000Z";
+        return new JSONObject()
+                .put("PerTy", "Student")
+                .put("PerId", id.optString("StuID"))
+                .put("PerNm", id.optString("name"))
+                .put("InId", id.optString("InId"))
+                .put("HstleReq", "true")
+                .put("LvTy", "Leave")
+                .put("Rson", why)
+                .put("PtAb", "")
+                .put("Sson", "")
+                .put("ToDt", midnight)
+                .put("FrDt", midnight)
+                .put("periods", new JSONArray())
+                .put("Attachments", new JSONArray())
+                .put("GateOutPass", true)
+                .put("passTy", "DOP")
+                .put("loggedInId", login)
+                .put("frdt", day + "T" + from + ":00Z")
+                .put("todt", day + "T" + to + ":00Z")
+                .put("rson", why)
+                .put("atcmnt", new JSONArray())
+                .put("timezoneOffSet", 330);
+    }
+
+    /** Sends a Day Out Pass the way MyCamu's form does; returns MyCamu's `output`. */
+    static JSONObject makeDayOut(Context c, String day, String from, String to, String reason)
+            throws IOException, Expired, JSONException, NeedsTeaching {
+        JSONObject id = need(c);
+        if (!canMakePass(c)) throw new NeedsTeaching();
+        String login = prefs(c).getString(K_LOGIN, "");
+        return data(c, "/api/Leave/crtLv", dayOutBody(id, login, day, from, to, reason));
+    }
+
+    /** The student's passes and leaves, as MyCamu's leave page lists them. */
+    static JSONArray passes(Context c) throws IOException, Expired, JSONException {
+        JSONObject id = need(c);
+        JSONObject body = new JSONObject().put("StuID", id.optString("StuID")).put("isFrmReact", true);
+        JSONArray a = data(c, "/api/Leave/getAllleave/", body).optJSONArray("data");
+        return a == null ? new JSONArray() : a;
     }
 
     // -------------------------------------------------------------------------

@@ -26,6 +26,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -380,6 +381,100 @@ public class DockInPlugin extends Plugin {
         } catch (ActivityNotFoundException e) {
             call.reject("Could not open Camu.");
         }
+    }
+
+    /** Can DockIn send a pass to MyCamu itself (signed in, and the login id learned)? */
+    @PluginMethod
+    public void camuCanMakePass(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("ok", Camu.canMakePass(getContext()));
+        call.resolve(o);
+    }
+
+    /**
+     * Sends a Day Out Pass to MyCamu, then reads MyCamu's list back to be sure
+     * it is there. Resolves {made, code?, record?, raw?}; rejects with code
+     * "expired" (sign in again), "teach" (no login id yet), "invalid" or "network".
+     */
+    @PluginMethod
+    public void camuDayOut(final PluginCall call) {
+        final Context c = getContext();
+        final String day = call.getString("date", "");
+        final String from = call.getString("from", "");
+        final String to = call.getString("to", "");
+        final String reason = call.getString("reason", "");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                JSObject out = new JSObject();
+                try {
+                    JSONObject res = Camu.makeDayOut(c, day, from, to, reason);
+                    Object data = res.opt("data");
+                    String code = data instanceof JSONObject ? ((JSONObject) data).optString("code", "") : "";
+                    Object errors = res.opt("errors");
+                    if (!code.isEmpty()) {
+                        out.put("made", false);
+                        out.put("code", code);
+                        call.resolve(out);
+                        return;
+                    }
+                    if (errors != null && errors != JSONObject.NULL) {
+                        out.put("made", false);
+                        out.put("code", "ERRORS");
+                        out.put("raw", String.valueOf(errors));
+                        call.resolve(out);
+                        return;
+                    }
+                    // MyCamu's answer to a good pass has not been seen yet, so the
+                    // pass list is the proof: the new Day Out must be in it.
+                    JSONObject found = null;
+                    JSONArray list = Camu.passes(c);
+                    String start = day + "T" + from;
+                    for (int i = 0; i < list.length(); i++) {
+                        JSONObject p = list.optJSONObject(i);
+                        if (p != null && "DOP".equals(p.optString("passTyCode")) && p.optString("frdt").startsWith(start)) {
+                            found = p;
+                            break;
+                        }
+                    }
+                    out.put("made", found != null);
+                    if (found != null) out.put("record", found.toString());
+                    else {
+                        out.put("code", "NOT_IN_LIST");
+                        out.put("raw", String.valueOf(data));
+                    }
+                    call.resolve(out);
+                } catch (Camu.Expired e) {
+                    call.reject("MyCamu sign-in has ended.", "expired");
+                } catch (Camu.NeedsTeaching e) {
+                    call.reject("Make one pass in MyCamu through DockIn first.", "teach");
+                } catch (IllegalArgumentException e) {
+                    call.reject(e.getMessage(), "invalid");
+                } catch (Exception e) {
+                    call.reject("Couldn't reach MyCamu.", "network");
+                }
+            }
+        }, "dockin-camu-pass").start();
+    }
+
+    /** MyCamu's own list of the student's passes (to bring statuses up to date). */
+    @PluginMethod
+    public void camuPasses(final PluginCall call) {
+        final Context c = getContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JSObject out = new JSObject();
+                    out.put("items", Camu.passes(c).toString());
+                    call.resolve(out);
+                } catch (Camu.Expired e) {
+                    call.reject("MyCamu sign-in has ended.", "expired");
+                } catch (Exception e) {
+                    call.reject("Couldn't reach MyCamu.", "network");
+                }
+            }
+        }, "dockin-camu-passes").start();
     }
 
     /** Shares a line of text through the phone's share sheet (WhatsApp, SMS…). */

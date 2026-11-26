@@ -4,6 +4,7 @@ import { DockIn, isNativeApp } from "../native";
 import { fmtTime, fromDateStr } from "../dates";
 import { needsProof, passSummary, type PassDraft } from "../outpass";
 import { whatsappUrl } from "../money";
+import { v3db, type PassStatus } from "./store";
 
 /**
  * Outpass, the parts that leave DockIn: MyCamu (with the mail screenshot ready
@@ -100,6 +101,94 @@ export async function shareText(text: string, title = "Share"): Promise<void> {
     }
   }
   window.open(whatsappUrl(text), "_blank", "noopener");
+}
+
+// ------------------------------------------------------------ straight to MyCamu
+
+/** What happened when DockIn sent a Day Out to MyCamu itself. */
+export type SendResult =
+  | { kind: "made"; camuId?: string; status: "applied" | "approved" }
+  /** MyCamu said no, in its own words: show it, don't save. */
+  | { kind: "refused"; message: string }
+  /** DockIn can't send it itself (old APK, not taught, signed out, offline): open MyCamu instead. */
+  | { kind: "open"; why: string };
+
+/** MyCamu's answer codes, in plain words. */
+const CODES: Record<string, string> = {
+  DUP_GATEPASS_EXISTS: "MyCamu already has a pass for this time. Cancel that one in MyCamu first, or pick another time.",
+  LEAVE_MISSING_ON_WORKING_DAY: "MyCamu says this is a working day and wants a leave for it before a day out.",
+};
+
+export function codeWords(code: string): string {
+  return CODES[code] ?? `MyCamu didn't take it (${code.replace(/_/g, " ").toLowerCase()}).`;
+}
+
+/** Can this phone send a pass to MyCamu without opening it? */
+export async function canSendDirect(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    return (await DockIn.camuCanMakePass()).ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Parent / warden approval as DockIn shows it. */
+function statusOf(r: Record<string, unknown>): PassStatus {
+  const all = [r.status, r.prntAp, r.stfAp].map((x) => String(x ?? "").toUpperCase());
+  if (all.some((x) => x.includes("REJ"))) return "rejected";
+  if (all.some((x) => x.includes("CANC") || x === "CNCL")) return "cancelled";
+  if (String(r.prntAp ?? "").toUpperCase() === "APPRVD" || String(r.status ?? "").toUpperCase() === "CMPT") return "approved";
+  return "applied";
+}
+
+/**
+ * A Day Out straight into MyCamu, the way MyCamu's own form sends it, then
+ * checked against MyCamu's list. Anything DockIn can't do itself falls back
+ * to opening MyCamu with the details pinned.
+ */
+export async function sendDayOut(p: PassDraft): Promise<SendResult> {
+  if (p.kind !== "dayout") return { kind: "open", why: "leave" };
+  if (!(await canSendDirect())) return { kind: "open", why: "not-ready" };
+  try {
+    const r = await DockIn.camuDayOut({ date: p.fromDate, from: p.fromTime, to: p.toTime, reason: p.reason });
+    if (r.made) {
+      let rec: Record<string, unknown> = {};
+      try {
+        rec = JSON.parse(r.record ?? "{}");
+      } catch {
+        /* the pass is there either way */
+      }
+      const st = statusOf(rec);
+      return { kind: "made", camuId: typeof rec._id === "string" ? rec._id : undefined, status: st === "approved" ? "approved" : "applied" };
+    }
+    if (r.code === "NOT_IN_LIST") return { kind: "open", why: "unsure" };
+    return { kind: "refused", message: codeWords(r.code ?? "UNKNOWN") };
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "invalid") return { kind: "refused", message: (e as Error).message };
+    return { kind: "open", why: code ?? "error" };
+  }
+}
+
+/** Brings the statuses of passes DockIn sent up to date from MyCamu's list. Returns how many changed. */
+export async function refreshFromCamu(passes: { id: string; camuId?: string; status: PassStatus }[]): Promise<number> {
+  const mine = passes.filter((p) => p.camuId);
+  if (!mine.length || !isNativeApp()) return 0;
+  const r = await DockIn.camuPasses();
+  const list = JSON.parse(r.items || "[]") as Record<string, unknown>[];
+  const byId = new Map(list.filter((x) => typeof x._id === "string").map((x) => [x._id as string, x]));
+  let changed = 0;
+  for (const p of mine) {
+    const rec = byId.get(p.camuId!);
+    if (!rec) continue;
+    const st = statusOf(rec);
+    if (st !== p.status) {
+      await v3db.passes.update(p.id, { status: st, updatedAt: Date.now() });
+      changed++;
+    }
+  }
+  return changed;
 }
 
 // ------------------------------------------------------------ teaching DockIn

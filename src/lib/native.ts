@@ -164,6 +164,12 @@ interface DockInPlugin {
   /** The phone's share sheet (WhatsApp, SMS…). Preview APK 3.0 and later. */
   shareText(options: { text: string; title?: string }): Promise<void>;
   clearCamuCaptured(): Promise<void>;
+  /** Preview APK: can DockIn submit a pass to MyCamu itself? */
+  camuCanMakePass(): Promise<{ ok: boolean }>;
+  /** Preview APK: submits a Day Out Pass to MyCamu and checks it is listed. */
+  camuDayOut(options: { date: string; from: string; to: string; reason: string }): Promise<{ made: boolean; code?: string; record?: string; raw?: string }>;
+  /** Preview APK: MyCamu's own list of passes and leaves (JSON). */
+  camuPasses(): Promise<{ items: string }>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */
   camuCaptured(): Promise<{ items: string; picked?: string; writes?: string }>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;

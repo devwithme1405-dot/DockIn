@@ -15,8 +15,8 @@ public class JSONObject {
   public boolean has(String k) { return m.containsKey(k); }
   public boolean isNull(String k) { return true; }
   public Object remove(String k) { return null; }
-  public Iterator<String> keys() { return null; }
-  public int length() { return 0; }
+  public Iterator<String> keys() { return m.keySet().iterator(); }
+  public int length() { return m.size(); }
   public String optString(String k) { return optString(k, ""); }
   public String optString(String k, String d) { Object v = m.get(k); return v == null ? d : String.valueOf(v); }
   public boolean optBoolean(String k) { return optBoolean(k, false); }

@@ -19,6 +19,10 @@ export interface PassRecord extends PassDraft {
   proof?: Blob;
   proofName?: string;
   via: "assistant" | "manual";
+  /** MyCamu's id for this pass, when DockIn sent it there itself. */
+  camuId?: string;
+  /** Sent to MyCamu by DockIn (not just saved here). */
+  sentByDockIn?: boolean;
 }
 
 /** One line in the assistant chat. */
