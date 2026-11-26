@@ -47,7 +47,7 @@ import {
   camuNotes,
   clearCamuNotes,
   notePath,
-  notesReport,
+  notesParts,
   openCamuToTeach,
   parentText,
   sendToCamu,
@@ -940,6 +940,7 @@ function TeachCamu() {
   const picked = notes?.picked ?? [];
   const sent = notes ? [...notes.writes, ...notes.picked].filter(isWrite) : [];
   const anything = !!notes && (picked.length > 0 || notes.recent.length > 0 || notes.writes.length > 0);
+  const parts = notes && anything ? notesParts(notes) : [];
   return (
     <section className="mt-6 w-full rounded-2xl border-[1.5px] border-dashed border-line bg-surface p-3.5 text-left">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-3 text-left">
@@ -983,12 +984,27 @@ function TeachCamu() {
             <button
               type="button"
               disabled={!anything}
-              onClick={() => notes && void shareText(notesReport(notes), "Share with DockIn team")}
+              onClick={() => notes && void shareText(notesParts(notes)[0], "Share with DockIn team")}
               className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px] disabled:opacity-50"
             >
-              <Share2 size={15} /> Share with team
+              <Share2 size={15} /> {parts.length > 1 ? "Share part 1" : "Share with team"}
             </button>
           </div>
+          {parts.length > 1 && (
+            <div className="grid grid-cols-3 gap-2">
+              {parts.slice(1).map((t, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => void shareText(t, "Share with DockIn team")}
+                  className="btn-paper lip-sm inline-flex h-9 items-center justify-center gap-1 rounded-xl text-[12.5px]"
+                >
+                  <Share2 size={13} /> Part {i + 2}
+                </button>
+              ))}
+            </div>
+          )}
+          {parts.length > 1 && <p className="text-[12px] text-muted">Send every part — {parts.length} in all.</p>}
           {anything && (
             <button
               type="button"

@@ -152,51 +152,59 @@ export function notePath(n: CamuNote): string {
 }
 
 const READS = /\/(get|list|fetch|search|count|view)[^/]*\/?$|getall|config|dashboard|summary/i;
+/** MyCamu's own server (relative URLs, or *.camu.in) — not analytics and the like. */
+const isCamu = (n: CamuNote) => n.url.startsWith("/") || /^https?:\/\/[^/]*camu\.in\//i.test(n.url);
 /** Was this MyCamu sending something (not just reading)? Also for APKs that don't keep `writes`. */
-export const isWrite = (n: CamuNote) => !!n.url && !READS.test(n.url);
+export const isWrite = (n: CamuNote) => !!n.url && isCamu(n) && !READS.test(n.url);
 
-/**
- * Everything worth sending to the DockIn team, small enough for a WhatsApp
- * message (long texts get cut): the sends first and whole, newest first; the
- * reads only as one line each.
- */
-export function notesReport(n: CamuNotes, limit = 3800): string {
+/** One line per distinct send: the newest of each kind (same URL and same leave type). */
+function distinctSends(n: CamuNotes): CamuNote[] {
+  const all = [...n.writes, ...n.picked, ...n.recent].filter(isWrite).sort((a, b) => b.at - a.at);
   const seen = new Set<string>();
-  const all = [...n.writes, ...n.picked, ...n.recent].filter((x) => {
-    const k = `${x.at}|${x.url}|${x.method}`;
+  return all.filter((w) => {
+    const kind = w.body.match(/"(?:LvTy|passTy|PassTy)"\s*:\s*"([^"]*)"/)?.[1] ?? "";
+    const k = `${notePath(w)}|${kind}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
-  all.sort((a, b) => b.at - a.at);
-  const writes = all.filter(isWrite);
-  const reads = all.filter((x) => !isWrite(x));
+}
+
+/**
+ * What to send to the DockIn team, as messages small enough that nothing gets
+ * cut on the way: each distinct MyCamu send whole (newest first), split over
+ * as many parts as it takes; the reads as one counted line.
+ */
+export function notesParts(n: CamuNotes, limit = 2800): string[] {
+  const sends = distinctSends(n);
   const counts = new Map<string, number>();
-  for (const r of reads) {
-    const k = `${r.method} ${notePath(r) || "(no url)"} ${r.status}`;
+  const once = new Set<string>();
+  for (const r of [...n.picked, ...n.recent].filter((x) => isCamu(x) && !isWrite(x))) {
+    if (once.has(`${r.at}|${r.url}`)) continue;
+    once.add(`${r.at}|${r.url}`);
+    const k = `${r.method} ${notePath(r)} ${r.status}`;
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
-  const readLines = [...counts].map(([k, c]) => (c > 1 ? `${k} ×${c}` : k));
-  const build = (body: number, answer: number) =>
-    [
-      `DockIn · MyCamu notes · ${new Date().toISOString()}`,
-      `SENT (${writes.length}):`,
-      JSON.stringify(
-        writes.map((w) => ({ at: new Date(w.at).toISOString(), page: w.page, m: w.method, url: w.url, st: w.status, body: w.body.slice(0, body), ans: w.answer.slice(0, answer) })),
-      ),
-      `READ: ${readLines.join(" | ")}`,
-    ].join("\n");
-  for (const [b, a] of [
-    [2400, 400],
-    [1500, 200],
-    [900, 120],
-    [500, 60],
-    [250, 0],
-  ] as const) {
-    const out = build(b, a);
-    if (out.length <= limit) return out;
+  const blocks = sends.map((w) =>
+    JSON.stringify({ at: new Date(w.at).toISOString(), page: w.page, m: w.method, url: w.url, st: w.status, body: w.body, ans: w.answer.slice(0, 800) }),
+  );
+  if (counts.size) blocks.push(`READ: ${[...counts].map(([k, c]) => (c > 1 ? `${k} ×${c}` : k)).join(" | ")}`);
+  if (!blocks.length) blocks.push("Nothing sent to MyCamu yet.");
+  // Long blocks are cut into pieces; pieces are packed into parts.
+  const pieces: string[] = [];
+  for (const b of blocks) for (let i = 0; i < b.length; i += limit - 120) pieces.push(b.slice(i, i + limit - 120));
+  const parts: string[] = [];
+  for (const p of pieces) {
+    if (parts.length && parts[parts.length - 1].length + p.length + 1 <= limit - 80) parts[parts.length - 1] += `\n${p}`;
+    else parts.push(p);
   }
-  return build(250, 0).slice(0, limit);
+  const at = new Date().toISOString();
+  return parts.map((p, i) => `DockIn · MyCamu notes · ${at} · part ${i + 1}/${parts.length} · ${sends.length} sent\n${p}`);
+}
+
+/** The whole report in one text (used where length does not matter). */
+export function notesReport(n: CamuNotes): string {
+  return notesParts(n, 1e9).join("\n");
 }
 
 export async function clearCamuNotes(): Promise<void> {

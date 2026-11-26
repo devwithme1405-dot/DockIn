@@ -304,7 +304,7 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).first().getByRole("button", { name: "Share with team" }).click();
     await page.waitForTimeout(300);
     const st = await phoneState(page);
-    if (!st.shared?.at(-1)?.includes("SENT (2)")) throw new Error("notes not shared");
+    if (!st.shared?.at(-1)?.includes("2 sent")) throw new Error("notes not shared");
   });
 
   await step("Back closes the page; Today shows the live pass", async () => {
