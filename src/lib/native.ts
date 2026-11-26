@@ -165,7 +165,7 @@ interface DockInPlugin {
   shareText(options: { text: string; title?: string }): Promise<void>;
   clearCamuCaptured(): Promise<void>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */
-  camuCaptured(): Promise<{ items: string; picked?: string }>;
+  camuCaptured(): Promise<{ items: string; picked?: string; writes?: string }>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;

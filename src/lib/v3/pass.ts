@@ -124,12 +124,19 @@ function list(json: string | undefined): CamuNote[] {
   }
 }
 
+export interface CamuNotes {
+  /** What MyCamu *sent* on the pass pages (the submit, the upload) — the part that matters. */
+  writes: CamuNote[];
+  picked: CamuNote[];
+  recent: CamuNote[];
+}
+
 /** What DockIn has noted so far; null outside the app (or on an APK without it). */
-export async function camuNotes(): Promise<{ picked: CamuNote[]; recent: CamuNote[] } | null> {
+export async function camuNotes(): Promise<CamuNotes | null> {
   if (!isNativeApp()) return null;
   try {
     const r = await DockIn.camuCaptured();
-    return { picked: list(r.picked), recent: list(r.items) };
+    return { writes: list(r.writes), picked: list(r.picked), recent: list(r.items) };
   } catch {
     return null;
   }
@@ -144,17 +151,52 @@ export function notePath(n: CamuNote): string {
   }
 }
 
-/** Everything noted, as one block of text to send to the DockIn team. */
-export function notesReport(n: { picked: CamuNote[]; recent: CamuNote[] }): string {
+const READS = /\/(get|list|fetch|search|count|view)[^/]*\/?$|getall|config|dashboard|summary/i;
+/** Was this MyCamu sending something (not just reading)? Also for APKs that don't keep `writes`. */
+export const isWrite = (n: CamuNote) => !!n.url && !READS.test(n.url);
+
+/**
+ * Everything worth sending to the DockIn team, small enough for a WhatsApp
+ * message (long texts get cut): the sends first and whole, newest first; the
+ * reads only as one line each.
+ */
+export function notesReport(n: CamuNotes, limit = 3800): string {
   const seen = new Set<string>();
-  const all = [...n.picked, ...n.recent].filter((x) => {
-    const k = `${x.at}|${x.url}`;
+  const all = [...n.writes, ...n.picked, ...n.recent].filter((x) => {
+    const k = `${x.at}|${x.url}|${x.method}`;
     if (seen.has(k)) return false;
     seen.add(k);
     return true;
   });
-  all.sort((a, b) => a.at - b.at);
-  return `DockIn · MyCamu outpass notes · ${new Date().toISOString()}\n` + JSON.stringify(all.slice(-20), null, 1);
+  all.sort((a, b) => b.at - a.at);
+  const writes = all.filter(isWrite);
+  const reads = all.filter((x) => !isWrite(x));
+  const counts = new Map<string, number>();
+  for (const r of reads) {
+    const k = `${r.method} ${notePath(r) || "(no url)"} ${r.status}`;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const readLines = [...counts].map(([k, c]) => (c > 1 ? `${k} ×${c}` : k));
+  const build = (body: number, answer: number) =>
+    [
+      `DockIn · MyCamu notes · ${new Date().toISOString()}`,
+      `SENT (${writes.length}):`,
+      JSON.stringify(
+        writes.map((w) => ({ at: new Date(w.at).toISOString(), page: w.page, m: w.method, url: w.url, st: w.status, body: w.body.slice(0, body), ans: w.answer.slice(0, answer) })),
+      ),
+      `READ: ${readLines.join(" | ")}`,
+    ].join("\n");
+  for (const [b, a] of [
+    [2400, 400],
+    [1500, 200],
+    [900, 120],
+    [500, 60],
+    [250, 0],
+  ] as const) {
+    const out = build(b, a);
+    if (out.length <= limit) return out;
+  }
+  return build(250, 0).slice(0, limit);
 }
 
 export async function clearCamuNotes(): Promise<void> {

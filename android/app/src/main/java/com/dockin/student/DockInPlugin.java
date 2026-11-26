@@ -405,7 +405,7 @@ public class DockInPlugin extends Plugin {
     @PluginMethod
     public void clearCamuCaptured(PluginCall call) {
         getContext().getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE)
-                .edit().remove("items").remove("picked").apply();
+                .edit().remove("items").remove("picked").remove("writes").apply();
         call.resolve();
     }
 
@@ -417,6 +417,7 @@ public class DockInPlugin extends Plugin {
         JSObject out = new JSObject();
         out.put("items", p.getString("items", "[]"));
         out.put("picked", p.getString("picked", "[]"));
+        out.put("writes", p.getString("writes", "[]"));
         call.resolve(out);
     }
 

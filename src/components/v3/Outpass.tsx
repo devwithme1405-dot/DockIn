@@ -52,7 +52,8 @@ import {
   parentText,
   sendToCamu,
   shareText,
-  type CamuNote,
+  isWrite,
+  type CamuNotes,
 } from "@/lib/v3/pass";
 import { v3db, type PassRecord, type PassStatus } from "@/lib/v3/store";
 import { passProblem, savePass } from "@/lib/v3/tools";
@@ -918,7 +919,7 @@ function PassSheet({ p, onClose }: { p: PassRecord | null; onClose: () => void }
  */
 function TeachCamu() {
   const toast = useToast();
-  const [notes, setNotes] = useState<{ picked: CamuNote[]; recent: CamuNote[] } | null>(null);
+  const [notes, setNotes] = useState<CamuNotes | null>(null);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -937,6 +938,8 @@ function TeachCamu() {
 
   if (!isNativeApp()) return null;
   const picked = notes?.picked ?? [];
+  const sent = notes ? [...notes.writes, ...notes.picked].filter(isWrite) : [];
+  const anything = !!notes && (picked.length > 0 || notes.recent.length > 0 || notes.writes.length > 0);
   return (
     <section className="mt-6 w-full rounded-2xl border-[1.5px] border-dashed border-line bg-surface p-3.5 text-left">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-3 text-left">
@@ -945,7 +948,9 @@ function TeachCamu() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-extrabold">Teach DockIn to submit for you</span>
-          <span className="block text-[12px] text-muted">{picked.length ? `${picked.length} MyCamu pass ${picked.length === 1 ? "step" : "steps"} noted` : "One-time · takes a minute"}</span>
+          <span className={cx("block text-[12px]", sent.length ? "font-bold text-safe" : "text-muted")}>
+            {sent.length ? `MyCamu submit noted ✓ — share it` : picked.length ? "Pass page seen · now submit a pass" : "One-time · takes a minute"}
+          </span>
         </span>
         <ChevronLeft size={18} className={cx("text-muted transition", open ? "rotate-90" : "-rotate-90")} />
       </button>
@@ -957,8 +962,11 @@ function TeachCamu() {
             <li>Tap “Share with DockIn team”. The next version then submits straight from here.</li>
           </ol>
           {picked.length > 0 && (
+            <p className="text-[12px] font-semibold text-muted">Newest first. A pass is learned when a non-“get” line shows up.</p>
+          )}
+          {picked.length > 0 && (
             <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl bg-card p-2 text-[11.5px]">
-              {picked.slice(-8).map((n) => (
+              {[...picked].reverse().slice(0, 8).map((n) => (
                 <li key={`${n.at}-${n.url}`} className="flex items-center gap-2">
                   <span className={cx("rounded px-1.5 py-0.5 font-bold", n.status >= 200 && n.status < 300 ? "bg-safe-soft text-safe" : "bg-warn-soft text-warn")}>{n.status || "…"}</span>
                   <span className="truncate font-mono">
@@ -974,19 +982,19 @@ function TeachCamu() {
             </button>
             <button
               type="button"
-              disabled={!notes || (!picked.length && !notes.recent.length)}
+              disabled={!anything}
               onClick={() => notes && void shareText(notesReport(notes), "Share with DockIn team")}
               className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px] disabled:opacity-50"
             >
               <Share2 size={15} /> Share with team
             </button>
           </div>
-          {notes && (picked.length > 0 || notes.recent.length > 0) && (
+          {anything && (
             <button
               type="button"
               onClick={() =>
                 void clearCamuNotes().then(() => {
-                  setNotes({ picked: [], recent: [] });
+                  setNotes({ writes: [], picked: [], recent: [] });
                   toast.show("Cleared");
                 })
               }

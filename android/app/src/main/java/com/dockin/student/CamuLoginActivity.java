@@ -117,13 +117,35 @@ public class CamuLoginActivity extends Activity {
                     + "XMLHttpRequest.prototype.send=function(b){var x=this;if(x.__m&&String(x.__m).toUpperCase()!=='GET'){"
                     + "x.addEventListener('loadend',function(){var r='';try{r=x.responseType===''||x.responseType==='text'?x.responseText:'';}catch(e){}"
                     + "note(x.__m,x.__u,b,x.status,r);});}return S.apply(this,arguments);};"
-                    + "if(window.fetch){var F=window.fetch;window.fetch=function(i,o){var m=(o&&o.method)||'GET';var p=F.apply(this,arguments);"
-                    + "if(String(m).toUpperCase()!=='GET'){p.then(function(res){res.clone().text().then(function(t){note(m,res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
+                    + "if(window.fetch){var F=window.fetch;window.fetch=function(i,o){var m=(o&&o.method)||(i&&typeof i!=='string'&&i.method)||'GET';var p=F.apply(this,arguments);"
+                    + "if(String(m).toUpperCase()!=='GET'){p.then(function(res){res.clone().text().then(function(t){note(m,(typeof i==='string'?i:(i&&i.url))||res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
                     + "return p;};}})()";
 
     /** Words that mark a leave / gate-pass request in what Camu sends. */
     static final java.util.regex.Pattern PASSY =
             java.util.regex.Pattern.compile("(?i)leave|gate|outpass|out_pass|lvreq|lvapp|upload|attach");
+
+    /** URLs that only read (lists, configs) — not the request that makes a pass. */
+    static final java.util.regex.Pattern READS =
+            java.util.regex.Pattern.compile("(?i)/(get|list|fetch|search|count|view)[^/]*/?$|getall|config|dashboard|summary");
+
+    /** Appends one noted request to a capped list under {@code key}. */
+    static void keepIn(SharedPreferences p, SharedPreferences.Editor e, String key, String json, int max) {
+        JSONArray had;
+        try {
+            had = new JSONArray(p.getString(key, "[]"));
+        } catch (JSONException x) {
+            had = new JSONArray();
+        }
+        try {
+            had.put(new JSONObject(json));
+        } catch (JSONException x) {
+            return;
+        }
+        JSONArray last = new JSONArray();
+        for (int i = Math.max(0, had.length() - max); i < had.length(); i++) last.put(had.opt(i));
+        e.putString(key, last.toString());
+    }
 
     /** Receives what {@link #CAPTURE} notes; keeps the last 25. */
     static final class Capture {
@@ -153,20 +175,16 @@ public class CamuLoginActivity extends Activity {
             // Camu sends plenty of other requests; the leave / gate-pass ones are
             // the point, so they are also kept in a list of their own.
             if (PASSY.matcher(json).find()) {
-                JSONArray picked;
+                keepIn(p, e, "picked", json, 12);
+                // MyCamu re-reads the pass list every few seconds; what it *sends*
+                // (the submit, the upload) is kept apart so those reads can't push it out.
+                String url = "";
                 try {
-                    picked = new JSONArray(p.getString("picked", "[]"));
+                    url = new JSONObject(json).optString("url", "");
                 } catch (JSONException x) {
-                    picked = new JSONArray();
+                    // checked above
                 }
-                try {
-                    picked.put(new JSONObject(json));
-                } catch (JSONException x) {
-                    // already checked above
-                }
-                JSONArray last = new JSONArray();
-                for (int i = Math.max(0, picked.length() - 12); i < picked.length(); i++) last.put(picked.opt(i));
-                e.putString("picked", last.toString());
+                if (!url.isEmpty() && !READS.matcher(url).find()) keepIn(p, e, "writes", json, 10);
             }
             e.apply();
         }

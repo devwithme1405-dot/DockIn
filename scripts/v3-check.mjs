@@ -298,13 +298,13 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     if ((await pass(page).first().locator(".pass-ticket").count()) !== 1) throw new Error("leave filter");
     await pass(page).first().getByRole("button", { name: "All", exact: true }).click();
     await pass(page).first().getByRole("button", { name: /Teach DockIn to submit for you/ }).click();
-    await pass(page).first().getByText("2 MyCamu pass steps noted").waitFor({ timeout: 3000 });
+    await pass(page).first().getByText(/MyCamu submit noted ✓/).waitFor({ timeout: 3000 });
     await pass(page).first().getByText(/POST \/api\/leave\/apply/).waitFor({ timeout: 2000 });
     await page.screenshot({ path: `${SHOTS}/op-history.png`, fullPage: false });
     await pass(page).first().getByRole("button", { name: "Share with team" }).click();
     await page.waitForTimeout(300);
     const st = await phoneState(page);
-    if (!st.shared?.at(-1)?.includes("MyCamu outpass notes")) throw new Error("notes not shared");
+    if (!st.shared?.at(-1)?.includes("SENT (2)")) throw new Error("notes not shared");
   });
 
   await step("Back closes the page; Today shows the live pass", async () => {
