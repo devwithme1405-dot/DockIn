@@ -49,7 +49,9 @@ import {
   notePath,
   notesParts,
   openCamuToTeach,
-  canSendDirect,
+  DIRECT_WHY,
+  directState,
+  type DirectState,
   parentText,
   refreshFromCamu,
   sendDayOut,
@@ -189,7 +191,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   /** MyCamu said no — its reason, in plain words. */
   const [refusal, setRefusal] = useState<string | null>(null);
   /** This phone can send a day out to MyCamu itself. */
-  const [direct, setDirect] = useState(false);
+  const [direct, setDirect] = useState<DirectState | null>(null);
   const pick = useRef<HTMLInputElement>(null);
   const reasonBox = useRef<HTMLInputElement>(null);
   const fromTimeBox = useRef<HTMLInputElement>(null);
@@ -199,8 +201,8 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
 
   useEffect(() => {
     let gone = false;
-    void canSendDirect().then((ok) => {
-      if (!gone) setDirect(ok);
+    void directState().then((st) => {
+      if (!gone) setDirect(st);
     });
     return () => {
       gone = true;
@@ -251,7 +253,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const reasonMissing = !d.reason.trim();
   const open = reading ? reading.asks.length + (reading.needStart ? 1 : 0) : 0;
 
-  const straight = direct && d.kind === "dayout";
+  const straight = direct === "ready" && d.kind === "dayout";
 
   async function save(toCamu: boolean) {
     setTried(true);
@@ -596,6 +598,12 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
               }}
             />
           </div>
+        )}
+
+        {d.kind === "dayout" && direct && direct !== "ready" && direct !== "web" && (
+          <p className="flex items-start gap-2 rounded-xl bg-surface px-3 py-2 text-[12.5px] text-muted">
+            <Sparkles size={14} className="mt-0.5 shrink-0 text-accent" /> {DIRECT_WHY[direct]}
+          </p>
         )}
 
         {tried && (problem || reasonMissing) && <p className="anim-pop text-[13px] font-semibold text-danger">{problem ?? "Pick or write a reason."}</p>}

@@ -242,6 +242,7 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     if (await pass(page).getByText(/morning or evening/).count()) throw new Error("question stayed");
     if ((await pass(page).getByLabel("From time").inputValue()) !== "18:00") throw new Error("time not set");
     if ((await pass(page).getByRole("button", { name: "Market", exact: true }).getAttribute("aria-pressed")) !== "true") throw new Error("reason chip not picked");
+    await pass(page).getByText(/then DockIn sends day outs itself/).waitFor({ timeout: 2000 });
   });
 
   await step("Make the pass: saved, stamped, MyCamu opened with the details", async () => {

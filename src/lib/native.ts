@@ -165,7 +165,7 @@ interface DockInPlugin {
   shareText(options: { text: string; title?: string }): Promise<void>;
   clearCamuCaptured(): Promise<void>;
   /** Preview APK: can DockIn submit a pass to MyCamu itself? */
-  camuCanMakePass(): Promise<{ ok: boolean }>;
+  camuCanMakePass(): Promise<{ ok: boolean; connected?: boolean; taught?: boolean }>;
   /** Preview APK: submits a Day Out Pass to MyCamu and checks it is listed. */
   camuDayOut(options: { date: string; from: string; to: string; reason: string }): Promise<{ made: boolean; code?: string; record?: string; raw?: string }>;
   /** Preview APK: MyCamu's own list of passes and leaves (JSON). */

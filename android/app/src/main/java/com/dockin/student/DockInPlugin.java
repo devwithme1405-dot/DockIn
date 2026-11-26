@@ -387,7 +387,10 @@ public class DockInPlugin extends Plugin {
     @PluginMethod
     public void camuCanMakePass(PluginCall call) {
         JSObject o = new JSObject();
-        o.put("ok", Camu.canMakePass(getContext()));
+        boolean ok = Camu.canMakePass(getContext());
+        o.put("ok", ok);
+        o.put("connected", Camu.connected(getContext()));
+        o.put("taught", ok || Camu.taught(getContext()));
         call.resolve(o);
     }
 

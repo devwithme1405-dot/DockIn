@@ -123,15 +123,33 @@ export function codeWords(code: string): string {
   return CODES[code] ?? `MyCamu didn't take it (${code.replace(/_/g, " ").toLowerCase()}).`;
 }
 
-/** Can this phone send a pass to MyCamu without opening it? */
-export async function canSendDirect(): Promise<boolean> {
-  if (!isNativeApp()) return false;
+/** Why a day out can (or can't yet) go straight into MyCamu from this phone. */
+export type DirectState = "ready" | "web" | "old-app" | "signed-out" | "not-taught";
+
+export async function directState(): Promise<DirectState> {
+  if (!isNativeApp()) return "web";
   try {
-    return (await DockIn.camuCanMakePass()).ok;
+    const r = await DockIn.camuCanMakePass();
+    if (r.ok) return "ready";
+    if (r.connected === false) return "signed-out";
+    return "not-taught";
   } catch {
-    return false;
+    return "old-app";
   }
 }
+
+/** Can this phone send a pass to MyCamu without opening it? */
+export async function canSendDirect(): Promise<boolean> {
+  return (await directState()) === "ready";
+}
+
+/** One line on what's missing, for the student. */
+export const DIRECT_WHY: Record<Exclude<DirectState, "ready">, string> = {
+  web: "In the DockIn app, a day out goes straight into MyCamu.",
+  "old-app": "Update to the newest DockIn test app to send day outs straight to MyCamu.",
+  "signed-out": "Connect Camu in Profile to send day outs straight to MyCamu.",
+  "not-taught": "Make one pass in MyCamu through DockIn once (History → Teach DockIn), then DockIn sends day outs itself.",
+};
 
 /** Parent / warden approval as DockIn shows it. */
 function statusOf(r: Record<string, unknown>): PassStatus {

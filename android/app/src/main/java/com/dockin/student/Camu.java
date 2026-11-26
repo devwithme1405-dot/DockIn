@@ -212,6 +212,12 @@ final class Camu {
         return !prefs(c).getString(K_LOGIN, "").isEmpty();
     }
 
+    /** Has the login id been learned (whether or not Camu is signed in now)? */
+    static boolean taught(Context c) {
+        if (prefs(c).getString(K_LOGIN, "").isEmpty() && ids(c) != null) learnFromNotes(c);
+        return !prefs(c).getString(K_LOGIN, "").isEmpty();
+    }
+
     /** Passes noted before this build knew to look (they stay on the phone). */
     private static void learnFromNotes(Context c) {
         SharedPreferences p = c.getApplicationContext()
