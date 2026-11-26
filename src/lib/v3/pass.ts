@@ -241,12 +241,14 @@ export function notePath(n: CamuNote): string {
 }
 
 const READS = /\/(get|list|fetch|search|count|view)[^/]*\/?$|getall|config|dashboard|summary/i;
+/** Anything to do with files is shown whole, even when named like a read ("/camuattchment/getappfile"). */
+const FILES = /att?ch|upload|file/i;
 /** Hosts that only count visits — never part of making a pass. */
 const ANALYTICS = /google-analytics|googletagmanager|doubleclick|facebook\.|clarity\.ms|hotjar|sentry|mixpanel|segment\.io/i;
 /** Anything but analytics: MyCamu's server, and wherever it uploads files to. */
 const isCamu = (n: CamuNote) => !!n.url && !ANALYTICS.test(n.url);
 /** Was this MyCamu sending something (not just reading)? Also for APKs that don't keep `writes`. */
-export const isWrite = (n: CamuNote) => isCamu(n) && !READS.test(n.url);
+export const isWrite = (n: CamuNote) => isCamu(n) && (FILES.test(n.url) || !READS.test(n.url));
 
 /** Every distinct send, newest first: the same request twice counts once. */
 function distinctSends(n: CamuNotes, max = 10): CamuNote[] {

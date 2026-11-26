@@ -18,6 +18,7 @@ describe("MyCamu notes", () => {
     expect(isWrite(note(1, ""))).toBe(false);
     expect(isWrite(note(1, "https://www.google-analytics.com/g/collect?v=2"))).toBe(false);
     expect(isWrite(note(1, "/api/Leave/crtLv"))).toBe(true);
+    expect(isWrite(note(1, "/camuattchment/getappfile"))).toBe(true);
     expect(isWrite(note(1, "https://student.bennetterp.camu.in/api/upload"))).toBe(true);
     expect(isWrite(note(1, "https://bucket.s3.ap-south-1.amazonaws.com/leave/mail.png"))).toBe(true);
   });
