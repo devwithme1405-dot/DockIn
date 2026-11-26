@@ -1,6 +1,11 @@
 package com.dockin.student;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -66,6 +71,13 @@ public class CamuLoginActivity extends Activity {
     static final String EXTRA_BROWSE = "browse";
     static final String EXTRA_PATH = "path";
     static final String EXTRA_NOTE = "note";
+    /**
+     * A file DockIn already holds for this form (the leave's parent-approval mail
+     * screenshot). When Camu's page asks for a file, it is offered first, so the
+     * student does not hunt for the same image twice.
+     */
+    static final String EXTRA_PROOF = "proof";
+    private static final int PICK_FILE = 4107;
     static final String PREFS_CAPTURE = "dockin_camu_capture";
     /** How long to let the remembered sign-in finish before showing the page. */
     private static final long REVEAL_AFTER_MS = 12_000;
@@ -109,6 +121,10 @@ public class CamuLoginActivity extends Activity {
                     + "if(String(m).toUpperCase()!=='GET'){p.then(function(res){res.clone().text().then(function(t){note(m,res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
                     + "return p;};}})()";
 
+    /** Words that mark a leave / gate-pass request in what Camu sends. */
+    static final java.util.regex.Pattern PASSY =
+            java.util.regex.Pattern.compile("(?i)leave|gate|outpass|out_pass|lvreq|lvapp|upload|attach");
+
     /** Receives what {@link #CAPTURE} notes; keeps the last 25. */
     static final class Capture {
         private final android.content.Context app;
@@ -133,7 +149,26 @@ public class CamuLoginActivity extends Activity {
             }
             JSONArray keep = new JSONArray();
             for (int i = Math.max(0, list.length() - 25); i < list.length(); i++) keep.put(list.opt(i));
-            p.edit().putString("items", keep.toString()).apply();
+            SharedPreferences.Editor e = p.edit().putString("items", keep.toString());
+            // Camu sends plenty of other requests; the leave / gate-pass ones are
+            // the point, so they are also kept in a list of their own.
+            if (PASSY.matcher(json).find()) {
+                JSONArray picked;
+                try {
+                    picked = new JSONArray(p.getString("picked", "[]"));
+                } catch (JSONException x) {
+                    picked = new JSONArray();
+                }
+                try {
+                    picked.put(new JSONObject(json));
+                } catch (JSONException x) {
+                    // already checked above
+                }
+                JSONArray last = new JSONArray();
+                for (int i = Math.max(0, picked.length() - 12); i < picked.length(); i++) last.put(picked.opt(i));
+                e.putString("picked", last.toString());
+            }
+            e.apply();
         }
     }
 
@@ -148,6 +183,8 @@ public class CamuLoginActivity extends Activity {
     private boolean browse = false;
     private boolean revealed = false;
     private boolean done = false;
+    /** Camu's page waiting for a file from the picker. */
+    private ValueCallback<Uri[]> pickFor;
     private boolean checking = false;
     /** True while the last person's Camu state is being wiped; no sign-in checks then. */
     private boolean wiping = false;
@@ -361,7 +398,70 @@ public class CamuLoginActivity extends Activity {
             public void onCloseWindow(WebView window) {
                 closePopup(window);
             }
+
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                return chooseFile(callback, params);
+            }
         });
+    }
+
+    /**
+     * Camu's page asked for a file (the leave's mail screenshot). Without this the
+     * WebView silently ignores the tap. Offers the screenshot DockIn already has,
+     * or the phone's own picker.
+     */
+    private boolean chooseFile(final ValueCallback<Uri[]> callback, final WebChromeClient.FileChooserParams params) {
+        if (pickFor != null) pickFor.onReceiveValue(null);
+        pickFor = callback;
+        String path = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_PROOF);
+        final java.io.File proof = path == null ? null : new java.io.File(path);
+        if (proof == null || !proof.exists()) {
+            openPicker(params);
+            return true;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Attach a file")
+                .setItems(new CharSequence[] {"The mail screenshot from DockIn", "Choose another file"},
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int which) {
+                                if (which == 0) give(new Uri[] {Uri.fromFile(proof)});
+                                else openPicker(params);
+                            }
+                        })
+                .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                    @Override
+                    public void onCancel(DialogInterface d) {
+                        give(null);
+                    }
+                })
+                .show();
+        return true;
+    }
+
+    private void openPicker(WebChromeClient.FileChooserParams params) {
+        try {
+            startActivityForResult(params.createIntent(), PICK_FILE);
+        } catch (ActivityNotFoundException e) {
+            give(null);
+        }
+    }
+
+    /** Always answer the page, even with nothing, or it never asks again. */
+    private void give(Uri[] files) {
+        ValueCallback<Uri[]> c = pickFor;
+        pickFor = null;
+        if (c != null) c.onReceiveValue(files);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PICK_FILE) {
+            give(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     private void closePopup(WebView w) {
@@ -466,6 +566,7 @@ public class CamuLoginActivity extends Activity {
     protected void onDestroy() {
         handler.removeCallbacks(poll);
         handler.removeCallbacks(reveal);
+        give(null);
         if (!done && !browse) DockInPlugin.camuFinished(false, null);
         for (WebView w : new ArrayList<>(popups)) closePopup(w);
         if (web != null) {

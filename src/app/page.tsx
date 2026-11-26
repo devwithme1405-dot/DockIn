@@ -1,6 +1,7 @@
 "use client";
 
 import { AnnouncementBar } from "@/components/AccountNotices";
+import { OutpassEntry } from "@/components/v3/OutpassEntry";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -316,6 +317,9 @@ export default function TodayPage() {
           </div>
         </div>
       </section>
+
+      {/* DockIn 3 preview: the way into Outpass */}
+      <OutpassEntry className="mt-8" />
 
       <Sheet open={bell} onClose={() => setBell(false)} title="Updates">
         <Updates

@@ -1,9 +1,10 @@
 /**
- * DockIn 3 preview (assistant + outpass), end to end in a real browser with a
- * pretend preview phone behind the bridge: the floating DockBot appears only on
- * the preview build, answers from Camu with cards, proposes and confirms a day
- * out pass (opening MyCamu with the details), asks for the mail screenshot on a
- * leave, hears a spoken request, and the Outpass screen saves and keeps history.
+ * DockIn 3 preview: the Outpass page, end to end in a real browser with a
+ * pretend preview phone behind the bridge. Today shows the way in only on the
+ * preview build; a typed line fills the form and asks (two buttons) only about
+ * what it can't be sure of; reasons are chips; a leave insists on the mail
+ * screenshot and hands it to MyCamu; parents get a ready message; history
+ * counts; and the "teach DockIn" notes can be shared.
  *
  *   node scripts/v3-check.mjs        # against a production build on :3000
  */
@@ -110,8 +111,21 @@ async function phone({ channel = "preview", theme = "light" } = {}) {
         channel: () => ({ channel, speech: true }),
         openCamu: (o) => {
           phone.notes.push(o.note);
+          phone.camu = o;
           return {};
         },
+        shareText: (o) => {
+          phone.shared = (phone.shared ?? []).concat(o.text);
+          return {};
+        },
+        camuCaptured: () => ({
+          items: "[]",
+          picked: JSON.stringify([
+            { at: 1, page: "/leave", method: "POST", url: "https://student.bennetterp.camu.in/api/leave/apply", body: "{}", status: 200, answer: "{}" },
+            { at: 2, page: "/leave", method: "POST", url: "https://student.bennetterp.camu.in/api/upload", body: "{}", status: 200, answer: "{}" },
+          ]),
+        }),
+        clearCamuCaptured: () => ({}),
         listen: (o) => {
           phone.lang = o.lang;
           setTimeout(() => fire("speech", { type: "state", state: "ready" }), 100);
@@ -186,126 +200,136 @@ async function phone({ channel = "preview", theme = "light" } = {}) {
   return { ctx, page };
 }
 
-const ask = (page) => page.getByRole("dialog", { name: "DockBot assistant" });
-const say = async (page, text) => {
-  await ask(page).getByLabel("Message", { exact: true }).fill(text);
-  await ask(page).getByLabel("Send", { exact: true }).click();
+const pass = (page) => page.getByRole("dialog", { name: "Outpass" });
+const line = async (page, text) => {
+  await pass(page).getByLabel("Describe the pass").fill(text);
+  await pass(page).getByRole("button", { name: "Fill the form" }).click();
 };
+const phoneState = (page) => page.evaluate(() => window.__phone.get());
 
 {
   const { ctx, page } = await phone();
-  await step("the preview build shows DockBot's floating button on Today", async () => {
-    await page.getByRole("button", { name: "Ask DockBot" }).waitFor({ timeout: 6000 });
-    await page.screenshot({ path: `${SHOTS}/v3-today-fab.png` });
+
+  await step("preview: Today has the Outpass card, and no chatbot button", async () => {
+    await page.getByRole("region", { name: "Outpass" }).waitFor({ timeout: 6000 });
+    if (await page.getByRole("button", { name: "Ask DockBot" }).count()) throw new Error("chatbot button still there");
+    await page.getByRole("region", { name: "Outpass" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${SHOTS}/op-today.png` });
   });
 
-  await step("DockBot opens with a greeting and starters", async () => {
-    await page.getByRole("button", { name: "Ask DockBot" }).click();
-    await ask(page).getByText(/Namaste, Sachin/).waitFor({ timeout: 4000 });
+  await step("Day out from Today opens the page on a day out", async () => {
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    await pass(page).waitFor({ timeout: 4000 });
+    if ((await pass(page).getByRole("button", { name: /^Day Out/ }).getAttribute("aria-pressed")) !== "true") throw new Error("not on day out");
     await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-empty.png` });
+    await page.screenshot({ path: `${SHOTS}/op-new.png` });
   });
 
-  await step("a starter gets an answer from Camu, with the attendance card", async () => {
-    await ask(page).getByRole("button", { name: /Kitni classes bunk/ }).click();
-    await ask(page).getByText(/Overall: 81\.6%/).waitFor({ timeout: 5000 });
-    await ask(page).getByText(/Can skip/).first().waitFor({ timeout: 3000 });
-    await page.waitForTimeout(700);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-attendance.png` });
-  });
-
-  await step("a day out pass: proposed, confirmed, saved, MyCamu opened with the details", async () => {
-    await say(page, "kal 3 baje day outpass");
-    await ask(page).getByRole("button", { name: /Confirm & open MyCamu/ }).waitFor({ timeout: 5000 });
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-pass-confirm.png` });
-    await ask(page).getByRole("button", { name: /Confirm & open MyCamu/ }).click();
-    await ask(page).getByText("Saved in Outpass").waitFor({ timeout: 4000 });
-    await page.waitForFunction(() => window.__phone.get().notes.length > 0, null, { timeout: 4000 });
-    const note = await page.evaluate(() => window.__phone.get().notes[0]);
-    if (!/Day Out Pass/.test(note) || !/3:00 pm/.test(note) || !/7:00 pm/.test(note)) throw new Error(`note was ${note}`);
-    await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-pass-done.png` });
-  });
-
-  await step("a leave waits for the mail screenshot, then can be confirmed", async () => {
-    await say(page, "15 to 18 dec leave for home");
-    const btn = ask(page).getByRole("button", { name: /Confirm & open MyCamu/ }).last();
-    await btn.waitFor({ timeout: 5000 });
-    if (await btn.isEnabled()) throw new Error("Confirm was allowed with no screenshot");
-    const chooser = page.waitForEvent("filechooser");
-    await ask(page).getByRole("button", { name: "Attach", exact: true }).last().click();
-    await (await chooser).setFiles({ name: "mail.png", mimeType: "image/png", buffer: PNG });
-    await ask(page).getByText(/Screenshot lag gaya/).waitFor({ timeout: 4000 });
-    await ask(page).getByText("Parent-approval mail attached ✓").waitFor({ timeout: 3000 });
-    if (!(await btn.isEnabled())) throw new Error("still disabled after the screenshot");
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-leave.png` });
-  });
-
-  await step("talking: the mic listens, shows the words, and sends them", async () => {
-    await ask(page).getByLabel("Talk", { exact: true }).click();
-    const panel = page.getByRole("dialog", { name: "Talk to DockBot" });
-    await panel.getByText("kal ka timetable").waitFor({ timeout: 4000 });
-    await page.screenshot({ path: `${SHOTS}/v3-voice.png` });
-    const lang = await page.evaluate(() => window.__phone.get().lang);
-    if (lang !== "hi-IN") throw new Error(`listened in ${lang}`);
-    await panel.getByLabel("Done").click();
-    await ask(page).getByText(/Tomorrow/).last().waitFor({ timeout: 5000 });
-    await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-voice-answer.png` });
-  });
-
-  await step("Back closes DockBot and the button returns", async () => {
-    await page.goBack();
-    await page.getByRole("button", { name: "Ask DockBot" }).waitFor({ timeout: 4000 });
-    if (await ask(page).count()) throw new Error("still open");
-  });
-
-  await step("Outpass from Profile: fill by words, save, stamp, history", async () => {
-    await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /Outpass Day out/ }).click();
-    const sheet = page.getByRole("dialog", { name: "Outpass" });
-    await sheet.getByText("Say it like you would to a friend").waitFor({ timeout: 4000 });
-    await page.screenshot({ path: `${SHOTS}/v3-outpass-new.png` });
-    await sheet.getByPlaceholder("kal 3 baje day out…").fill("kal 4pm day out for bank");
-    await sheet.getByLabel("Fill the form").click();
-    await page.waitForTimeout(500);
-    const reason = await sheet.locator("textarea").inputValue();
-    if (!/bank/i.test(reason)) throw new Error(`reason ${reason}`);
-    await sheet.getByRole("button", { name: "Save only" }).click();
-    await sheet.getByText("Pass saved").waitFor({ timeout: 4000 });
+  await step("'kal 6 baje market' asks morning or evening, and fills Market", async () => {
+    await line(page, "kal 6 baje market");
+    await pass(page).getByText("Got it").waitFor({ timeout: 3000 });
+    await pass(page).getByText(/Leaving at 6:00 — morning or evening\?/).waitFor({ timeout: 3000 });
     await page.waitForTimeout(800);
-    await page.screenshot({ path: `${SHOTS}/v3-outpass-saved.png` });
-    await sheet.getByRole("button", { name: "See history" }).click();
-    await page.getByRole("dialog", { name: "Outpass" }).last().getByText("Status ·").waitFor({ timeout: 4000 });
-    await page.getByRole("button", { name: "Approved" }).click();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${SHOTS}/v3-outpass-detail.png` });
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: `${SHOTS}/v3-outpass-history.png` });
-    const n = await sheet.getByText(/Day Out Pass|Leave ·/).count();
-    if (n < 2) throw new Error(`history shows ${n} passes`);
+    await page.screenshot({ path: `${SHOTS}/op-ask.png` });
+    await pass(page).getByRole("button", { name: "6:00 PM" }).click();
+    if (await pass(page).getByText(/morning or evening/).count()) throw new Error("question stayed");
+    if ((await pass(page).getByLabel("From time").inputValue()) !== "18:00") throw new Error("time not set");
+    if ((await pass(page).getByRole("button", { name: "Market", exact: true }).getAttribute("aria-pressed")) !== "true") throw new Error("reason chip not picked");
+  });
+
+  await step("Make the pass: saved, stamped, MyCamu opened with the details", async () => {
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText("Your pass is ready").waitFor({ timeout: 4000 });
+    const st = await phoneState(page);
+    if (!st.notes.at(-1)?.includes("Day Out Pass") || !st.notes.at(-1)?.includes("Market")) throw new Error(`note: ${st.notes.at(-1)}`);
+    await page.waitForTimeout(1300);
+    await page.screenshot({ path: `${SHOTS}/op-saved.png` });
+  });
+
+  await step("Tell parents shares a ready message; 'I submitted' ticks step 1", async () => {
+    await pass(page).getByRole("button", { name: "Tell parents" }).click();
+    await page.waitForTimeout(300);
+    const st = await phoneState(page);
+    if (!st.shared?.at(-1)?.includes("Day Out Pass") || !st.shared.at(-1).includes("approve")) throw new Error("no parent message");
+    await pass(page).getByRole("button", { name: "I submitted" }).click();
+    await pass(page).getByRole("button", { name: "Submitted" }).waitFor({ timeout: 3000 });
+  });
+
+  await step("a day out without a reason asks for one; 'Write my own' works", async () => {
+    await pass(page).getByRole("button", { name: "New pass" }).last().click();
+    await line(page, "kal 4 baje day out");
+    if (await pass(page).getByText(/morning or evening/).count()) throw new Error("asked about 4 PM");
+    if ((await pass(page).getByLabel("From time").inputValue()) !== "16:00") throw new Error("4 baje is not 4 PM");
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText("Pick or write a reason.").waitFor({ timeout: 2000 });
+    await pass(page).getByRole("button", { name: "Write my own" }).click();
+    await pass(page).getByPlaceholder(/Meeting a friend/).fill("Meeting my cousin");
+    if (await pass(page).getByText("Pick or write a reason.").count()) throw new Error("error stayed");
+  });
+
+  await step("a leave needs the mail screenshot, then hands it to MyCamu", async () => {
+    await line(page, "kal se 3 din ghar");
+    if ((await pass(page).getByRole("button", { name: /^Leave Out for/ }).getAttribute("aria-pressed")) !== "true") throw new Error("not a leave");
+    if ((await pass(page).getByRole("button", { name: "Going home", exact: true }).getAttribute("aria-pressed")) !== "true") throw new Error("reason not found");
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText(/needs the parent-approval mail/).waitFor({ timeout: 2000 });
+    const chooser = page.waitForEvent("filechooser");
+    await pass(page).getByRole("button", { name: /Attach the screenshot/ }).click();
+    await (await chooser).setFiles({ name: "mail.png", mimeType: "image/png", buffer: PNG });
+    await pass(page).getByText("Attached ✓").waitFor({ timeout: 2000 });
+    await page.screenshot({ path: `${SHOTS}/op-leave.png` });
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText("Your pass is ready").waitFor({ timeout: 4000 });
+    const st = await phoneState(page);
+    if (!st.camu?.proofData || !/^mail-screenshot\.(png|jpg)$/.test(st.camu.proofName)) throw new Error("no proof sent to MyCamu");
+    if (!st.notes.at(-1)?.includes("Leave")) throw new Error("leave note missing");
+    await pass(page).getByText(/pick “The mail screenshot from DockIn”/).waitFor({ timeout: 2000 });
+  });
+
+  await step("history: counts, filters, and the teach-DockIn notes", async () => {
+    await pass(page).getByRole("button", { name: "See history" }).click();
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(600);
+    const sheet = page.getByRole("dialog", { name: "Outpass" }).last();
+    if (await sheet.getByText("Status ·").count()) await page.goBack();
+    await page.waitForTimeout(500);
+    await pass(page).first().getByText("This month").waitFor({ timeout: 3000 });
+    await pass(page).first().getByRole("button", { name: "Leave", exact: true }).click();
+    if ((await pass(page).first().locator(".pass-ticket").count()) !== 1) throw new Error("leave filter");
+    await pass(page).first().getByRole("button", { name: "All", exact: true }).click();
+    await pass(page).first().getByRole("button", { name: /Teach DockIn to submit for you/ }).click();
+    await pass(page).first().getByText("2 MyCamu pass steps noted").waitFor({ timeout: 3000 });
+    await pass(page).first().getByText(/POST \/api\/leave\/apply/).waitFor({ timeout: 2000 });
+    await page.screenshot({ path: `${SHOTS}/op-history.png`, fullPage: false });
+    await pass(page).first().getByRole("button", { name: "Share with team" }).click();
+    await page.waitForTimeout(300);
+    const st = await phoneState(page);
+    if (!st.shared?.at(-1)?.includes("MyCamu outpass notes")) throw new Error("notes not shared");
+  });
+
+  await step("Back closes the page; Today shows the live pass", async () => {
+    await page.goBack();
+    await page.waitForTimeout(700);
+    if (await pass(page).count()) throw new Error("still open");
+    await page.getByRole("region", { name: "Outpass" }).getByText(/Leave ·|Day out ·/).waitFor({ timeout: 3000 });
   });
   await ctx.close();
 }
 
 {
   const { ctx, page } = await phone({ theme: "dark" });
-  await step("dark: DockBot and Outpass look right", async () => {
-    await page.getByRole("button", { name: "Ask DockBot" }).click();
+  await step("dark: the page, a question and the saved ticket look right", async () => {
+    await page.getByRole("region", { name: "Outpass" }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${SHOTS}/op-today-dark.png` });
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    await line(page, "kal 6 baje movie");
     await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-dark.png` });
-    await say(page, "aaj mess mein kya hai");
-    await ask(page).getByText("Mess menu").first().waitFor({ timeout: 4000 });
-    await page.waitForTimeout(900);
-    await page.screenshot({ path: `${SHOTS}/v3-ask-dark-mess.png` });
-    await ask(page).getByRole("button", { name: "Chat menu" }).click();
-    await page.getByRole("button", { name: "Outpass history" }).click();
-    await page.getByRole("dialog", { name: "Outpass" }).getByRole("tab", { name: "New pass" }).click();
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: `${SHOTS}/v3-outpass-dark.png` });
+    await page.screenshot({ path: `${SHOTS}/op-ask-dark.png` });
+    await pass(page).getByRole("button", { name: "6:00 PM" }).click();
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText("Your pass is ready").waitFor({ timeout: 4000 });
+    await page.waitForTimeout(1300);
+    await page.screenshot({ path: `${SHOTS}/op-saved-dark.png` });
   });
   await ctx.close();
 }
@@ -314,7 +338,7 @@ const say = async (page, text) => {
   const { ctx, page } = await phone({ channel: "stable" });
   await step("the everyday build shows none of it", async () => {
     await page.waitForTimeout(1500);
-    if (await page.getByRole("button", { name: "Ask DockBot" }).count()) throw new Error("FAB on stable");
+    if (await page.getByRole("region", { name: "Outpass" }).count()) throw new Error("Outpass on stable");
     await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
     if (await page.getByText("DockIn 3 · test build").count()) throw new Error("Profile rows on stable");
@@ -323,5 +347,5 @@ const say = async (page, text) => {
 }
 
 await browser.close();
-console.log(problems.length ? `\n${problems.length} problem(s):\n${problems.join("\n")}` : `\nDockIn 3 preview works (${ok} checks).`);
+console.log(problems.length ? `\n${problems.length} problem(s):\n${problems.join("\n")}` : `\nOutpass preview works (${ok} checks).`);
 process.exit(problems.length ? 1 : 0);

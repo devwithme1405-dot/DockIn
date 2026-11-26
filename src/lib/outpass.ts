@@ -1,4 +1,3 @@
-// Kept for Version 3 (Leave & Outpass): the parser is built and tested, the screen is not shipped yet.
 import { addDays, fromDateStr, toDateStr, fmtTime } from "./dates";
 
 /**
@@ -32,8 +31,6 @@ export const DAYOUT_END = "19:00";
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-type Clock = { h: number; m: number; ap: "am" | "pm" | null };
-
 const pad = (n: number) => String(n).padStart(2, "0");
 const hm = (h: number, m: number) => `${pad(h)}:${pad(m)}`;
 
@@ -56,41 +53,156 @@ function soon(now: Date): string {
   return hm(Math.floor(m / 60), m % 60);
 }
 
+/** A clock time found in the words, before am/pm is settled. */
+interface Clock {
+  h: number;
+  m: number;
+  ap: "am" | "pm" | null;
+}
+
+/** One time the words left open: tap one of `options` ("HH:MM", 24h). */
+export interface TimeAsk {
+  which: "from" | "to";
+  /** As written, e.g. "6:00" — for "6 AM or 6 PM?" */
+  said: string;
+  options: string[];
+  /** The likelier one, already in the draft. */
+  picked: string;
+}
+
+/** What one line of words turned into, and what is still worth a tap. */
+export interface PassReading {
+  draft: PassDraft;
+  /** Times written without am/pm where both make sense. */
+  asks: TimeAsk[];
+  /** A day out with no start time: offer a few. */
+  needStart: boolean;
+  /** Was a reason written (or clearly implied, like "market")? */
+  reasonGiven: boolean;
+  /** Pieces that were understood, in order, for "Got it" chips. */
+  heard: string[];
+}
+
+/** Reason chips: what students actually put on a pass. */
+export const REASONS: Record<PassKind, string[]> = {
+  dayout: ["Outing", "Walking", "Market", "Shopping", "Food outside", "Movie", "Bank work", "Doctor visit"],
+  leave: ["Going home", "Family function", "Festival", "Medical", "Personal work", "College event"],
+};
+
+/** Words that already say why. First match wins; order matters ("doctor" before "outing"). */
+const REASON_WORDS: [RegExp, string][] = [
+  [/\b(doctor|hospital|checkup|clinic|dentist)\b/, "Doctor visit"],
+  [/\b(bank|atm)\b/, "Bank work"],
+  [/\b(movie|film|cinema|picture dekhne)\b/, "Movie"],
+  [/\b(shopping|mall|kapde|clothes)\b/, "Shopping"],
+  [/\b(market|bazaar|bazar|grocery|saman|samaan)\b/, "Market"],
+  [/\b(khana|khane|food|dinner|lunch|restaurant|cafe)\b/, "Food outside"],
+  [/\b(walk|walking|tehelne|tahalne|ghoomne|ghumne|ghoomna|ghumna)\b/, "Walking"],
+  [/\b(parcel|courier|delivery)\b/, "Collect a parcel"],
+  [/\b(haircut|salon|baal)\b/, "Haircut"],
+  [/\b(shaadi|shadi|wedding|function)\b/, "Family function"],
+  [/\b(diwali|holi|eid|festival|tyohar|chhath|rakhi)\b/, "Festival"],
+  [/\b(ghar|home)\b/, "Going home"],
+  [/\b(outing|trip|friends)\b/, "Outing"],
+];
+
+const AM_WORDS = "subah|subha|savere|sawere|morning|mrng";
+const PM_WORDS = "shaam|sham|evening|raat|night|dopahar|dophar|dopehar|afternoon|noon";
+const AM_RE = new RegExp(`\\b(?:${AM_WORDS})\\b`);
+const PM_RE = new RegExp(`\\b(?:${PM_WORDS})\\b`);
+const AFTER_RE = new RegExp(`^\\s*(?:ko\\s+|ki\\s+|ke\\s+)?(${AM_WORDS}|${PM_WORDS})\\b`);
+
+/** A day out must sit between these (gate opens / closes). */
+const DAYOUT_START = "06:00";
+
+const asTime = (c: Clock, ap: "am" | "pm") => to24({ ...c, ap }, ap);
+
+/** Which of am / pm make sense for this clock, given the pass kind and the other end. */
+function fits(c: Clock, which: "from" | "to", kind: PassKind, other: string | null): ("am" | "pm")[] {
+  if (c.h === 0) return ["am"];
+  return (["am", "pm"] as const).filter((ap) => {
+    const t = asTime(c, ap);
+    if (kind === "dayout") {
+      if (which === "from" && (t < DAYOUT_START || t >= DAYOUT_END)) return false;
+      if (which === "to" && (t <= DAYOUT_START || t > DAYOUT_END)) return false;
+    }
+    if (other && kind === "dayout") {
+      if (which === "to" && t <= other) return false;
+      if (which === "from" && t >= other) return false;
+    }
+    return true;
+  });
+}
+
 export function parsePass(text: string, now: Date = new Date()): PassDraft {
+  return readPass(text, now).draft;
+}
+
+/**
+ * The same reading as {@link parsePass}, plus what it was not sure of: a time
+ * with no am/pm where both fit becomes a two-button question instead of a guess.
+ */
+export function readPass(text: string, now: Date = new Date()): PassReading {
   const today = toDateStr(now);
   let t = ` ${text.toLowerCase().replace(/[–—]/g, "-").replace(/\s+/g, " ")} `;
+  const heard: string[] = [];
 
   // ---- reason: whatever follows "for / because / reason / kyunki / due to"
-  let reason = ".";
-  const rm = t.match(/\b(?:for|because|reason|kyunki|kyuki|due to|coz)\b[: ]+(.+)$/);
+  let reason = "";
+  const rm = t.match(/\b(?:for|because|reason|kyunki|kyuki|due to|coz|wajah)\b[: ]+(.+)$/);
   if (rm) {
     reason = rm[1].trim().replace(/\s+/g, " ");
     reason = reason.charAt(0).toUpperCase() + reason.slice(1);
     t = t.slice(0, rm.index) + " ";
   }
+  if (!reason) reason = REASON_WORDS.find(([re]) => re.test(t))?.[1] ?? "";
 
   // ---- kind + leave type
-  const medical = /\b(medical|doctor|hospital|sick|bimar|fever|checkup)\b/.test(t);
+  const medical = /\b(medical|sick|bimar|fever|hospital|checkup)\b/.test(t);
   const duty = /\b(on ?duty|od|event|competition|hackathon|fest)\b/.test(t);
   const leaveType: LeaveType = medical ? "Medical" : duty ? "On Duty" : "Leave";
-  const saysDayOut = /\b(day ?out|outing|outpass|out pass|gate ?pass|bahar)\b/.test(t);
-  const saysLeave = /\b(leave|ghar|home|chutti|chhutti)\b/.test(t) || medical || duty;
+  const saysDayOut = /\b(day ?out|dayout|outing|outpass|out pass|gate ?pass|bahar)\b/.test(t);
+  const saysLeave = /\b(leave|chutti|chhutti)\b/.test(t);
+  // Going home, being ill or on duty usually means a leave — unless a day out was asked for.
+  const leanLeave = /\b(ghar|home)\b/.test(t) || medical || duty;
+  const nowish = /\b(abhi|abi|now|turant|right now)\b/.test(t);
+
+  // ---- durations: "3 din", "2 days", "3 ghante" — these numbers are not dates
+  let days = 0;
+  let hours = 0;
+  t = t.replace(/\b(\d{1,2})\s*(din|days?)\b/g, (_a, n) => {
+    days = Number(n);
+    return " ";
+  });
+  t = t.replace(/\b(\d{1,2})\s*(ghante|ghanta|ghante ke liye|hours?|hrs?)\b/g, (_a, n) => {
+    hours = Number(n);
+    return " ";
+  });
 
   // ---- clock times: need am/pm, a colon/dot, or "baje" — so "6-10" stays dates
   const clocks: Clock[] = [];
+  const src = t;
   t = t.replace(
-    /\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|baje|bje)\b|\b(\d{1,2})[:.](\d{2})\b/g,
-    (_all, h1, m1, suf, h2, m2) => {
+    /\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm|baje|bje|bajhe)\b|\b(\d{1,2})[:.](\d{2})\b/g,
+    (all: string, h1: string, m1: string, suf: string, h2: string, m2: string, at: number) => {
       const h = Number(h1 ?? h2);
       const m = Number(m1 ?? m2 ?? 0);
-      if (h > 23 || m > 59) return _all;
-      const ap = suf === "am" || suf === "pm" ? suf : h > 12 ? "pm" : null;
+      if (h > 23 || m > 59) return all;
+      let ap: Clock["ap"] = suf === "am" || suf === "pm" ? suf : h > 12 ? "pm" : null;
+      if (!ap) {
+        // "subah 10 baje", "10 baje subah", "shaam 6" — a time-of-day word settles it.
+        const before = src.slice(Math.max(0, at - 14), at);
+        const after = src.slice(at + all.length).match(AFTER_RE)?.[1];
+        const lastAm = before.search(new RegExp(`(?:${AM_WORDS})\\s*(?:ko\\s*)?(?:\\d|$)`));
+        const lastPm = before.search(new RegExp(`(?:${PM_WORDS})\\s*(?:ko\\s*)?(?:\\d|$)`));
+        if (lastAm >= 0 || lastPm >= 0) ap = lastPm > lastAm ? "pm" : "am";
+        else if (after) ap = AM_RE.test(after) ? "am" : PM_RE.test(after) ? "pm" : null;
+      }
       clocks.push({ h: h > 12 ? h - 12 : h, m, ap });
       return " @ ";
     },
   );
-  // "se 3 tak 7" style leftovers are rare; a range written "3-7pm" leaves "3-@"
-  // behind — pick the bare hour up as the start.
+  // A range written "3-7pm" leaves "3-@" behind — pick the bare hour up as the start.
   const lead = t.match(/\b(\d{1,2})\s*(?:-|to|se)\s*@/);
   if (lead && clocks.length === 1) {
     const h = Number(lead[1]);
@@ -149,36 +261,90 @@ export function parsePass(text: string, now: Date = new Date()): PassDraft {
     }
   }
 
-  const multiDay = dates.length === 2 && dates[0] !== dates[1];
-  const kind: PassKind = saysDayOut && !saysLeave ? "dayout" : saysLeave || multiDay ? "leave" : "dayout";
+  const multiDay = (dates.length === 2 && dates[0] !== dates[1]) || days > 1;
+  const kind: PassKind = saysLeave || multiDay ? "leave" : saysDayOut ? "dayout" : leanLeave ? "leave" : "dayout";
+  heard.push(kind === "dayout" ? "Day Out" : leaveType === "Leave" ? "Leave" : `${leaveType} leave`);
 
-  // ---- times, with am/pm filled in sensibly
-  const end = clocks[1];
-  const start = clocks[0];
+  // ---- am / pm: settle what the words settle, ask about the rest
+  const asks: TimeAsk[] = [];
+  const settle = (c: Clock | undefined, which: "from" | "to", other: string | null): string | null => {
+    if (!c) return null;
+    if (c.ap) return asTime(c, c.ap);
+    const ok = fits(c, which, kind, other);
+    const guess = guessAp(c.h);
+    if (ok.length === 1) return asTime(c, ok[0]);
+    const pick = ok.includes(guess) || ok.length === 0 ? guess : ok[0];
+    const picked = asTime(c, pick);
+    if (ok.length === 2) {
+      asks.push({ which, said: `${c.h}:${pad(c.m)}`, options: [asTime(c, "am"), asTime(c, "pm")], picked });
+    }
+    return picked;
+  };
+  const [start, end] = clocks;
   // "2:40-7pm": the start shares the end's pm when it comes before it.
-  const startAp: "am" | "pm" =
-    start?.ap ?? (start && end?.ap === "pm" && end.h !== 12 && start.h <= end.h ? "pm" : guessAp(start?.h ?? 9));
+  if (start && !start.ap && end?.ap === "pm" && end.h !== 12 && start.h <= end.h) start.ap = "pm";
+  const endFirst = end?.ap ? asTime(end, end.ap) : null;
+  let fromT = settle(start, "from", endFirst);
+  const toT = settle(end, "to", fromT);
 
   if (kind === "dayout") {
     const day = dates[0] ?? base;
-    let fromTime = start ? to24(start, startAp) : day === today ? soon(now) : "10:00";
-    let toTime = end ? to24(end, end.ap ?? guessAp(end.h)) : DAYOUT_END;
+    if (nowish && !fromT) fromT = soon(now);
+    let fromTime = fromT ?? (day === today ? soon(now) : "10:00");
+    let toTime = toT ?? (hours && fromT ? addHours(fromT, hours) : DAYOUT_END);
     if (toTime > DAYOUT_END) toTime = DAYOUT_END;
     if (fromTime >= toTime) fromTime = soon(now) < toTime ? soon(now) : "10:00";
-    return { kind, leaveType: "Leave", fromDate: day, fromTime, toDate: day, toTime, reason };
+    heard.push(day === today ? "Today" : day === addDays(today, 1) ? "Tomorrow" : dayLabel(day));
+    heard.push(`${fmtTime(fromTime)} → ${fmtTime(toTime)}`);
+    if (reason) heard.push(reason);
+    return {
+      draft: { kind, leaveType: "Leave", fromDate: day, fromTime, toDate: day, toTime, reason },
+      asks,
+      needStart: !fromT,
+      reasonGiven: !!reason,
+      heard,
+    };
   }
 
   const fromDate = dates[0] ?? base;
-  const toDate = dates[1] ?? dates[0] ?? base;
+  let toDate = dates[1] ?? (days > 1 ? addDays(fromDate, days - 1) : dates[0] ?? base);
+  if (toDate < fromDate) toDate = fromDate;
+  const fromTime = fromT ?? "08:00";
+  const toTime = toT ?? DAYOUT_END;
+  heard.push(fromDate === toDate ? dayLabel(fromDate) : `${dayLabel(fromDate)} → ${dayLabel(toDate)}`);
+  if (fromT || toT) heard.push(`${fmtTime(fromTime)} → ${fmtTime(toTime)}`);
+  if (reason) heard.push(reason);
   return {
-    kind,
-    leaveType,
-    fromDate,
-    fromTime: start ? to24(start, startAp) : "08:00",
-    toDate: toDate < fromDate ? fromDate : toDate,
-    toTime: end ? to24(end, end.ap ?? guessAp(end.h)) : DAYOUT_END,
-    reason,
+    draft: { kind, leaveType, fromDate, fromTime, toDate, toTime, reason },
+    asks,
+    needStart: false,
+    reasonGiven: !!reason,
+    heard,
   };
+}
+
+function addHours(t: string, n: number): string {
+  const [h, m] = t.split(":").map(Number);
+  const mins = Math.min(h * 60 + m + n * 60, 23 * 60 + 59);
+  return hm(Math.floor(mins / 60), mins % 60);
+}
+
+function dayLabel(s: string): string {
+  return fromDateStr(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** A few start times for a day out on `day`: now-ish, then the next round hours. */
+export function startChoices(day: string, now: Date = new Date()): string[] {
+  const out: string[] = [];
+  if (day === toDateStr(now)) {
+    const s = soon(now);
+    if (s < DAYOUT_END) out.push(s);
+    for (let h = now.getHours() + 1; h <= 18 && out.length < 4; h++) {
+      const x = hm(h, 0);
+      if (x > (out[0] ?? "00:00") && x >= DAYOUT_START) out.push(x);
+    }
+  } else out.push("09:00", "11:00", "13:00", "15:00");
+  return out;
 }
 
 /** One line for Camu's top bar: what to fill in, in the order the form asks. */

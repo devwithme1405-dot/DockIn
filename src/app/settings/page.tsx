@@ -23,7 +23,6 @@ import {
   School,
   ShieldCheck,
   Sparkles,
-  Bot,
   DoorOpen,
   Sun,
   Trash2,
@@ -69,7 +68,7 @@ import { clearChat } from "@/lib/chat";
 import { forgetPushToken } from "@/lib/push";
 import { UpdatesSheet } from "@/components/UpdatesSheet";
 import { usePreview } from "@/lib/v3/flags";
-import { openAssistant, openOutpass } from "@/lib/v3/ui";
+import { openOutpass } from "@/lib/v3/ui";
 import { LATEST, RELEASES } from "@/lib/changelog";
 
 type SheetName =
@@ -377,11 +376,10 @@ export default function ProfilePage() {
           {profile.bio && <p className="border-t border-line py-3 text-[14px] text-muted">{profile.bio}</p>}
         </section>
 
-        {/* DockIn 3 preview build only: the assistant and outpass */}
+        {/* DockIn 3 preview build only: the outpass */}
         {preview && (
           <section className="space-y-2.5" aria-label="DockIn 3 preview">
             <p className="px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">DockIn 3 · test build</p>
-            <MenuRow icon={Bot} title="DockBot" sub="Ask anything, by text or voice" onClick={openAssistant} />
             <MenuRow icon={DoorOpen} title="Outpass" sub="Day out & leave, and your history" onClick={() => openOutpass("new")} />
           </section>
         )}

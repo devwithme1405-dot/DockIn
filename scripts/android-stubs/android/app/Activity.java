@@ -12,6 +12,8 @@ public class Activity extends Context {
   public <T extends android.view.View> T findViewById(int id) { return null; }
   public android.view.Window getWindow() { return null; }
   public void startActivity(Intent i) {}
+  public void startActivityForResult(Intent i, int code) {}
+  protected void onActivityResult(int requestCode, int resultCode, Intent data) {}
   public void runOnUiThread(Runnable r) {}
   public void onBackPressed() {}
   protected void onDestroy() {}

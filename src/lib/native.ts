@@ -160,9 +160,12 @@ interface DockInPlugin {
   /** A page of HTML as an A4 PDF (base64), with no dialog. Added in the solution-sharing build. */
   htmlToPdf(options: { html: string }): Promise<{ data: string }>;
   /** Open Camu, signed in, at a path, with a note in the top bar. */
-  openCamu(options: { path?: string; note?: string }): Promise<void>;
+  openCamu(options: { path?: string; note?: string; proofData?: string; proofName?: string }): Promise<void>;
+  /** The phone's share sheet (WhatsApp, SMS…). Preview APK 3.0 and later. */
+  shareText(options: { text: string; title?: string }): Promise<void>;
+  clearCamuCaptured(): Promise<void>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */
-  camuCaptured(): Promise<{ items: string }>;
+  camuCaptured(): Promise<{ items: string; picked?: string }>;
   disconnectCollege(options: { which: "camu" | "lms" }): Promise<CollegeState>;
   syncCollege(options?: { full?: boolean }): Promise<CollegeState>;
   scheduleReminders(options: { items: ReminderItem[] }): Promise<void>;

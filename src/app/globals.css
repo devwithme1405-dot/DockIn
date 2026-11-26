@@ -1619,6 +1619,27 @@ html.lite .hero-drift { animation: none; }
 .pass-stamp { animation: pass-stamp .55s cubic-bezier(.2,1.6,.4,1) both; }
 @keyframes pass-stamp { 0% { transform: scale(2.4) rotate(-18deg); opacity: 0; } 60% { transform: scale(.92) rotate(-10deg); opacity: 1; } 100% { transform: scale(1) rotate(-10deg); opacity: 1; } }
 
+/* outpass page: the ticket prints out of a slot, then gets stamped */
+.pass-print { animation: pass-print .7s cubic-bezier(.2,.85,.25,1) both; }
+@keyframes pass-print { 0% { clip-path: inset(0 0 100% 0 round 16px); transform: translateY(-18px); } 100% { clip-path: inset(0 0 0 0 round 16px); transform: none; } }
+.pass-print ~ .pass-stamp { animation-delay: .62s; }
+/* fields glow once when a typed line fills them */
+.op-filled input { animation: op-glow .9s ease-out; }
+@keyframes op-glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 45% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+/* the mic while it listens */
+.op-mic-live { position: relative; }
+.op-mic-live::after { content: ""; position: absolute; inset: -4px; border-radius: 99px; border: 2px solid var(--danger); animation: voice-ring 1.4s ease-out infinite; }
+/* the door in the header swings once */
+.op-door svg { transform-origin: 30% 50%; animation: op-door .9s .2s cubic-bezier(.3,1.4,.5,1) both; }
+@keyframes op-door { 0% { transform: perspective(60px) rotateY(0); } 50% { transform: perspective(60px) rotateY(-38deg); } 100% { transform: perspective(60px) rotateY(0); } }
+/* a soft light across the hero card */
+.op-hero::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / .22) 50%, transparent 65%); transform: translateX(-120%); animation: op-sheen 1.6s .35s ease both; }
+@keyframes op-sheen { to { transform: translateX(120%); } }
+html.lite .op-hero::after, html.lite .op-mic-live::after, html.lite .op-filled input { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .pass-print, .op-filled input, .op-mic-live::after, .op-door svg, .op-hero::after, .pass-stamp { animation: none !important; }
+}
+
 html.lite .dockbot svg, html.lite .dockbot .bot-all, html.lite .dockbot .bot-shadow, html.lite .dockbot .bot-bulb,
 html.lite .bot-fab::after, html.lite .ask-halo, html.lite .voice-ring { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {

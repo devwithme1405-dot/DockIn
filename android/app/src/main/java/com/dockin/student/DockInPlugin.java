@@ -355,6 +355,25 @@ public class DockInPlugin extends Plugin {
                 .putExtra(CamuLoginActivity.EXTRA_BROWSE, true)
                 .putExtra(CamuLoginActivity.EXTRA_PATH, call.getString("path", "/"))
                 .putExtra(CamuLoginActivity.EXTRA_NOTE, call.getString("note", ""));
+        // The leave's parent-approval screenshot: kept ready so Camu's own upload
+        // button can be handed this exact image with one tap.
+        String proof = call.getString("proofData");
+        java.io.File dir = new java.io.File(getContext().getCacheDir(), "camu-proof");
+        java.io.File[] old = dir.listFiles();
+        if (old != null) for (java.io.File f : old) f.delete();
+        if (proof != null && !proof.isEmpty()) {
+            try {
+                dir.mkdirs();
+                String safe = call.getString("proofName", "mail-screenshot.jpg").replaceAll("[^A-Za-z0-9._-]", "_");
+                java.io.File out = new java.io.File(dir, safe.isEmpty() ? "mail-screenshot.jpg" : safe);
+                try (java.io.FileOutputStream f = new java.io.FileOutputStream(out)) {
+                    f.write(android.util.Base64.decode(proof, android.util.Base64.DEFAULT));
+                }
+                i.putExtra(CamuLoginActivity.EXTRA_PROOF, out.getAbsolutePath());
+            } catch (Exception e) {
+                // Without it the student simply picks the screenshot in Camu as usual.
+            }
+        }
         try {
             getActivity().startActivity(i);
             call.resolve();
@@ -363,13 +382,41 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /** Shares a line of text through the phone's share sheet (WhatsApp, SMS…). */
+    @PluginMethod
+    public void shareText(PluginCall call) {
+        String text = call.getString("text", "");
+        if (text == null || text.isEmpty()) {
+            call.reject("Nothing to share.");
+            return;
+        }
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_TEXT, text);
+        try {
+            getActivity().startActivity(Intent.createChooser(send, call.getString("title", "Share")));
+            call.resolve();
+        } catch (ActivityNotFoundException e) {
+            call.reject("No app on this phone can share text.");
+        }
+    }
+
+    /** Forgets what the Camu page sent (after it has been shared with the DockIn team). */
+    @PluginMethod
+    public void clearCamuCaptured(PluginCall call) {
+        getContext().getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE)
+                .edit().remove("items").remove("picked").apply();
+        call.resolve();
+    }
+
     /** What the Camu page sent while open in DockIn (see CamuLoginActivity.CAPTURE). */
     @PluginMethod
     public void camuCaptured(PluginCall call) {
+        android.content.SharedPreferences p = getContext()
+                .getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE);
         JSObject out = new JSObject();
-        out.put("items", getContext()
-                .getSharedPreferences(CamuLoginActivity.PREFS_CAPTURE, Context.MODE_PRIVATE)
-                .getString("items", "[]"));
+        out.put("items", p.getString("items", "[]"));
+        out.put("picked", p.getString("picked", "[]"));
         call.resolve(out);
     }
 
