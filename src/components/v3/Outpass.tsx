@@ -14,6 +14,7 @@ import {
   GraduationCap,
   House,
   ImagePlus,
+  Loader2,
   Mail,
   Mic,
   Moon,
@@ -22,6 +23,7 @@ import {
   Send,
   Share2,
   Sparkles,
+  Stamp,
   Sun,
   Sunrise,
   Trash2,
@@ -56,7 +58,6 @@ import {
   DIRECT_WHY,
   directState,
   type DirectState,
-  parentText,
   cachedHistory,
   liveCamu,
   useCamuHistory,
@@ -78,6 +79,7 @@ import { closeOutpass, openOutpass, useV3Screens } from "@/lib/v3/ui";
 import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
+import { connectApprover, useApproverState } from "@/lib/approver";
 import { ApproveNow, CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
@@ -184,6 +186,7 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {!saved && <ApproverChip />}
         {saved ? (
           <Saved
             id={saved}
@@ -458,14 +461,19 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
               <div
                 key={`${reading.n}-${a.which}`}
                 className={cx(
-                  "ask-in rounded-2xl border-[1.5px] p-3",
-                  waiting ? "border-danger/60 bg-danger-soft/40" : "border-accent/40 bg-accent-soft/50",
+                  "ask-in rounded-2xl border-2 p-3 shadow-[0_2px_0_rgb(60_20_5/0.12)]",
+                  waiting ? "border-danger bg-danger-soft" : "border-accent bg-accent-soft",
                 )}
                 style={{ animationDelay: `${250 + i * 80}ms` }}
               >
-                <p className="text-[13.5px] font-bold">
-                  {a.which === "from" ? "Going out at" : "Back by"} {a.said} — AM or PM?
-                  {!a.must && <span className="ml-1 font-semibold text-muted">· tap to confirm</span>}
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <span className={cx("grid size-5 place-items-center rounded-full text-[12px] font-black text-white", waiting ? "bg-danger" : "bg-accent")}>?</span>
+                  <span className={cx("text-[11px] font-extrabold tracking-wide uppercase", waiting ? "text-danger" : "text-accent")}>
+                    {waiting ? "Tap one to continue" : "Quick check"}
+                  </span>
+                </div>
+                <p className="text-[14.5px] font-extrabold">
+                  {a.which === "from" ? "Going out at" : "Back by"} {a.said} — morning or evening?
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {a.options.map((t, j) => {
@@ -497,8 +505,12 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
             );
           })}
           {reading.needStart && (
-            <div className="ask-in rounded-2xl border-[1.5px] border-accent/40 bg-accent-soft/50 p-3" style={{ animationDelay: "250ms" }}>
-              <p className="text-[13.5px] font-bold">When are you heading out?</p>
+            <div className="ask-in rounded-2xl border-2 border-accent bg-accent-soft p-3 shadow-[0_2px_0_rgb(60_20_5/0.12)]" style={{ animationDelay: "250ms" }}>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="grid size-5 place-items-center rounded-full bg-accent text-[12px] font-black text-white">?</span>
+                <span className="text-[11px] font-extrabold tracking-wide text-accent uppercase">Quick check</span>
+              </div>
+              <p className="text-[14.5px] font-extrabold">When are you heading out?</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {startChoices(d.fromDate).map((t, j) => (
                   <button
@@ -825,6 +837,44 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   );
 }
 
+// ------------------------------------------------------------ self-approval chip
+
+/** A quick self-approval set-up / status at the top of Outpass, next to Profile. */
+function ApproverChip() {
+  const approver = useApproverState();
+  const [busy, setBusy] = useState(false);
+
+  if (approver.saved) {
+    return (
+      <div className="mx-4 mt-3 flex items-center gap-2 rounded-2xl border border-safe/30 bg-safe-soft/50 px-3 py-2">
+        <Stamp size={16} className="text-safe" />
+        <span className="flex-1 text-[12.5px] font-bold text-safe">Self-approval on{approver.user ? ` · ${approver.user}` : ""}</span>
+        <span className="text-[11px] text-muted">one-tap approve</span>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void connectApprover("Sign in with your approval login and approve one pass — then it's one tap.").finally(() => setBusy(false));
+      }}
+      className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 text-left active:scale-[.99]"
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+        <Stamp size={17} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <b className="block text-[13px] font-bold">Approve your own passes</b>
+        <span className="block text-[11.5px] text-muted">Connect your college approval login — one tap after.</span>
+      </span>
+      {busy ? <Loader2 size={16} className="shrink-0 animate-spin text-muted" /> : <ChevronLeft size={17} className="shrink-0 rotate-180 text-muted" />}
+    </button>
+  );
+}
+
 // ------------------------------------------------------------ warden mail
 
 /**
@@ -886,6 +936,7 @@ function WardenMail({ d }: { d: PassDraft }) {
 
 function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void; onAnother: () => void }) {
   const toast = useToast();
+  const approver = useApproverState();
   const p = useLiveQuery(() => v3db.passes.get(id), [id]);
   if (!p) return null;
   const applied = p.status !== "saved";
@@ -944,18 +995,21 @@ function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void
             </div>
           </Step>
         )}
-        <Step n={2} title="Get it approved" delay={520}>
-          <p className="text-[12.5px] text-muted">Approve it yourself with your college approval login, or send your parents a ready message.</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <ApproveNow camuId={p.camuId} />
-            <button
-              type="button"
-              onClick={() => void shareText(parentText(p), "Send to parents")}
-              className="btn-paper lip-sm inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
-            >
-              <Share2 size={15} /> Tell parents
-            </button>
-          </div>
+        <Step n={2} done={p.status === "approved"} title="Get it approved" delay={520}>
+          {p.status === "approved" ? (
+            <p className="text-[12.5px] font-semibold text-safe">Approved — you&apos;re all set ✓</p>
+          ) : approver.saved ? (
+            <>
+              <p className="text-[12.5px] text-muted">Approve it yourself, right here.</p>
+              <div className="mt-2">
+                <ApproveNow camuId={p.camuId} />
+              </div>
+            </>
+          ) : (
+            <p className="text-[12.5px] text-muted">
+              Waiting for approval — your parent or warden approves it in MyCamu. Set up self-approval (Profile) to do it yourself in one tap.
+            </p>
+          )}
         </Step>
       </ol>
 
@@ -1327,10 +1381,19 @@ const NEXT: { status: PassStatus; label: string; icon: typeof Check }[] = [
   { status: "cancelled", label: "Cancelled", icon: X },
 ];
 
-function PassSheet({ p, onClose }: { p: PassRecord | null; onClose: () => void }) {
+function PassSheet({ p: initial, onClose }: { p: PassRecord | null; onClose: () => void }) {
   const toast = useToast();
+  // A live copy, so an auto status update from MyCamu shows without reopening.
+  const live = useLiveQuery(() => (initial ? v3db.passes.get(initial.id) : undefined), [initial?.id]);
+  const p = live ?? initial;
   const proofUrl = useBlobUrl(p?.proof);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Sent through DockIn (has a MyCamu id): pull its real status instead of asking.
+  useEffect(() => {
+    if (p?.camuId) void refreshFromCamu([{ id: p.id, camuId: p.camuId, status: p.status }]).catch(() => 0);
+  }, [p?.id, p?.camuId, p?.status]);
+
   return (
     <Sheet open={!!p} onClose={onClose} title="Outpass">
       {p && (
@@ -1345,37 +1408,36 @@ function PassSheet({ p, onClose }: { p: PassRecord | null; onClose: () => void }
           )}
           <div>
             <p className="mb-1.5 text-[13px] font-medium text-muted">Status · {STATUS_LABEL[p.status]}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {NEXT.map((n) => (
-                <button
-                  key={n.status}
-                  type="button"
-                  onClick={() => void v3db.passes.update(p.id, { status: n.status, updatedAt: Date.now() })}
-                  className={cx(
-                    "lip-sm inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-[13px]",
-                    p.status === n.status ? "btn-leather" : "btn-paper",
-                    n.status === "applied" && "col-span-2",
-                  )}
-                >
-                  <n.icon size={15} /> {n.label}
-                </button>
-              ))}
-            </div>
+            {p.camuId ? (
+              <div className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2.5 text-[12.5px] text-muted">
+                <RefreshCw size={14} className="text-accent" /> Kept up to date from MyCamu automatically.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {NEXT.map((n) => (
+                  <button
+                    key={n.status}
+                    type="button"
+                    onClick={() => void v3db.passes.update(p.id, { status: n.status, updatedAt: Date.now() })}
+                    className={cx(
+                      "lip-sm inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-2 text-[13px]",
+                      p.status === n.status ? "btn-leather" : "btn-paper",
+                      n.status === "applied" && "col-span-2",
+                    )}
+                  >
+                    <n.icon size={15} /> {n.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               onClick={() => void sendToCamu(p, p.proof).then((how) => how === "copied" && toast.show("Details copied — paste them in MyCamu"))}
               className="btn-leather inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
             >
               <ExternalLink size={15} /> Open MyCamu
-            </button>
-            <button
-              type="button"
-              onClick={() => void shareText(parentText(p), "Send to parents")}
-              className="btn-paper inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
-            >
-              <Share2 size={15} /> Tell parents
             </button>
             <button
               type="button"
@@ -1386,7 +1448,7 @@ function PassSheet({ p, onClose }: { p: PassRecord | null; onClose: () => void }
                 const { kind, leaveType, fromTime, toTime, reason } = p;
                 openOutpass("new", { kind, leaveType, fromTime, toTime, reason, fromDate: addDays(p.fromDate, shift), toDate: addDays(p.toDate, shift) });
               }}
-              className="btn-paper col-span-2 inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
+              className="btn-paper inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
             >
               <Copy size={15} /> Use again
             </button>

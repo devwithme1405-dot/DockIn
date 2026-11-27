@@ -251,7 +251,8 @@ interface DockInPlugin {
 export type SpeechEvent =
   | { type: "state"; state: "ready" | "speaking" | "processing" }
   | { type: "level"; level: number }
-  | { type: "partial" | "final"; text: string }
+  | { type: "partial"; text: string }
+  | { type: "final"; text: string; alts?: string }
   | { type: "error"; code: string };
 
 /** Text, a link or documents shared into DockIn from another app. */

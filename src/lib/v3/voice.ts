@@ -36,6 +36,40 @@ export function saveVoiceLang(tag: string) {
 
 export type VoiceState = "idle" | "starting" | "listening" | "hearing" | "processing" | "error";
 
+// Words that mark a pass, used only to pick between the engine's own guesses.
+const SIGNAL = /\b(day\s?out|out\s?pass|gate\s?pass|outing|leave|medical|duty|baje|a\.?m\.?|p\.?m\.?|kal|parso|aaj|aj|today|tomorrow|tonight|night|subah|shaam|sham|market|home|ghar|hospital|doctor|fever|event)\b|\d/gi;
+
+function passScore(s: string): number {
+  const m = s.match(SIGNAL);
+  return m ? m.length : 0;
+}
+
+/**
+ * From the engine's guesses, the one that reads most like a pass. The top guess
+ * isn't always the clearest; ties keep the top one, so this never does worse.
+ */
+function bestGuess(top: string, altsJson?: string): string {
+  if (!altsJson) return top;
+  let alts: unknown;
+  try {
+    alts = JSON.parse(altsJson);
+  } catch {
+    return top;
+  }
+  if (!Array.isArray(alts) || alts.length < 2) return top;
+  let best = top || String(alts[0] ?? "");
+  let bestScore = passScore(best);
+  for (const a of alts) {
+    const s = String(a ?? "");
+    const sc = passScore(s);
+    if (sc > bestScore) {
+      best = s;
+      bestScore = sc;
+    }
+  }
+  return best;
+}
+
 /** Minimal shape of the browser's own SpeechRecognition (desktop Chrome), for testing outside the app. */
 interface WebRec {
   lang: string;
@@ -119,7 +153,7 @@ export function useVoice(onFinal: (text: string) => void) {
           setState("hearing");
           break;
         case "final":
-          done(e.text || heard.current);
+          done(bestGuess(e.text || heard.current, e.alts));
           break;
         case "error":
           setLevel(0);

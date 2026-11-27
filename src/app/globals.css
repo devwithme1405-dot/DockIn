@@ -1757,3 +1757,16 @@ html.lite .adm-top, html.lite .adm-bottom { backdrop-filter: none; -webkit-backd
   .celebrate-tick { stroke-dashoffset: 0; }
   .celebrate-confetti { display: none; }
 }
+
+/* Mess pass: grows once when scrolled into view (no per-frame scroll work). */
+.mess-grow {
+  transform: scale(.82);
+  opacity: .55;
+  transform-origin: center top;
+  transition: transform .5s cubic-bezier(.2,.9,.3,1.1), opacity .5s ease;
+  will-change: transform, opacity;
+}
+.mess-grow.in { transform: scale(1); opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .mess-grow { transition: none; transform: none; opacity: 1; }
+}

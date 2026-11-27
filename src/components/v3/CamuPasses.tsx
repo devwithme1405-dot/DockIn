@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, Loader2, LogIn, LogOut, RefreshCw, ShieldAlert, Stamp, Sun, UserCheck, XCircle } from "lucide-react";
 import { DockIn } from "@/lib/native";
-import { approvePass, connectApprover } from "@/lib/approver";
+import { approvePass, connectApprover, useApproverState } from "@/lib/approver";
 import { fmtTime, fromDateStr } from "@/lib/dates";
 import type { PassDraft } from "@/lib/outpass";
 import { cancelInCamu, cancellable, fetchHistory, findInHistory, markCancelledLocally, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
@@ -190,6 +190,8 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
       const r = await approvePass(camuId, note);
       if (r.ok) {
         void fetchHistory().catch(() => []);
+        // Reflect it on DockIn's own copy at once, so the "approve" button turns into "approved".
+        void v3db.passes.filter((p) => p.camuId === camuId).modify({ status: "approved", updatedAt: Date.now() });
         setCelebrate(true);
       } else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
       else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
@@ -215,6 +217,17 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
   );
 }
 
+/** In a pass sheet: approve it yourself if self-approval is set up, else say it's waiting. */
+function SheetApprove({ camuId }: { camuId: string }) {
+  const approver = useApproverState();
+  if (approver.saved) return <ApproveNow camuId={camuId} />;
+  return (
+    <p className="rounded-xl bg-warn-soft px-3 py-2.5 text-center text-[13px] font-semibold text-warn">
+      Waiting for approval in MyCamu
+    </p>
+  );
+}
+
 export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () => void }) {
   return (
     <Sheet open={!!c} onClose={onClose} title={c?.type ?? "Pass"}>
@@ -225,7 +238,7 @@ export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () 
             <Steps c={c} big />
           </div>
           {c.files > 0 && <p className="text-[12.5px] text-muted">{c.files === 1 ? "1 file attached in MyCamu" : `${c.files} files attached in MyCamu`}</p>}
-          {awaitingApproval(c) && <ApproveNow camuId={c.id} />}
+          {awaitingApproval(c) && <SheetApprove camuId={c.id} />}
           {cancellable(c) && <CancelPass c={c} onDone={onClose} />}
           {(c.kind === "dayout" || c.kind === "leave") && (
             <button

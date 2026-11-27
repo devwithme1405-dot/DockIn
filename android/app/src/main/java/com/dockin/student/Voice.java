@@ -90,6 +90,9 @@ final class Voice {
                 JSObject o = new JSObject();
                 o.put("type", "final");
                 o.put("text", best(results));
+                // All the engine's guesses, so the app can pick the one that reads
+                // as a real pass — the top guess isn't always the clearest.
+                o.put("alts", alts(results));
                 out.emit("speech", o);
                 release();
             }
@@ -112,7 +115,7 @@ final class Voice {
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang);
         i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
         // A student pauses mid-sentence ("kal… 3 baje… day out"): give them a moment.
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
@@ -153,6 +156,16 @@ final class Voice {
         if (b == null) return "";
         ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         return list == null || list.isEmpty() || list.get(0) == null ? "" : list.get(0).trim();
+    }
+
+    /** All of the engine's guesses, as a JSON array string. */
+    private static String alts(Bundle b) {
+        org.json.JSONArray out = new org.json.JSONArray();
+        if (b != null) {
+            ArrayList<String> list = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            if (list != null) for (String s : list) if (s != null && !s.trim().isEmpty()) out.put(s.trim());
+        }
+        return out.toString();
     }
 
     private static String errorName(int e) {

@@ -141,35 +141,23 @@ export default function CafeteriaPage() {
     };
   }, [qrValue, drawn]);
 
-  // Grows as it is scrolled into view, straight on the node in a rAF. The tab
-  // stays alive while hidden, so it only reacts while it is actually on screen,
-  // and settles itself again the moment the tab is shown.
+  // Grows once as it scrolls into view — an IntersectionObserver flips a class
+  // and CSS does the rest. No per-scroll-frame rect reads or style writes, so it
+  // stays smooth on budget phones (the old per-frame transform made it stutter).
   const qrRef = useRef<HTMLDivElement>(null);
+  const [grown, setGrown] = useState(false);
   useEffect(() => {
     const el = qrRef.current;
     if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        if (el.offsetParent === null) return; // this tab is hidden
-        const r = el.getBoundingClientRect();
-        const vh = window.innerHeight || 1;
-        const p = Math.max(0, Math.min(1, 1 - (r.top - vh * 0.2) / (vh * 0.55)));
-        el.style.transform = `scale(${(0.76 + 0.24 * p).toFixed(3)})`;
-        el.style.opacity = (0.5 + 0.5 * p).toFixed(3);
-      });
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    window.addEventListener(TAB_SHOWN, onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      window.removeEventListener(TAB_SHOWN, onScroll);
-      cancelAnimationFrame(raf);
-    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[0];
+        if (e) setGrown(e.isIntersecting && e.intersectionRatio >= 0.3);
+      },
+      { threshold: [0, 0.3, 0.6] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, [svg]);
 
   // "Show my mess pass" from the offline sheet or Today: bring it into view as
@@ -291,7 +279,7 @@ export default function CafeteriaPage() {
         <div className="grid min-h-[70vh] place-items-center pt-7 pb-24">
           {qrValue ? (
             <div className="flex flex-col items-center">
-              <div ref={qrRef} className="relative will-change-transform" style={{ transformOrigin: "center" }}>
+              <div ref={qrRef} className={cx("mess-grow relative", grown && "in")}>
                 {/* warm light behind the pass, breathing */}
                 <span className="anim-halo pointer-events-none absolute -inset-8 rounded-[48px] bg-[radial-gradient(closest-side,rgba(242,135,31,0.5),transparent)] blur-xl" aria-hidden />
                 {/* little dishes floating round it */}

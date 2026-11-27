@@ -7,7 +7,10 @@
  * no-ops so the screens still render. The native side learns MyCamu's sign-in
  * and approve from the student doing it once, then replays them.
  */
-import { DockIn, isNativeApp } from "./native";
+"use client";
+
+import { useEffect, useState } from "react";
+import { DockIn, isNativeApp, onPhone } from "./native";
 
 export interface ApproverState {
   /** A self-approval login is saved (its session may still have ended). */
@@ -30,6 +33,22 @@ export async function approverState(): Promise<ApproverState> {
   } catch {
     return OFF;
   }
+}
+
+/** Live self-approval state for a screen — refreshes on mount and when the app resumes. */
+export function useApproverState(): ApproverState {
+  const [st, setSt] = useState<ApproverState>(OFF);
+  useEffect(() => {
+    let live = true;
+    const load = () => void approverState().then((s) => live && setSt(s));
+    load();
+    const off = onPhone("resume", load);
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+  return st;
 }
 
 /**
