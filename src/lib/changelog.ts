@@ -20,6 +20,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    date: "2026-11-28",
+    title: "Outpass, in seconds — our biggest update yet",
+    app: true,
+    items: [
+      "Make a pass by just saying it: type or speak “kal 4 baje market” and DockIn fills the whole MyCamu form in seconds.",
+      "Approve your own gate pass in one tap — save your college approval login once, and DockIn approves it for you, no second app and no signing in again.",
+      "It stays signed in: DockIn renews the approval session on its own, so you set it up once and forget it.",
+      "Leave Out Pass: DockIn writes the warden mail for you — your name, enrollment, dates and times — ready to send.",
+      "A cancelled pass now shows cancelled at once, and every pass keeps its real status straight from MyCamu.",
+      "Smoother cafeteria mess pass, clearer questions, and an Outpass shortcut right on the home bar.",
+    ],
+  },
+  {
     date: "2026-11-23",
     title: "LMS hand-in that just works",
     app: true,

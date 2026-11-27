@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Download, Loader2, RotateCcw, ShieldCheck, Smartphone, Sparkles } from "lucide-react";
 import { DockIn, isNativeApp, onPhone, type UpdateState } from "@/lib/native";
+import { RELEASES } from "@/lib/changelog";
 import { BACK_ONLINE, isOffline } from "@/lib/net";
 import { useBackClose } from "@/lib/backClose";
 import { cx, useToast } from "./ui";
@@ -314,9 +315,9 @@ export function AppUpdate() {
         ) : (
           <ul className="mt-4 space-y-2.5">
             {[
+              RELEASES[0]?.title ?? "New features and fixes from the team",
               offer.ready ? "Already downloaded — installs in seconds" : "Installs right here — no link, no Play Store",
               "Your attendance, tasks and chats stay exactly as they are",
-              "Fixes and new features from the team",
             ].map((t) => (
               <li key={t} className="flex items-start gap-2.5 text-[13.5px] leading-snug">
                 <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-safe-soft text-safe">

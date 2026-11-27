@@ -2,11 +2,9 @@
 
 import { AnnouncementBar } from "@/components/AccountNotices";
 import { OutpassEntry } from "@/components/v3/OutpassEntry";
+import { WhatsNew } from "@/components/WhatsNew";
 import { usePreview } from "@/lib/v3/flags";
 import { openOutpass } from "@/lib/v3/ui";
-import { useApproverState } from "@/lib/approver";
-import { createPortal } from "react-dom";
-import { Stamp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -160,7 +158,7 @@ export default function TodayPage() {
 
   return (
     <div className="page-wash stagger">
-      <ApproverIntro />
+      <WhatsNew />
       <StickyBar className="px-5 pb-2">
         <div className="flex h-12 items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -595,66 +593,6 @@ function TaskLine({ task, today }: { task: Task; today: string }) {
 }
 
 // ---------- the bell ----------
-
-/**
- * A one-time nudge, on the preview build, pointing the student to set up
- * self-approval. Shows once — a flag is set the moment it appears, so it never
- * comes back whether they act on it or not.
- */
-function ApproverIntro() {
-  const preview = usePreview();
-  const st = useApproverState();
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (!preview || st.saved || st.hasCreds) return;
-    let seen = false;
-    try {
-      seen = localStorage.getItem("dockin-approver-intro") === "1";
-    } catch {
-      /* private mode */
-    }
-    if (seen) return;
-    const t = setTimeout(() => {
-      setShow(true);
-      try {
-        localStorage.setItem("dockin-approver-intro", "1");
-      } catch {
-        /* private mode */
-      }
-    }, 1400);
-    return () => clearTimeout(t);
-  }, [preview, st.saved, st.hasCreds]);
-
-  if (!show || typeof document === "undefined") return null;
-  return createPortal(
-    <div className="celebrate-dim" style={{ zIndex: 80 }} onClick={() => setShow(false)}>
-      <div className="anim-pop mx-6 w-full max-w-sm rounded-3xl bg-card p-5 text-center shadow-[0_24px_60px_-24px_rgb(var(--shadow-ink)/0.6)]" onClick={(e) => e.stopPropagation()}>
-        <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent">
-          <Stamp size={26} />
-        </span>
-        <h3 className="mt-3 text-[18px] font-extrabold">Approve your own outpass</h3>
-        <p className="mt-1.5 text-[13.5px] text-muted">Save your college approval login once — then approve your passes in one tap, right here. No second app, and it stays signed in.</p>
-        <div className="mt-4 grid gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShow(false);
-              openOutpass("new");
-            }}
-            className="btn-leather inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl text-[15px] font-bold"
-          >
-            <Stamp size={17} /> Set it up
-          </button>
-          <button type="button" onClick={() => setShow(false)} className="h-11 rounded-2xl text-[14px] font-bold text-muted active:bg-black/5">
-            Maybe later
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 type BellRow = { key: string; icon: typeof Bell; tone: string; title: string; body: string; href: string };
 
