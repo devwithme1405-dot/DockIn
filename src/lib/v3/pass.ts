@@ -119,7 +119,12 @@ const CODES: Record<string, string> = {
   LEAVE_MISSING_ON_WORKING_DAY: "MyCamu says this is a working day and wants a leave for it before a day out.",
 };
 
-export function codeWords(code: string): string {
+export function codeWords(code: string, message?: string): string {
+  if (code === "ERRORS" && message) {
+    return /^\d{1,2}-[A-Za-z]{3}-\d{4}$/.test(message.trim())
+      ? `MyCamu flagged ${message.trim()} — usually there's already a leave or pass on that day. Cancel it in MyCamu, or start another day.`
+      : `MyCamu said: ${message.trim()}`;
+  }
   return CODES[code] ?? `MyCamu didn't take it (${code.replace(/_/g, " ").toLowerCase()}).`;
 }
 
@@ -160,16 +165,38 @@ function statusOf(r: Record<string, unknown>): PassStatus {
   return "applied";
 }
 
+/** Can this pass (with this file) go straight into MyCamu from DockIn? */
+export function sendable(p: PassDraft, proof?: Blob | null): boolean {
+  if (p.kind === "dayout") return true;
+  // Only plain leaves with an image were captured from MyCamu's form.
+  return p.leaveType === "Leave" && !!proof && proof.type.startsWith("image/");
+}
+
 /**
- * A Day Out straight into MyCamu, the way MyCamu's own form sends it, then
- * checked against MyCamu's list. Anything DockIn can't do itself falls back
- * to opening MyCamu with the details pinned.
+ * A pass straight into MyCamu, the way MyCamu's own form sends it (for a
+ * leave: the mail screenshot uploaded, then the leave), then checked against
+ * MyCamu's list. Anything DockIn can't do itself falls back to opening MyCamu.
  */
-export async function sendDayOut(p: PassDraft): Promise<SendResult> {
-  if (p.kind !== "dayout") return { kind: "open", why: "leave" };
+export async function sendPass(p: PassDraft, proof?: Blob | null): Promise<SendResult> {
+  if (!sendable(p, proof)) return { kind: "open", why: "not-sendable" };
   if (!(await canSendDirect())) return { kind: "open", why: "not-ready" };
   try {
-    const r = await DockIn.camuDayOut({ date: p.fromDate, from: p.fromTime, to: p.toTime, reason: p.reason });
+    let r;
+    if (p.kind === "dayout") {
+      r = await DockIn.camuDayOut({ date: p.fromDate, from: p.fromTime, to: p.toTime, reason: p.reason });
+    } else {
+      const small = await shrinkImage(proof!);
+      r = await DockIn.camuLeaveOut({
+        fromDate: p.fromDate,
+        fromTime: p.fromTime,
+        toDate: p.toDate,
+        toTime: p.toTime,
+        reason: p.reason,
+        proofData: await toBase64(small),
+        proofName: `mail-screenshot.${extOf(small.type)}`,
+        proofType: small.type || "image/jpeg",
+      });
+    }
     if (r.made) {
       let raw: Record<string, unknown> = {};
       try {
@@ -183,11 +210,11 @@ export async function sendDayOut(p: PassDraft): Promise<SendResult> {
         camuId: typeof raw._id === "string" ? raw._id : undefined,
         status: st === "approved" ? "approved" : "applied",
         record: camuPassOf(raw),
-        already: !!(r as { already?: boolean }).already,
+        already: !!r.already,
       };
     }
     if (r.code === "NOT_IN_LIST") return { kind: "open", why: "unsure" };
-    return { kind: "refused", message: codeWords(r.code ?? "UNKNOWN") };
+    return { kind: "refused", message: codeWords(r.code ?? "UNKNOWN", r.message) };
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === "invalid") return { kind: "refused", message: (e as Error).message };

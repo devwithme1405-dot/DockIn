@@ -395,25 +395,26 @@ public class DockInPlugin extends Plugin {
         call.resolve(o);
     }
 
+    /** One kind of pass DockIn can send: how to find it in MyCamu's list, and how to send it. */
+    private interface PassJob {
+        JSONObject find(JSONArray list);
+
+        JSONObject send() throws Exception;
+    }
+
     /**
-     * Sends a Day Out Pass to MyCamu, then reads MyCamu's list back to be sure
-     * it is there. Resolves {made, code?, record?, raw?}; rejects with code
-     * "expired" (sign in again), "teach" (no login id yet), "invalid" or "network".
+     * The same careful path for every pass: not again if MyCamu already has it;
+     * send; then MyCamu's list decides (it can answer "duplicate" for a pass it
+     * has just made). Resolves {made, already?, code?, message?, record?}.
      */
-    @PluginMethod
-    public void camuDayOut(final PluginCall call) {
+    private void runPass(final PluginCall call, final PassJob job) {
         final Context c = getContext();
-        final String day = call.getString("date", "");
-        final String from = call.getString("from", "");
-        final String to = call.getString("to", "");
-        final String reason = call.getString("reason", "");
         new Thread(new Runnable() {
             @Override
             public void run() {
                 JSObject out = new JSObject();
                 try {
-                    // Already there (sent twice, or made in MyCamu)? Don't send it again.
-                    JSONObject had = Camu.findDayOut(Camu.passes(c), day, from, to);
+                    JSONObject had = job.find(Camu.passes(c));
                     if (had != null) {
                         out.put("made", true);
                         out.put("already", true);
@@ -422,25 +423,26 @@ public class DockInPlugin extends Plugin {
                         return;
                     }
                     String code = "";
+                    String message = "";
                     Exception sendFailed = null;
                     try {
-                        JSONObject res = Camu.makeDayOut(c, day, from, to, reason);
+                        JSONObject res = job.send();
                         Object data = res.opt("data");
                         code = data instanceof JSONObject ? ((JSONObject) data).optString("code", "") : "";
                         Object errors = res.opt("errors");
-                        if (code.isEmpty() && errors != null && errors != JSONObject.NULL) code = "ERRORS";
+                        if (errors instanceof JSONObject) {
+                            message = ((JSONObject) errors).optString("message", "");
+                            if (code.isEmpty()) code = "ERRORS";
+                        } else if (code.isEmpty() && errors != null && errors != JSONObject.NULL) code = "ERRORS";
                     } catch (IOException e) {
                         // It may still have reached MyCamu: the list decides.
                         sendFailed = e;
                     }
-                    // MyCamu sometimes answers DUP_GATEPASS_EXISTS for the pass it has
-                    // just made, so whatever it said, its list decides — read a few
-                    // times while it catches up.
                     JSONObject found = null;
                     for (int i = 0; i < 4 && found == null; i++) {
                         if (i > 0) Thread.sleep(1200);
                         try {
-                            found = Camu.findDayOut(Camu.passes(c), day, from, to);
+                            found = job.find(Camu.passes(c));
                         } catch (IOException e) {
                             if (i == 3 && sendFailed == null) sendFailed = e;
                         }
@@ -455,6 +457,7 @@ public class DockInPlugin extends Plugin {
                     if (sendFailed != null && code.isEmpty()) throw sendFailed;
                     out.put("made", false);
                     out.put("code", code.isEmpty() ? "NOT_IN_LIST" : code);
+                    if (!message.isEmpty()) out.put("message", message);
                     call.resolve(out);
                 } catch (Camu.Expired e) {
                     call.reject("MyCamu sign-in has ended.", "expired");
@@ -467,6 +470,62 @@ public class DockInPlugin extends Plugin {
                 }
             }
         }, "dockin-camu-pass").start();
+    }
+
+    /** Sends a Day Out Pass to MyCamu, then makes sure MyCamu lists it. */
+    @PluginMethod
+    public void camuDayOut(final PluginCall call) {
+        final Context c = getContext();
+        final String day = call.getString("date", "");
+        final String from = call.getString("from", "");
+        final String to = call.getString("to", "");
+        final String reason = call.getString("reason", "");
+        runPass(call, new PassJob() {
+            @Override
+            public JSONObject find(JSONArray list) {
+                return Camu.findDayOut(list, day, from, to);
+            }
+
+            @Override
+            public JSONObject send() throws Exception {
+                return Camu.makeDayOut(c, day, from, to, reason);
+            }
+        });
+    }
+
+    /**
+     * Sends a Leave Out Pass with the parent-approval mail screenshot, the way
+     * MyCamu's form does: the file twice (two ids), then the leave.
+     */
+    @PluginMethod
+    public void camuLeaveOut(final PluginCall call) {
+        final Context c = getContext();
+        final String fromDay = call.getString("fromDate", "");
+        final String from = call.getString("fromTime", "");
+        final String toDay = call.getString("toDate", "");
+        final String to = call.getString("toTime", "");
+        final String reason = call.getString("reason", "");
+        final String proof = call.getString("proofData", "");
+        final String name = call.getString("proofName", "mail-screenshot.jpg").replaceAll("[^A-Za-z0-9._-]", "_");
+        final String mime = call.getString("proofType", "image/jpeg");
+        runPass(call, new PassJob() {
+            @Override
+            public JSONObject find(JSONArray list) {
+                return Camu.findLeaveOut(list, fromDay, from, toDay, to);
+            }
+
+            @Override
+            public JSONObject send() throws Exception {
+                // Everything is checked before the screenshot leaves the phone.
+                Camu.checkLeave(fromDay, from, toDay, to, reason);
+                if (proof == null || proof.isEmpty()) throw new IllegalArgumentException("A leave needs the mail screenshot.");
+                byte[] bytes = android.util.Base64.decode(proof, android.util.Base64.DEFAULT);
+                if (bytes.length == 0 || bytes.length > 8 * 1024 * 1024) throw new IllegalArgumentException("That screenshot can't be sent — pick it again.");
+                String attId = Camu.uploadFile(c, bytes, name, mime);
+                String atchId = Camu.uploadFile(c, bytes, name, mime);
+                return Camu.makeLeaveOut(c, fromDay, from, toDay, to, reason, name, attId, atchId);
+            }
+        });
     }
 
     /** MyCamu's own list of the student's passes (to bring statuses up to date). */

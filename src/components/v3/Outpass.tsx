@@ -57,7 +57,8 @@ import {
   cachedHistory,
   fetchHistory,
   refreshFromCamu,
-  sendDayOut,
+  sendable,
+  sendPass,
   sendToCamu,
   shareText,
   isWrite,
@@ -260,7 +261,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const reasonMissing = !d.reason.trim();
   const open = reading ? reading.asks.length + (reading.needStart ? 1 : 0) : 0;
 
-  const straight = direct === "ready" && d.kind === "dayout";
+  const straight = direct === "ready" && sendable(d, proof);
 
   /** Times with both AM and PM possible, still not tapped. */
   const unanswered = reading?.asks.filter((a) => a.must) ?? [];
@@ -298,13 +299,13 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
     setBusy(true);
     const clean = { ...d, reason: d.reason.trim() };
     try {
-      const r = await sendDayOut(clean);
+      const r = await sendPass(clean, proof);
       if (r.kind === "refused") {
         setRefusal(r.message);
         return;
       }
       if (r.kind === "made") {
-        const id = await savePass(clean, undefined, "manual");
+        const id = await savePass(clean, proof ?? undefined, "manual");
         await v3db.passes.update(id, {
           status: r.status,
           camuId: r.camuId,
@@ -682,12 +683,33 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
         <div className="space-y-4 pb-1">
           <div className="pass-ticket overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-center">
             <p className="pt-4 text-[12px] font-bold tracking-[0.12em] text-muted uppercase">{d.kind === "dayout" ? "Day Out Pass" : "Leave Out Pass"}</p>
-            <p className="font-display mt-1 text-[22px] font-extrabold">{dayShort(d.fromDate)}</p>
-            <p className="font-display text-[30px] leading-tight font-extrabold tnum">
-              {fmtTime(d.fromTime)} <span className="text-muted">→</span> {fmtTime(d.toTime)}
-            </p>
+            {d.fromDate === d.toDate ? (
+              <>
+                <p className="font-display mt-1 text-[22px] font-extrabold">{dayShort(d.fromDate)}</p>
+                <p className="font-display text-[30px] leading-tight font-extrabold tnum">
+                  {fmtTime(d.fromTime)} <span className="text-muted">→</span> {fmtTime(d.toTime)}
+                </p>
+              </>
+            ) : (
+              <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4">
+                <div>
+                  <p className="font-display text-[19px] font-extrabold">{dayShort(d.fromDate)}</p>
+                  <p className="text-[15px] font-bold text-muted">{fmtTime(d.fromTime)}</p>
+                </div>
+                <span className="text-[22px] text-muted">→</span>
+                <div>
+                  <p className="font-display text-[19px] font-extrabold">{dayShort(d.toDate)}</p>
+                  <p className="text-[15px] font-bold text-muted">{fmtTime(d.toTime)}</p>
+                </div>
+              </div>
+            )}
             <div className="mx-4 my-3 border-t-2 border-dashed border-line" />
-            <p className="px-4 pb-4 text-[15px] font-bold">“{d.reason.trim()}”</p>
+            <p className={cx("px-4 text-[15px] font-bold", d.kind === "dayout" ? "pb-4" : "pb-1")}>“{d.reason.trim()}”</p>
+            {d.kind === "leave" && (
+              <p className="inline-flex items-center gap-1 pb-4 text-[12.5px] font-bold text-safe">
+                <ImagePlus size={14} /> Mail screenshot goes with it
+              </p>
+            )}
           </div>
           <p className="text-center text-[12.5px] text-muted">DockIn sends it, then reads it back from MyCamu to check every field.</p>
           <div className="grid grid-cols-[1fr_1.6fr] gap-2">

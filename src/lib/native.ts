@@ -10,6 +10,15 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor
 
 export type NotifState = "granted" | "denied" | "prompt";
 
+/** What the phone reports after sending a pass to MyCamu. */
+export interface CamuSendResult {
+  made: boolean;
+  already?: boolean;
+  code?: string;
+  message?: string;
+  record?: string;
+}
+
 export interface PhoneStatus {
   /** Whether DockIn may post its own notifications (class, assignment and exam reminders). */
   notifications: NotifState;
@@ -167,7 +176,18 @@ interface DockInPlugin {
   /** Preview APK: can DockIn submit a pass to MyCamu itself? */
   camuCanMakePass(): Promise<{ ok: boolean; connected?: boolean; taught?: boolean }>;
   /** Preview APK: submits a Day Out Pass to MyCamu and checks it is listed. */
-  camuDayOut(options: { date: string; from: string; to: string; reason: string }): Promise<{ made: boolean; code?: string; record?: string; raw?: string }>;
+  camuDayOut(options: { date: string; from: string; to: string; reason: string }): Promise<CamuSendResult>;
+  /** Preview APK: uploads the mail screenshot and submits a Leave Out Pass, then checks it is listed. */
+  camuLeaveOut(options: {
+    fromDate: string;
+    fromTime: string;
+    toDate: string;
+    toTime: string;
+    reason: string;
+    proofData: string;
+    proofName: string;
+    proofType: string;
+  }): Promise<CamuSendResult>;
   /** Preview APK: MyCamu's own list of passes and leaves (JSON). */
   camuPasses(): Promise<{ items: string }>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */

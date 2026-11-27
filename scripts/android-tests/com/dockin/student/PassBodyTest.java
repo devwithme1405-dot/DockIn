@@ -55,6 +55,41 @@ public class PassBodyTest {
         refuses("back before out", "2026-12-03", "15:00", "14:00", "x");
         refuses("no reason", "2026-12-03", "10:00", "12:00", "  ");
         refuses("bad date", "3 Dec", "10:00", "12:00", "x");
+        // Leave Out Pass, against MyCamu's own request of 27 Nov 2026.
+        JSONObject v = new JSONObject().put("StuID", "6899a90f4245c98c34c2201d").put("InId", "663474b11dd0e9412a1f793f").put("name", "Vaibhav .");
+        JSONObject lb = Camu.leaveBody(v, "6899a90f4245c98c34c22020", "2026-12-03", "14:00", "2026-12-11", "19:00", "Home ",
+                "IMG-20261127-WA0001.jpg", "6b091aec7d05ddfe316bb467", "6b091aed89a02425b5d39b0c");
+        String[][] want = {
+                {"PerTy", "Student"}, {"PerId", "6899a90f4245c98c34c2201d"}, {"PerNm", "Vaibhav ."}, {"InId", "663474b11dd0e9412a1f793f"},
+                {"HstleReq", "true"}, {"LvTy", "Leave"}, {"Rson", "Home"}, {"PtAb", ""}, {"Sson", ""},
+                {"ToDt", "2026-12-11T00:00:00.000Z"}, {"FrDt", "2026-12-03T00:00:00.000Z"}, {"GateOutPass", "true"},
+                {"passTy", "LEAVE_OUT_PASS"}, {"loggedInId", "6899a90f4245c98c34c22020"},
+                {"frdt", "2026-12-03T14:00:00Z"}, {"todt", "2026-12-11T19:00:00Z"}, {"rson", "Home"}, {"timezoneOffSet", "330"},
+        };
+        for (String[] w : want) eq("leave " + w[0], w[1], lb.opt(w[0]));
+        eq("leave field count", want.length + 3, lb.length()); // + periods, Attachments, atcmnt = 21, as captured
+        JSONObject att = ((org.json.JSONArray) lb.opt("Attachments")).optJSONObject(0);
+        eq("Attachments name", "IMG-20261127-WA0001.jpg", att.optString("AttchName"));
+        eq("Attachments id", "6b091aec7d05ddfe316bb467", att.optString("AttchID"));
+        JSONObject at2 = ((org.json.JSONArray) lb.opt("atcmnt")).optJSONObject(0);
+        eq("atcmnt name", "IMG-20261127-WA0001.jpg", at2.optString("atchNm"));
+        eq("atcmnt id", "6b091aed89a02425b5d39b0c", at2.optString("atchId"));
+        try {
+            Camu.checkLeave("2026-12-03", "14:00", "2026-12-11", "20:00", "x");
+            fails++;
+            System.out.println("FAIL leave after 7pm accepted");
+        } catch (IllegalArgumentException e) {
+            // right
+        }
+        try {
+            Camu.checkLeave("2026-12-11", "14:00", "2026-12-03", "19:00", "x");
+            fails++;
+            System.out.println("FAIL leave ending before start accepted");
+        } catch (IllegalArgumentException e) {
+            // right
+        }
+        Camu.checkLeave("2026-11-27", "14:00", "2026-12-03", "07:00", "Home");
+
         // MyCamu's list decides whether a pass was made.
         org.json.JSONArray list = new org.json.JSONArray()
                 .put(new JSONObject().put("_id", "rej").put("passTyCode", "DOP").put("frdt", "2026-11-27T17:00:00.000Z").put("todt", "2026-11-27T19:00:00.000Z").put("status", "REJ"))
@@ -64,7 +99,11 @@ public class PassBodyTest {
         JSONObject f = Camu.findDayOut(list, "2026-11-27", "17:00", "19:00");
         eq("finds the matching day out", "mine", f == null ? null : f.optString("_id"));
         eq("other day: none", null, Camu.findDayOut(list, "2026-11-28", "17:00", "19:00"));
-        System.out.println(fails == 0 ? "Day Out body matches MyCamu's form." : fails + " problem(s)");
+        org.json.JSONArray ll = new org.json.JSONArray()
+                .put(new JSONObject().put("_id", "lo").put("passTyCode", "LEAVE_OUT_PASS").put("frdt", "2026-12-03T14:00:00.000Z").put("todt", "2026-12-11T19:00:00.000Z").put("status", "SUB"));
+        JSONObject lf = Camu.findLeaveOut(ll, "2026-12-03", "14:00", "2026-12-11", "19:00");
+        eq("finds the leave", "lo", lf == null ? null : lf.optString("_id"));
+        System.out.println(fails == 0 ? "Day Out and Leave Out bodies match MyCamu's form." : fails + " problem(s)");
         System.exit(fails == 0 ? 0 : 1);
     }
 }

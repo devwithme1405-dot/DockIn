@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, LogIn, LogOut, RefreshCw, ShieldAlert, Sun, UserCheck, XCircle } from "lucide-react";
+import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, LogIn, LogOut, RefreshCw, ShieldAlert, Sun, UserCheck, XCircle } from "lucide-react";
+import { DockIn, isNativeApp } from "@/lib/native";
 import { fmtTime, fromDateStr } from "@/lib/dates";
 import type { PassDraft } from "@/lib/outpass";
 import { fetchHistory, findInHistory, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
@@ -117,6 +118,23 @@ export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () 
             <Steps c={c} big />
           </div>
           {c.files > 0 && <p className="text-[12.5px] text-muted">{c.files === 1 ? "1 file attached in MyCamu" : `${c.files} files attached in MyCamu`}</p>}
+          {cancellable(c) && isNativeApp() && (
+            <div className="rounded-2xl border border-danger/40 bg-danger-soft/40 p-3">
+              <button
+                type="button"
+                onClick={() =>
+                  void DockIn.openCamu({
+                    path: "/v2/leaveManagement",
+                    note: `Cancel: ${c.type} · ${day(c.fromDate)} ${c.fromTime ? fmtTime(c.fromTime) : ""} — tap it below and cancel. DockIn notes how, to do it itself next time.`,
+                  })
+                }
+                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-danger text-[14px] font-bold text-white"
+              >
+                <Ban size={16} /> Cancel this pass
+              </button>
+              <p className="mt-1.5 text-center text-[11.5px] text-muted">Opens MyCamu on your passes — cancel it there.</p>
+            </div>
+          )}
           {(c.kind === "dayout" || c.kind === "leave") && (
             <button
               type="button"
@@ -211,6 +229,13 @@ export function VerifyCard({ p }: { p: PassRecord }) {
       </ul>
     </section>
   );
+}
+
+/** Still ahead and not yet used at the gate: MyCamu lets it be cancelled. */
+function cancellable(c: CamuPass): boolean {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return (c.state === "applied" || c.state === "approved") && !c.outAt && c.toDate >= today && c.kind !== "other";
 }
 
 /** Does this pass DockIn holds appear in MyCamu's list? */

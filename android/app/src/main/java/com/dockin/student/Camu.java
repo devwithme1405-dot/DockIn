@@ -290,17 +290,96 @@ final class Camu {
      * answer to the submit itself can say "duplicate" for a pass it just made.
      */
     static JSONObject findDayOut(JSONArray list, String day, String from, String to) {
-        String start = day + "T" + from;
-        String end = day + "T" + to;
+        return findPass(list, "DOP", day + "T" + from, day + "T" + to);
+    }
+
+    /** The Leave Out Pass for exactly these dates and times in MyCamu's list (not rejected / cancelled). */
+    static JSONObject findLeaveOut(JSONArray list, String fromDay, String from, String toDay, String to) {
+        return findPass(list, "LEAVE_OUT_PASS", fromDay + "T" + from, toDay + "T" + to);
+    }
+
+    private static JSONObject findPass(JSONArray list, String code, String start, String end) {
         for (int i = 0; i < list.length(); i++) {
             JSONObject p = list.optJSONObject(i);
-            if (p == null || !"DOP".equals(p.optString("passTyCode", ""))) continue;
+            if (p == null || !code.equals(p.optString("passTyCode", ""))) continue;
             if (!p.optString("frdt", "").startsWith(start) || !p.optString("todt", "").startsWith(end)) continue;
             String st = (p.optString("status", "") + " " + p.optString("prntAp", "") + " " + p.optString("stfAp", "")).toUpperCase();
             if (st.contains("REJ") || st.contains("CANC") || st.contains("CNCL")) continue;
             return p;
         }
         return null;
+    }
+
+    /**
+     * Uploads a file the way MyCamu's leave form does (multipart field "file"
+     * to /camuattchment/getappfile) and returns the id MyCamu gives it.
+     */
+    static String uploadFile(Context c, byte[] data, String name, String mime) throws IOException, Expired, JSONException {
+        need(c);
+        JSONObject out = output(Net.postMultipart(BASE + "/camuattchment/getappfile", new HashMap<String, String>(), "file", name, mime, data));
+        JSONObject d = out.optJSONObject("data");
+        String id = d == null ? "" : d.optString("_id", "");
+        if (id.isEmpty()) throw new IOException("MyCamu didn't take the file");
+        return id;
+    }
+
+    /**
+     * The body MyCamu's own form sends for a Leave Out Pass (captured 27 Nov
+     * 2026): the mail screenshot is uploaded twice and each copy's id goes in
+     * its own list; dates at midnight, times as Indian wall-clock + "Z".
+     */
+    static JSONObject leaveBody(JSONObject id, String login, String fromDay, String from, String toDay, String to,
+                                String reason, String fileName, String attId, String atchId) throws JSONException {
+        if (!DAY.matcher(fromDay).matches() || !DAY.matcher(toDay).matches() || !TIME.matcher(from).matches() || !TIME.matcher(to).matches())
+            throw new IllegalArgumentException("Pick both dates and both times.");
+        if (from.compareTo("06:00") < 0 || from.compareTo("19:00") > 0 || to.compareTo("06:00") < 0 || to.compareTo("19:00") > 0)
+            throw new IllegalArgumentException("Leave times have to be between 6:00 am and 7:00 pm.");
+        if ((toDay + to).compareTo(fromDay + from) <= 0) throw new IllegalArgumentException("It ends before it starts.");
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty() || why.length() > 200) throw new IllegalArgumentException("Give a reason.");
+        if (attId == null || attId.isEmpty() || atchId == null || atchId.isEmpty())
+            throw new IllegalArgumentException("A leave needs the mail screenshot.");
+        return new JSONObject()
+                .put("PerTy", "Student")
+                .put("PerId", id.optString("StuID"))
+                .put("PerNm", id.optString("name"))
+                .put("InId", id.optString("InId"))
+                .put("HstleReq", "true")
+                .put("LvTy", "Leave")
+                .put("Rson", why)
+                .put("PtAb", "")
+                .put("Sson", "")
+                .put("ToDt", toDay + "T00:00:00.000Z")
+                .put("FrDt", fromDay + "T00:00:00.000Z")
+                .put("periods", new JSONArray())
+                .put("Attachments", new JSONArray().put(new JSONObject().put("AttchName", fileName).put("AttchID", attId)))
+                .put("GateOutPass", true)
+                .put("passTy", "LEAVE_OUT_PASS")
+                .put("loggedInId", login)
+                .put("frdt", fromDay + "T" + from + ":00Z")
+                .put("todt", toDay + "T" + to + ":00Z")
+                .put("rson", why)
+                .put("atcmnt", new JSONArray().put(new JSONObject().put("atchNm", fileName).put("atchId", atchId)))
+                .put("timezoneOffSet", 330);
+    }
+
+    /** Checks a leave before anything (even the screenshot) is sent. */
+    static void checkLeave(String fromDay, String from, String toDay, String to, String reason) {
+        try {
+            leaveBody(new JSONObject(), "x", fromDay, from, toDay, to, reason, "f", "a", "b");
+        } catch (JSONException e) {
+            throw new IllegalArgumentException("Couldn't read the leave.");
+        }
+    }
+
+    /** Sends a Leave Out Pass the way MyCamu's form does; returns MyCamu's `output`. */
+    static JSONObject makeLeaveOut(Context c, String fromDay, String from, String toDay, String to, String reason,
+                                   String fileName, String attId, String atchId)
+            throws IOException, Expired, JSONException, NeedsTeaching {
+        JSONObject id = need(c);
+        if (!canMakePass(c)) throw new NeedsTeaching();
+        String login = prefs(c).getString(K_LOGIN, "");
+        return data(c, "/api/Leave/crtLv", leaveBody(id, login, fromDay, from, toDay, to, reason, fileName, attId, atchId));
     }
 
     /** The student's passes and leaves, as MyCamu's leave page lists them. */
@@ -320,14 +399,21 @@ final class Camu {
     }
 
     /** Posts to Camu and returns its `output` object, or throws when the session is over. */
-    private static JSONObject data(Context c, String path, JSONObject body) throws IOException, Expired, JSONException {
+    private static Map<String, String> headers(Context c) {
         Map<String, String> h = new HashMap<>();
         h.put("Cookie", Vault.get(c, V_COOKIE));
         h.put("Origin", BASE);
         h.put("Referer", BASE + "/v2/");
         String ua = prefs(c).getString(K_UA, null);
         if (ua != null) h.put("User-Agent", ua);
-        Net.Res r = Net.postJson(BASE + path, body.toString(), h);
+        return h;
+    }
+
+    private static JSONObject data(Context c, String path, JSONObject body) throws IOException, Expired, JSONException {
+        return output(Net.postJson(BASE + path, body.toString(), headers(c)));
+    }
+
+    private static JSONObject output(Net.Res r) throws IOException, Expired, JSONException {
         if (r.code == 401 || r.code == 403 || (r.code >= 300 && r.code < 400)) throw new Expired();
         if (!r.ok()) throw new IOException("Camu answered " + r.code);
         JSONObject j;

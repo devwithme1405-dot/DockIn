@@ -148,6 +148,12 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
           // MyCamu's quirk: it says "duplicate" for the pass it has just made.
           return { made: true, code: "DUP_GATEPASS_EXISTS", record: JSON.stringify(rec) };
         },
+        camuLeaveOut: (o) => {
+          phone.sentLeaves = (phone.sentLeaves ?? []).concat({ ...o, proofData: o.proofData.length });
+          const rec = { _id: `leave-${phone.sentLeaves.length}`, lvId: `lvl-${phone.sentLeaves.length}`, passTyCode: "LEAVE_OUT_PASS", passTyNme: "Leave Out Pass", frdt: `${o.fromDate}T${o.fromTime}:00.000Z`, todt: `${o.toDate}T${o.toTime}:00.000Z`, rson: o.reason, atcmnt: [{ atchNm: o.proofName }], prntAp: "SUB", status: "SUB" };
+          phone.camuList.unshift(rec);
+          return { made: true, record: JSON.stringify(rec) };
+        },
         camuPasses: () => ({ items: JSON.stringify(phone.camuList) }),
         listen: (o) => {
           phone.lang = o.lang;
@@ -371,6 +377,27 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).getByRole("alert").getByText(/overlaps this time/).waitFor({ timeout: 3000 });
     await page.screenshot({ path: `${SHOTS}/op-refused.png` });
     if ((await page.evaluate(() => window.__phone.get().notes.length)) !== 0) throw new Error("opened MyCamu");
+  });
+
+  await step("a leave with its screenshot goes straight in too, and is checked", async () => {
+    await pass(page).getByRole("button", { name: "Make the pass" }).or(pass(page).getByRole("button", { name: "Submit to MyCamu" })).first().waitFor();
+    await line(page, "kal se 3 din ghar");
+    if (await pass(page).getByRole("button", { name: "Submit to MyCamu" }).count()) throw new Error("leave without screenshot offered straight send");
+    const chooser = page.waitForEvent("filechooser");
+    await pass(page).getByRole("button", { name: /Attach the screenshot/ }).click();
+    await (await chooser).setFiles({ name: "mail.png", mimeType: "image/png", buffer: PNG });
+    await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
+    const review = page.getByRole("dialog", { name: "Send this to MyCamu?" });
+    await review.getByText("Mail screenshot goes with it").waitFor({ timeout: 3000 });
+    await review.getByRole("button", { name: "Yes, send it" }).click();
+    await pass(page).getByText("Sent to MyCamu").waitFor({ timeout: 5000 });
+    await pass(page).getByText("Checked in MyCamu — all correct").waitFor({ timeout: 3000 });
+    const st = await phoneState(page);
+    const l = st.sentLeaves?.at(-1);
+    if (!l || l.reason !== "Going home" || !l.proofData || !/^mail-screenshot\./.test(l.proofName)) throw new Error(`leave sent ${JSON.stringify(l)}`);
+    if (st.notes.length) throw new Error("opened MyCamu");
+    await page.screenshot({ path: `${SHOTS}/op-leave-sent.png` });
+    await pass(page).getByRole("button", { name: "New pass" }).last().click();
   });
 
   await step("History shows MyCamu's own passes: approval, out and back times", async () => {
