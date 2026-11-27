@@ -8,8 +8,8 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -43,21 +43,18 @@ final class Approver {
     static final String K_USER = "approver.user";
     static final String K_IDS = "approver.ids";
     static final String K_UA = "approver.ua";
-    /** The learned approve request (url, method, body) — no secret. */
-    static final String K_APPROVE = "approver.approveReq";
-    /** Every change-y request the approver page sent, kept so the real approve can be read out. */
+    /** Every change-y request the approval page sent, kept as a setup helper. */
     static final String K_WRITES = "approver.writes";
+    /** The approval login's own id (loggedInId), learned from one approve by hand. */
+    static final String K_LOGIN = "approver.loginId";
     /** The approver session cookie (Vault). */
     static final String V_COOKIE = "approver.cookie";
-    /** The learned sign-in request, which carries the password (Vault). */
-    static final String V_LOGIN = "approver.loginReq";
+
+    /** MyCamu's own "Approve" button sends this (captured 28 Nov 2026). */
+    static final String APPROVE_API = "/api/gatepasses/change-gatepasses-status";
 
     private static final Pattern OBJECT_ID = Pattern.compile("[a-f0-9]{24}");
-    /** What the sign-in request looks like among the page's requests. */
-    private static final Pattern LOGIN_URL = Pattern.compile("(?i)login|signin|sign-in|authenticate|token|auth");
-    /** What an approve (not a cancel, not a read) looks like. */
-    private static final Pattern APPROVE_HINT = Pattern.compile("(?i)appr|accept|prntap|parentap|sanction|grant");
-    private static final Pattern REJECT_HINT = Pattern.compile("(?i)rej|decline|deny|cancel|cncl|withdraw");
+    private static final Pattern LOGGED_IN = Pattern.compile("\"loggedInId\"\\s*:\\s*\"([a-f0-9]{24})\"");
 
     static final class Expired extends Exception {}
     static final class NeedsTeaching extends Exception {}
@@ -68,14 +65,14 @@ final class Approver {
         return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    /** The student has connected a self-approval login (even if the session ended). */
+    /** The student has connected a self-approval login (even if the session has since ended). */
     static boolean saved(Context c) {
-        return Vault.get(c, V_LOGIN) != null;
+        return prefs(c).getString(K_IDS, null) != null || Vault.get(c, V_COOKIE) != null;
     }
 
-    /** DockIn has learned how to approve, so it can do it on its own. */
+    /** DockIn knows the approval login's id, so it can approve on its own. */
     static boolean taught(Context c) {
-        return saved(c) && prefs(c).getString(K_APPROVE, null) != null;
+        return saved(c) && !prefs(c).getString(K_LOGIN, "").isEmpty();
     }
 
     static String user(Context c) {
@@ -83,8 +80,8 @@ final class Approver {
     }
 
     static void forget(Context c) {
-        Vault.remove(c, V_COOKIE, V_LOGIN);
-        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_APPROVE).remove(K_WRITES).apply();
+        Vault.remove(c, V_COOKIE);
+        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_LOGIN).remove(K_WRITES).apply();
     }
 
     /** Saves the session the approver sign-in just set (cookie + the login's ids). */
@@ -110,9 +107,9 @@ final class Approver {
     }
 
     /**
-     * Looks at one request MyCamu's page sent and keeps it if it is the sign-in
-     * or an approve. Called for every captured request while the approver screen
-     * is open; most are ignored.
+     * Learns from one request MyCamu's approval page sent. The one approve the
+     * student does by hand carries {@code loggedInId} — the approval login's own
+     * id — which is all DockIn needs to approve on its own after that.
      */
     static void learn(Context c, String capturedJson) {
         JSONObject r;
@@ -121,33 +118,16 @@ final class Approver {
         } catch (JSONException e) {
             return;
         }
-        String method = r.optString("method", "").toUpperCase();
         String url = r.optString("url", "");
         String body = r.optString("body", "");
-        if (url.isEmpty()) return;
-        if (CamuLoginActivity.ANALYTICS.matcher(url).find()) return;
+        if (url.isEmpty() || CamuLoginActivity.ANALYTICS.matcher(url).find()) return;
 
-        // The sign-in: a POST whose url or body talks about logging in. Kept
-        // encrypted, because the body carries the password.
-        if ("POST".equals(method) && (LOGIN_URL.matcher(url).find() || LOGIN_URL.matcher(body).find())
-                && (body.toLowerCase().contains("pass") || body.toLowerCase().contains("pwd") || body.toLowerCase().contains("user"))) {
-            Vault.put(c, V_LOGIN, r.toString());
-            return;
-        }
+        Matcher m = LOGGED_IN.matcher(body);
+        if (m.find()) prefs(c).edit().putString(K_LOGIN, m.group(1)).apply();
 
-        // An approve: a change (not a plain read) that mentions approving and a
-        // pass, and is not a reject or a cancel.
-        boolean changey = !"GET".equals(method) || url.toLowerCase().contains("cancel") || url.toLowerCase().contains("appr");
-        boolean aboutPass = Pattern.compile("(?i)leave|gate|pass|lvapp|lvreq").matcher(url + " " + body).find();
-        boolean looksApprove = APPROVE_HINT.matcher(url + " " + body).find();
-        boolean looksReject = REJECT_HINT.matcher(url).find() && !APPROVE_HINT.matcher(url).find();
-        boolean hasId = OBJECT_ID.matcher(url + " " + body).find();
-        if (changey && aboutPass && looksApprove && !looksReject && hasId) {
-            prefs(c).edit().putString(K_APPROVE, r.toString()).apply();
-        }
-        // Keep every change-y pass request raw, whatever our guess, so the real
-        // approve can be read out and pinned down once (approverCaptured()).
-        if (changey && aboutPass && hasId && !looksReject) {
+        // Keep the change-y pass requests raw too, as a setup helper / for tweaks.
+        boolean changey = !"GET".equalsIgnoreCase(r.optString("method", "")) || url.toLowerCase().contains("status");
+        if (changey && Pattern.compile("(?i)leave|gate|pass").matcher(url).find() && OBJECT_ID.matcher(url + " " + body).find()) {
             keepWrite(c, r.toString());
         }
     }
@@ -186,118 +166,56 @@ final class Approver {
         return h;
     }
 
-    /** Signs in again with the learned request (it still holds the password). */
-    private static void relogin(Context c) throws IOException, Expired {
-        String raw = Vault.get(c, V_LOGIN);
-        if (raw == null) throw new Expired();
-        try {
-            JSONObject req = new JSONObject(raw);
-            String url = absolute(req.optString("url", ""));
-            String body = req.optString("body", "");
-            Map<String, String> h = headers(c);
-            h.remove("Cookie"); // a sign-in starts a fresh session
-            Net.Res res = body.trim().startsWith("{")
-                    ? Net.postJson(url, body, h)
-                    : Net.postForm(url, formOf(body), h);
-            String cookie = cookieFrom(res);
-            if (cookie == null || cookie.isEmpty()) throw new Expired();
-            Vault.put(c, V_COOKIE, cookie);
-        } catch (JSONException e) {
-            throw new Expired();
-        }
-    }
-
     /**
-     * Approves the pass with this id, the way the approver did it by hand. Signs
-     * in again once if the session has ended. Returns MyCamu's status text.
+     * Approves one pass the way MyCamu's own "Approve" button does (captured
+     * 28 Nov 2026):
+     *
+     *   POST /api/gatepasses/change-gatepasses-status
+     *   {"id":<pass>,"roll":"parent","action":"Approve","PerId":<student>,"loggedInId":<approver>}
+     *   → {"output":{"data":{"code":"STATUS_UPDTD_SUCC"}}}
+     *
+     * PerId is the student whose pass it is — this phone's own MyCamu id, so the
+     * student stays signed in for it. loggedInId is the approval login's own id,
+     * learned from the one approve done by hand at setup. Throws {@link Expired}
+     * when the approval session has ended (reconnect), {@link NeedsTeaching}
+     * before the id is known.
      */
     static String approve(Context c, String passId) throws IOException, Expired, NeedsTeaching {
         if (passId == null || !OBJECT_ID.matcher(passId).matches())
             throw new IllegalArgumentException("That pass can't be approved from here.");
-        String raw = prefs(c).getString(K_APPROVE, null);
-        if (raw == null || !saved(c)) throw new NeedsTeaching();
-        if (Vault.get(c, V_COOKIE) == null) relogin(c);
+        if (Vault.get(c, V_COOKIE) == null) throw new Expired();
+        String loggedInId = prefs(c).getString(K_LOGIN, "");
+        JSONObject stu = Camu.ids(c);
+        String perId = stu == null ? "" : stu.optString("StuID", "");
+        if (loggedInId.isEmpty() || perId.isEmpty()) throw new NeedsTeaching();
+        String body;
         try {
-            Net.Res res = sendApprove(c, new JSONObject(raw), passId);
-            if (res.code == 401 || res.code == 403 || res.redirect()) {
-                relogin(c);
-                res = sendApprove(c, new JSONObject(raw), passId);
-            }
-            if (res.code == 401 || res.code == 403 || res.redirect()) throw new Expired();
-            if (!res.ok()) throw new IOException("MyCamu answered " + res.code);
-            return statusOf(res.body);
+            body = new JSONObject()
+                    .put("id", passId)
+                    .put("roll", "parent")
+                    .put("action", "Approve")
+                    .put("PerId", perId)
+                    .put("loggedInId", loggedInId)
+                    .toString();
         } catch (JSONException e) {
-            throw new NeedsTeaching();
+            throw new IOException("Couldn't build the approval.");
         }
+        Net.Res res = Net.postJson(Camu.BASE + APPROVE_API, body, headers(c));
+        if (res.code == 401 || res.code == 403 || res.redirect()) throw new Expired();
+        if (!res.ok()) throw new IOException("MyCamu answered " + res.code);
+        return codeOf(res.body);
     }
 
-    private static Net.Res sendApprove(Context c, JSONObject req, String passId) throws IOException, JSONException {
-        String method = req.optString("method", "POST").toUpperCase();
-        String url = swapId(absolute(req.optString("url", "")), passId);
-        String body = swapId(req.optString("body", ""), passId);
-        Map<String, String> h = headers(c);
-        if ("GET".equals(method)) return Net.get(url, h);
-        if (body.trim().startsWith("{") || body.trim().startsWith("[")) return Net.postJson(url, body, h);
-        if (!body.isEmpty()) return Net.postForm(url, formOf(body), h);
-        return Net.postJson(url, "{}", h);
-    }
-
-    /** Replaces the pass id the request was learned with by the one we want approved. */
-    private static String swapId(String s, String passId) {
-        if (s == null || s.isEmpty()) return s;
-        return OBJECT_ID.matcher(s).replaceAll(passId);
-    }
-
-    private static String absolute(String url) {
-        if (url.startsWith("http")) return url;
-        if (url.startsWith("/")) return Camu.BASE + url;
-        return Camu.BASE + "/" + url;
-    }
-
-    /** Joins the Set-Cookie values of a response into one Cookie header. */
-    private static String cookieFrom(Net.Res res) {
-        List<String> set = res.all("Set-Cookie");
-        if (set.isEmpty()) return null;
-        StringBuilder b = new StringBuilder();
-        for (String s : set) {
-            if (s == null) continue;
-            int semi = s.indexOf(';');
-            String pair = (semi >= 0 ? s.substring(0, semi) : s).trim();
-            if (pair.isEmpty() || pair.indexOf('=') <= 0) continue;
-            if (b.length() > 0) b.append("; ");
-            b.append(pair);
-        }
-        return b.length() == 0 ? null : b.toString();
-    }
-
-    private static Map<String, String> formOf(String body) {
-        Map<String, String> m = new HashMap<>();
-        for (String part : body.split("&")) {
-            int eq = part.indexOf('=');
-            if (eq <= 0) continue;
-            try {
-                m.put(java.net.URLDecoder.decode(part.substring(0, eq), "UTF-8"),
-                        java.net.URLDecoder.decode(part.substring(eq + 1), "UTF-8"));
-            } catch (Exception e) {
-                // skip a part that won't decode
-            }
-        }
-        return m;
-    }
-
-    /** MyCamu's answer in a word, for the toast ("approved", or its own code). */
-    private static String statusOf(String body) {
-        if (body == null || body.isEmpty()) return "approved";
+    /** MyCamu's answer code ("STATUS_UPDTD_SUCC" on success), else "approved". */
+    private static String codeOf(String responseBody) {
+        if (responseBody == null || responseBody.isEmpty()) return "approved";
         try {
-            JSONObject j = new JSONObject(body);
-            JSONObject out = j.optJSONObject("output");
+            JSONObject out = new JSONObject(responseBody).optJSONObject("output");
             JSONObject data = out == null ? null : out.optJSONObject("data");
             String code = data == null ? "" : data.optString("code", "");
-            if (!code.isEmpty()) return code;
-            if (APPROVE_HINT.matcher(body).find()) return "approved";
+            return code.isEmpty() ? "approved" : code;
         } catch (JSONException e) {
-            // not json — fall through
+            return "approved";
         }
-        return "approved";
     }
 }
