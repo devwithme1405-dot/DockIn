@@ -15,7 +15,6 @@ import {
   Info,
   KeyRound,
   LogOut,
-  Mail,
   Monitor,
   Moon,
   Palette,
@@ -371,7 +370,6 @@ export default function ProfilePage() {
           <ul>
             <DetailRow icon={IdCard} label="Roll No." value={profile.roll} onAdd={openDetails} />
             <DetailRow icon={GraduationCap} label="Year" value={profile.year ? `${ordinal(profile.year)} year` : undefined} onAdd={openDetails} />
-            {signedIn && <DetailRow icon={Mail} label="Email" value={accountName(session.user.email)} />}
           </ul>
           {profile.bio && <p className="border-t border-line py-3 text-[14px] text-muted">{profile.bio}</p>}
         </section>
