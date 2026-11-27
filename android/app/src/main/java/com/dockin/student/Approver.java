@@ -61,6 +61,8 @@ final class Approver {
 
     private static final Pattern OBJECT_ID = Pattern.compile("[a-f0-9]{24}");
     private static final Pattern LOGGED_IN = Pattern.compile("\"loggedInId\"\\s*:\\s*\"([a-f0-9]{24})\"");
+    /** The logged-in user's own id in a sign-in response — the approval login's id. */
+    private static final Pattern USER_ID = Pattern.compile("\"(?:loggedInId|userId|UserId|usrId|UsrId|user_id|_id)\"\\s*:\\s*\"([a-f0-9]{24})\"");
     /** What the sign-in request looks like among the page's requests. */
     private static final Pattern LOGIN_URL = Pattern.compile("(?i)login|signin|sign-in|authenticate|/token|/auth\\b|validateuser|verifyuser|checkuser");
 
@@ -156,18 +158,27 @@ final class Approver {
         String body = r.optString("body", "");
         if (url.isEmpty() || CamuLoginActivity.ANALYTICS.matcher(url).find()) return;
 
+        // The approval login's own id. A real approve sends it as loggedInId and is
+        // the ground truth — always keep that. So the student never has to approve
+        // one by hand first, also read it from the sign-in response (the logged-in
+        // user's id) at connect, as long as nothing truer is known yet.
         Matcher m = LOGGED_IN.matcher(body);
         if (m.find()) prefs(c).edit().putString(K_LOGIN, m.group(1)).apply();
 
-        // The sign-in itself — a POST that logs in. Kept (encrypted) so DockIn can
-        // sign in again on its own and the session never just "ends".
         String method = r.optString("method", "").toUpperCase();
         String low = body.toLowerCase();
-        if ("POST".equals(method)
+        boolean isLogin = "POST".equals(method)
                 && (LOGIN_URL.matcher(url).find() || LOGIN_URL.matcher(low).find())
                 && (low.contains("pass") || low.contains("pwd"))
-                && (low.contains("user") || low.contains("email") || low.contains("login"))) {
+                && (low.contains("user") || low.contains("email") || low.contains("login"));
+        if (isLogin) {
+            // The sign-in request — kept (encrypted) so DockIn renews the session itself.
             Vault.put(c, V_LOGIN, r.toString());
+            // The logged-in user's id from the response, so approval needs no "teach".
+            if (prefs(c).getString(K_LOGIN, "").isEmpty()) {
+                Matcher um = USER_ID.matcher(r.optString("answer", ""));
+                if (um.find()) prefs(c).edit().putString(K_LOGIN, um.group(1)).apply();
+            }
         }
 
         // Keep the change-y pass requests raw too, as a setup helper / for tweaks.
