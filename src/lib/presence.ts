@@ -17,6 +17,10 @@ async function report(): Promise<void> {
   const native = isNativeApp();
   let version = "web";
   let notif: string | null = typeof Notification !== "undefined" ? Notification.permission : null;
+  // MyCamu / LMS from the phone itself: the screen's copy may not be loaded
+  // yet this early, and a "false" then would hide a working connection.
+  let camu: boolean | null = null;
+  let lms: boolean | null = null;
   if (native) {
     try {
       const s = await DockIn.status();
@@ -25,20 +29,33 @@ async function report(): Promise<void> {
     } catch {
       version = "app";
     }
+    try {
+      const c = await DockIn.college();
+      camu = !!c.camu?.connected;
+      lms = !!c.lms?.connected;
+    } catch {
+      const col = collegeNow();
+      camu = col.camu ? !!col.camu.connected : null;
+      lms = col.lms ? !!col.lms.connected : null;
+    }
   }
   let channel = "stable";
   try {
     if (localStorage.getItem("dockin-channel") === "preview") channel = "preview";
   } catch {}
-  const col = collegeNow();
-  await sb.rpc("seen", {
+  const { error } = await sb.rpc("seen", {
     p_platform: native ? "android" : "web",
     p_version: version,
     p_channel: channel,
-    p_camu: native ? !!col.camu?.connected : null,
-    p_lms: native ? !!col.lms?.connected : null,
+    p_camu: camu,
+    p_lms: lms,
     p_notif: notif,
   });
+  if (error) {
+    // Shows up in DockIn Admin → Health → What broke.
+    void sb.from("client_errors").insert({ message: `presence: ${error.message}`.slice(0, 300), source: "presence", version }).then(() => {});
+    throw new Error(error.message);
+  }
 }
 
 export function startPresence(): () => void {

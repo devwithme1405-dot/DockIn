@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Bot, Bug, CheckCircle2, CircleAlert, Copy, Database, Download, ExternalLink, Link2 } from "lucide-react";
-import { ago, errors, github, overview } from "@/lib/adminApi";
+import { ago, errors, github, identitySummary, overview, serverHealth } from "@/lib/adminApi";
 import { getSupabase } from "@/lib/supabase";
 import { useToast } from "../ui";
 import { BarList } from "./charts";
@@ -24,6 +24,8 @@ export function HealthSection() {
     const ai = await fetch("/api/assistant", { method: "POST" }).then((r) => r.status).catch(() => 0);
     return { db, ms, ai: ai === 401 ? "ready" : ai === 503 ? "not set" : "unknown" };
   });
+  const setup = useLoad(serverHealth);
+  const ids = useLoad(identitySummary);
   const [open, setOpen] = useState<string | null>(null);
 
   const copy = (s: string) => {
@@ -32,6 +34,69 @@ export function HealthSection() {
 
   return (
     <div className="space-y-4">
+      <Card
+        title="Setup checks"
+        sub="Everything notifications and these numbers need — with the exact reason when something isn't right"
+        action={<RefreshButton loading={setup.loading} onClick={() => void setup.reload()} />}
+      >
+        {setup.error ? (
+          <p className="text-[13.5px] font-semibold text-danger">{setup.error}</p>
+        ) : !setup.data ? (
+          <Loading />
+        ) : (
+          <ul className="space-y-2" aria-label="Setup checks">
+            {setup.data.checks.map((c) => (
+              <li key={c.id} className="flex items-start gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                {c.ok ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-safe" /> : <CircleAlert size={18} className="mt-0.5 shrink-0 text-danger" />}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-bold">{c.label}</span>
+                  <span className="block text-[12.5px] leading-snug text-muted">{c.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card
+        title="Usernames = enrollment numbers"
+        sub="Confirmed from each student's own MyCamu sign-in"
+        action={<RefreshButton loading={ids.loading} onClick={() => void ids.reload()} />}
+      >
+        {ids.error ? (
+          <p className="text-[13.5px] text-muted">{/assert_admin|does not exist|function/i.test(ids.error) ? "Run migration 0030_identity.sql to turn this on." : ids.error}</p>
+        ) : !ids.data ? (
+          <Loading />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-[14px]">
+              <b className="text-[20px] tabular-nums">{ids.data.verified}</b> of {ids.data.users} accounts confirmed
+              {ids.data.unverified_named > 0 && <span className="text-muted"> · {ids.data.unverified_named} renamed “unverified-…” (were on someone else&apos;s enrollment)</span>}
+            </p>
+            {ids.data.events.length > 0 && (
+              <ul className="space-y-1.5" aria-label="Username changes">
+                {ids.data.events.map((e, i) => (
+                  <li key={i} className="flex items-start gap-2 rounded-xl border border-line px-3 py-2 text-[12.5px]">
+                    <Badge tone={e.kind === "conflict" ? "bad" : e.kind === "renamed_holder" ? "warn" : "plain"}>
+                      {e.kind === "conflict" ? "Dispute" : e.kind === "renamed_holder" ? "Taken back" : "Second account"}
+                    </Badge>
+                    <span className="min-w-0 flex-1">
+                      <b>{e.enrollment}</b>
+                      {e.kind === "renamed_holder"
+                        ? ` went to its owner; the account that had it is now ${String(e.detail?.new_username ?? "unverified")}`
+                        : e.kind === "conflict"
+                          ? ` — confirmed by one MyCamu, claimed by another (${e.username ?? "new sign-up"})`
+                          : ` — a second DockIn account tried to link the same MyCamu`}
+                      <span className="text-muted"> · {ago(e.at)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </Card>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Check
           icon={<Database size={17} />}

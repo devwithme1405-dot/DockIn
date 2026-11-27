@@ -87,9 +87,27 @@ const PNG = Buffer.from(
   "base64",
 );
 
-async function phone({ channel = "preview", theme = "light", direct = false } = {}) {
+const REF = "qfwldkdwxkqjmscttlza";
+const USER = { id: "00000000-0000-4000-8000-000000000001", aud: "authenticated", role: "authenticated", email: "hello123@dockin.app", app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() };
+
+async function phone({ channel = "preview", theme = "light", direct = false, signedIn = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
+  // No real server: Supabase answers emptily, and (signed in) this account isn't confirmed yet.
+  await ctx.route(/supabase\.co/, (route) => {
+    const u = route.request().url();
+    if (u.includes("/auth/v1/user")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(USER) });
+    if (u.includes("/auth/v1/")) return route.fulfill({ status: 400, contentType: "application/json", body: "{}" });
+    if (u.includes("/rest/v1/identities")) {
+      const one = (route.request().headers()["accept"] ?? "").includes("vnd.pgrst.object");
+      return route.fulfill({ status: one ? 406 : 200, contentType: "application/json", body: one ? JSON.stringify({ code: "PGRST116", message: "0 rows" }) : "[]" });
+    }
+    return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+  });
+  if (signedIn) {
+    const session = { access_token: "fake", refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: USER };
+    await page.addInitScript(([ref, v]) => localStorage.setItem(`sb-${ref}-auth-token`, v), [REF, JSON.stringify(session)]);
+  }
   page.on("pageerror", (e) => problems.push(`uncaught: ${e.message}`));
   await page.addInitScript(
     ({ channel, camu, direct }) => {
@@ -148,6 +166,11 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
         }),
         clearCamuCaptured: () => ({}),
         camuCanMakePass: () => ({ ok: direct, connected: true, taught: direct }),
+        camuIdentity: () => (phone.camuOn ? { connected: true, enrollment: "S25CSEU0155", stuId: "6899a3e84245c98c34c20825", name: "SACHIN KUMAR" } : { connected: false, enrollment: "", stuId: "", name: "" }),
+        connectCamu: () => {
+          phone.camuOn = true;
+          return college;
+        },
         camuDayOut: (o) => {
           phone.sentDayOuts.push(o);
           if (o.reason === "Bank work") return { made: false, code: "DUP_GATEPASS_EXISTS" };
@@ -262,7 +285,7 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
   });
 
   await step("Day out from Today opens the page on a day out", async () => {
-    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button").first().click();
     await pass(page).waitFor({ timeout: 4000 });
     if ((await pass(page).getByRole("button", { name: /^Day Out/ }).getAttribute("aria-pressed")) !== "true") throw new Error("not on day out");
     await page.waitForTimeout(900);
@@ -359,7 +382,7 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await page.goBack();
     await page.waitForTimeout(700);
     if (await pass(page).count()) throw new Error("still open");
-    await page.getByRole("region", { name: "Outpass" }).getByText(/Leave ·|Day out ·/).waitFor({ timeout: 3000 });
+    await page.getByRole("region", { name: "Outpass" }).getByText(/Upcoming|Live now/).waitFor({ timeout: 3000 });
   });
   await ctx.close();
 }
@@ -367,7 +390,10 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
 {
   const { ctx, page } = await phone({ direct: true });
   await step("taught phone: review, send, MyCamu's 'duplicate' ignored, read back and checked", async () => {
-    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    // A pass is live, so the card opens History first.
+    await page.getByRole("region", { name: "Outpass" }).getByText("Upcoming").waitFor({ timeout: 6000 });
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button").first().click();
+    await pass(page).getByRole("tab", { name: "New pass" }).click();
     await line(page, "kl 4 bje mkt");
     await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
     const review = page.getByRole("dialog", { name: "Send this to MyCamu?" });
@@ -458,11 +484,64 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
 }
 
 {
+  const { ctx, page } = await phone({ signedIn: true });
+  await page.route("**/api/identity/claim", (route) => {
+    const b = route.request().postDataJSON();
+    if (b.enrollment !== "S25CSEU0155" || b.stuId !== "6899a3e84245c98c34c20825") return route.fulfill({ status: 400, json: { ok: false, code: "bad_input", message: "wrong" } });
+    if (!/^Bearer /.test(route.request().headers()["authorization"] ?? "")) return route.fulfill({ status: 401, json: { ok: false, code: "server", message: "Sign in again." } });
+    return route.fulfill({ json: { ok: true, username: "S25CSEU0155" } });
+  });
+  await step("signed in, not confirmed: asked to confirm with MyCamu; username becomes the enrollment", async () => {
+    const gate = page.getByRole("dialog", { name: "Confirm it's you" });
+    await gate.waitFor({ timeout: 8000 });
+    await page.screenshot({ path: `${SHOTS}/id-gate.png` });
+    await gate.getByRole("button", { name: "Continue with MyCamu" }).click();
+    await gate.getByText("S25CSEU0155").first().waitFor({ timeout: 4000 });
+    await gate.getByText(/same password \(not "hello123"\)/).waitFor();
+    await page.screenshot({ path: `${SHOTS}/id-confirm.png` });
+    await gate.getByRole("button", { name: "Yes, that's me" }).click();
+    await gate.getByText("You're confirmed").waitFor({ timeout: 4000 });
+    await gate.getByText(/not “hello123”/).waitFor();
+    await page.screenshot({ path: `${SHOTS}/id-done.png` });
+  });
+  await ctx.close();
+}
+
+{
+  const { ctx, page } = await phone();
+  await page.route("**/api/identity/signup", (route) => {
+    const b = route.request().postDataJSON();
+    if (b.notMine) return route.fulfill({ json: { ok: false, code: "server", message: "pretend server stops here" } });
+    return route.fulfill({ json: { ok: false, code: "exists_unverified", username: "S25CSEU0155", message: 'A DockIn account named S25CSEU0155 already exists. If it\'s yours, sign in with its password — DockIn will confirm it with MyCamu. If it isn\'t, tap "It\'s not mine".' } });
+  });
+  await step("create account: MyCamu first, username = enrollment; a taken name offers sign-in or 'not mine'", async () => {
+    await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1500);
+    await page.getByText("Backup & Sync").click();
+    await page.waitForTimeout(600);
+    await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
+    await page.waitForTimeout(600);
+    await page.getByRole("tab", { name: "Create account" }).click();
+    await page.getByText(/Your username will be your/).waitFor({ timeout: 4000 });
+    if (await page.getByPlaceholder("Pick a username").count()) throw new Error("free-text username still offered");
+    await page.getByRole("button", { name: "Continue with MyCamu" }).click();
+    await page.getByText("S25CSEU0155").first().waitFor({ timeout: 4000 });
+    await page.getByPlaceholder("At least 6 characters").fill("secret123");
+    await page.screenshot({ path: `${SHOTS}/id-create.png` });
+    await page.getByRole("button", { name: "Create my account" }).click();
+    await page.getByRole("alert").getByText(/already exists/).waitFor({ timeout: 4000 });
+    await page.getByRole("button", { name: "Sign in instead" }).click();
+    if ((await page.locator("#dockin-user").inputValue()) !== "S25CSEU0155") throw new Error("username not carried to sign in");
+  });
+  await ctx.close();
+}
+
+{
   const { ctx, page } = await phone({ theme: "dark" });
   await step("dark: the page, a question and the saved ticket look right", async () => {
     await page.getByRole("region", { name: "Outpass" }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${SHOTS}/op-today-dark.png` });
-    await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
+    await page.getByRole("region", { name: "Outpass" }).getByRole("button").first().click();
     await line(page, "kal 6 baje movie");
     await page.waitForTimeout(900);
     await page.screenshot({ path: `${SHOTS}/op-ask-dark.png` });

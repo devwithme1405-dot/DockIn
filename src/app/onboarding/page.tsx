@@ -9,6 +9,8 @@ import { CapTile, HeroBand } from "@/components/FirstRun";
 import { SignIn } from "@/components/SignIn";
 import { IntroSlides } from "@/components/Intro";
 import { useAuth, accountName } from "@/lib/auth";
+import { usePreview } from "@/lib/v3/flags";
+import { camuNameHint, firstName } from "@/lib/identity";
 
 const d = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 
@@ -23,7 +25,9 @@ export default function OnboardingPage() {
   const [stepRaw, setStep] = useState<number | null>(null);
   // Someone already signed in (e.g. back from a sign-in link) goes straight to their name.
   const step = stepRaw ?? (session ? 2 : 0);
-  const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "").trim();
+  const v3 = usePreview();
+  // DockIn 3: the nickname starts from the name MyCamu has (just made the account).
+  const metaName = String(session?.user.user_metadata?.full_name ?? session?.user.user_metadata?.name ?? "").trim() || (v3 ? firstName(camuNameHint()) : "");
   const [nameRaw, setName] = useState<string | null>(null);
   const name = nameRaw ?? metaName;
   const [target, setTarget] = useState(75);
@@ -54,7 +58,15 @@ export default function OnboardingPage() {
               of={2}
               onBack={() => setStep(0)}
               title={session ? "You're in!" : creating ? "Join DockIn" : "Welcome back!"}
-              sub={session ? "Your data is backed up to this account." : creating ? "Pick a username — that's all it takes." : "Sign in and everything comes back, on any phone."}
+              sub={
+                session
+                  ? "Your data is backed up to this account."
+                  : creating
+                    ? v3
+                      ? "MyCamu first — your username is your enrollment number."
+                      : "Pick a username — that's all it takes."
+                    : "Sign in and everything comes back, on any phone."
+              }
             >
               <CapTile />
             </HeroBand>
@@ -114,7 +126,7 @@ export default function OnboardingPage() {
 
             <div className="lift-card anim-pop relative mx-5 -mt-10 p-4" style={d(100)}>
               <label className="block">
-                <span className="mb-1.5 block text-[13.5px] font-extrabold">What should we call you?</span>
+                <span className="mb-1.5 block text-[13.5px] font-extrabold">{v3 ? "Nickname — shown on your Today page" : "What should we call you?"}</span>
                 <input
                   className="field h-14 w-full px-4 text-[18px] font-bold placeholder:font-semibold"
                   value={name}

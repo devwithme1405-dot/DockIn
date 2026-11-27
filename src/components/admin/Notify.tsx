@@ -46,6 +46,9 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
   const [days, setDays] = useState(7);
   const [version, setVersion] = useState("");
   const [reach, setReach] = useState<{ people: number; phones: number } | null>(null);
+  const [reachErr, setReachErr] = useState<string | null>(null);
+  /** What happened on the last send — shown, not just toasted. */
+  const [result, setResult] = useState<{ ok: boolean; text: string; detail?: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const history = useLoad(broadcasts);
@@ -69,8 +72,16 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
     let alive = true;
     const t = setTimeout(() => {
       notify({ title: "x", body: "x", path: "/", audience: JSON.parse(key) as Audience, dryRun: true })
-        .then((r) => alive && setReach({ people: r.people, phones: r.phones }))
-        .catch(() => alive && setReach(null));
+        .then((r) => {
+          if (!alive) return;
+          setReach({ people: r.people, phones: r.phones });
+          setReachErr(null);
+        })
+        .catch((e: Error) => {
+          if (!alive) return;
+          setReach(null);
+          setReachErr(e.message);
+        });
     }, 350);
     return () => {
       alive = false;
@@ -80,15 +91,26 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
 
   async function send() {
     setBusy(true);
+    setResult(null);
     try {
       const r = await notify({ title, body, path, audience });
-      toast.show(`Sent to ${r.sent ?? 0} of ${r.phones} phones`);
+      const errs = Object.entries(r.errors ?? {});
+      const sent = r.sent ?? 0;
+      setResult({
+        ok: sent > 0,
+        text: r.phones === 0 ? "Nobody to send to — none of these students has a phone with DockIn notifications on." : `Delivered to ${sent} of ${r.phones} phones`,
+        detail: errs.length ? `Google said: ${errs.map(([k, n]) => `${k} ×${n}`).join(", ")}${errs.some(([k]) => k === "UNREGISTERED") ? " (old phones, now removed)" : ""}` : undefined,
+      });
+      toast.show(sent ? `Sent to ${sent} of ${r.phones} phones` : "Not delivered — see below");
       setConfirm(false);
-      setTitle("");
-      setBody("");
+      if (sent) {
+        setTitle("");
+        setBody("");
+      }
       void history.reload();
     } catch (e) {
-      toast.show((e as Error).message);
+      setResult({ ok: false, text: (e as Error).message });
+      toast.show("Not sent — see below");
     } finally {
       setBusy(false);
     }
@@ -140,7 +162,16 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
           </label>
         </Card>
 
-        <Card title="Who gets it" sub={reach ? `Reaches ${reach.people} ${reach.people === 1 ? "student" : "students"} on ${reach.phones} ${reach.phones === 1 ? "phone" : "phones"}` : "Counting…"}>
+        <Card
+          title="Who gets it"
+          sub={
+            reachErr
+              ? `Can't count: ${reachErr}`
+              : reach
+                ? `Reaches ${reach.people} ${reach.people === 1 ? "student" : "students"} on ${reach.phones} ${reach.phones === 1 ? "phone" : "phones"}${reach.phones === 0 ? " — nobody here has notifications on" : ""}`
+                : "Counting…"
+          }
+        >
           {target && (
             <button
               type="button"
@@ -224,6 +255,16 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
           >
             <Send size={17} /> {kind === "me" ? "Send me a test" : "Send"}
           </button>
+          {result && (
+            <div
+              role="status"
+              className={cx("anim-fade mt-3 rounded-xl border p-3 text-[13.5px]", result.ok ? "border-safe/40 bg-safe-soft" : "border-danger/40 bg-danger-soft")}
+            >
+              <p className={cx("font-bold", result.ok ? "text-safe" : "text-danger")}>{result.text}</p>
+              {result.detail && <p className="mt-0.5 text-[12.5px] text-muted">{result.detail}</p>}
+              {!result.ok && <p className="mt-0.5 text-[12.5px] text-muted">Health → Setup checks shows what the server is missing.</p>}
+            </div>
+          )}
           {confirm && (
             <div className="anim-fade mt-3 rounded-xl border border-accent/40 bg-accent-soft p-3 text-[13.5px]">
               <p className="font-bold">Send to {reach?.people ?? "?"} students now?</p>

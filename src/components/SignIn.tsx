@@ -13,6 +13,8 @@ import {
 } from "@/lib/auth";
 import { isNativeApp } from "@/lib/native";
 import { Button, cx } from "./ui";
+import { usePreview } from "@/lib/v3/flags";
+import { CamuSignUp } from "./v3/Identity";
 
 function GoogleG() {
   return (
@@ -54,6 +56,8 @@ export function SignIn({ dark = false, onModeChange }: { dark?: boolean; onModeC
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [providers, setProviders] = useState<Providers | null>(null);
+  // DockIn 3: new accounts come from MyCamu (username = enrollment number).
+  const v3 = usePreview();
 
   useEffect(() => {
     let alive = true;
@@ -113,8 +117,19 @@ export function SignIn({ dark = false, onModeChange }: { dark?: boolean; onModeC
         ))}
       </div>
 
+      {v3 && creating ? (
+        <CamuSignUp
+          muted={muted}
+          onSignInInstead={(u) => {
+            setCreating(false);
+            setUsername(u);
+            setError(null);
+          }}
+        />
+      ) : (
+        <>
       <label className={cx("mb-1.5 block text-[13px] font-bold", muted)} htmlFor="dockin-user">
-        Username
+        {v3 ? "Enrollment number" : "Username"}
       </label>
       <div className="relative">
         <User size={18} className="pointer-events-none absolute inset-y-0 left-4 my-auto text-[#a07850]" />
@@ -125,7 +140,7 @@ export function SignIn({ dark = false, onModeChange }: { dark?: boolean; onModeC
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder={creating ? "Pick a username" : "Type your username"}
+          placeholder={creating ? "Pick a username" : v3 ? "e.g. S25CSEU0155 (or your old username)" : "Type your username"}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
         />
@@ -185,6 +200,9 @@ export function SignIn({ dark = false, onModeChange }: { dark?: boolean; onModeC
               Continue with Google
             </button>
           )}
+        </>
+      )}
+
         </>
       )}
 

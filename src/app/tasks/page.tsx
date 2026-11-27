@@ -14,6 +14,8 @@ import { useAuth } from "@/lib/auth";
 import { isCloudConfigured } from "@/lib/supabase";
 import { addTask } from "@/lib/repo";
 import { FRIENDS } from "@/lib/features";
+import { isPreview } from "@/lib/v3/flags";
+import { TAB_SHOWN } from "@/lib/tabs";
 import {
   BUCKET_LABEL,
   KIND_BY_ID,
@@ -46,6 +48,25 @@ export default function TasksPage() {
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1",
   );
   const [editing, setEditing] = useState<Task | null>(null);
+
+  // Today's "Add Task" opens the add sheet straight away. Tabs stay mounted, so
+  // the ?new=1 is read whenever Tasks is shown, not only the first time.
+  useEffect(() => {
+    const strip = () => {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get("new") !== "1") return false;
+      u.searchParams.delete("new");
+      window.history.replaceState(window.history.state, "", u.pathname + u.search);
+      return true;
+    };
+    if (isPreview()) strip();
+    const onShow = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== "/tasks" || !isPreview()) return;
+      if (strip()) setAdding(true);
+    };
+    window.addEventListener(TAB_SHOWN, onShow);
+    return () => window.removeEventListener(TAB_SHOWN, onShow);
+  }, []);
   // Ticked a moment ago: kept in place so the list does not jump under a finger.
   const [justDone, setJustDone] = useState<ReadonlySet<string>>(() => new Set());
 

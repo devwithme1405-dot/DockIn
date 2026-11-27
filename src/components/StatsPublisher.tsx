@@ -105,6 +105,18 @@ export function useStatsSnapshot(all: boolean): FriendStatsData | null | undefin
         if (ix.length) days[d] = ix;
       }
       out.days = days;
+      // With times, for "who's free now" on days I haven't opened the app.
+      const week: Record<string, { from: string; to: string; name: string }[]> = {};
+      for (let d = today; d <= addDays(today, 13); d = addDays(d, 1)) {
+        const list2 = camu
+          ? projectedClassesOn(camu, d, LAST_TEACHING_DAY).map((p) => ({ from: p.from, to: p.to, name: p.name }))
+          : (slots ?? [])
+              .filter((s) => s.weekday === weekdayOf(d) && appliesOn(s, d))
+              .sort((a, b) => a.start.localeCompare(b.start))
+              .map((s) => ({ from: s.start, to: s.end, name: (subjects ?? []).find((x) => x.id === s.subjectId)?.name ?? "Class" }));
+        if (list2.length) week[d] = list2;
+      }
+      out.week = week;
       const names = new Map((subjects ?? []).map((s) => [s.id, s.name]));
       out.today = {
         date: today,

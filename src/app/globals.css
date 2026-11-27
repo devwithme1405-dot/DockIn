@@ -780,6 +780,21 @@ html[data-navved] .stagger > * {
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 6px 18px -12px rgb(var(--shadow-ink) / 0.5);
 }
 /* The tab bar: dark leather glass, the page shows through. */
+/* DockIn 3: Friends as a raised chat button in the middle of the bar */
+.nav-raised-wrap { display: flex; flex-direction: column; align-items: center; margin-top: -26px; }
+.nav-raised {
+  position: relative; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px; color: #fff;
+  background-image: radial-gradient(circle at 35% 28%, #ffc06a 0%, #f68a22 48%, #c95f0c 100%);
+  border: 3px solid #6c3416;
+  box-shadow: 0 8px 18px -6px rgb(60 20 0 / 0.65), inset 0 1px 0 rgb(255 236 200 / 0.8), inset 0 -3px 4px rgb(150 60 0 / 0.35);
+  transition: transform .2s cubic-bezier(.3,1.4,.5,1), box-shadow .2s;
+}
+.nav-raised-wrap:active .nav-raised { transform: scale(0.92); }
+.nav-raised-on { box-shadow: 0 0 0 3px rgb(255 190 110 / 0.55), 0 0 22px 2px rgb(255 150 40 / 0.6), inset 0 1px 0 rgb(255 236 200 / 0.8); }
+.nav-raised-on svg { animation: nav-bubble .5s cubic-bezier(.3,1.6,.5,1); }
+@keyframes nav-bubble { 0% { transform: scale(.7) rotate(-12deg); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nav-raised-on svg { animation: none; } }
+
 .glass-nav {
   background: linear-gradient(180deg, rgb(124 61 27 / 0.93), rgb(84 38 14 / 0.97));
   backdrop-filter: blur(20px) saturate(1.5);
@@ -1618,6 +1633,28 @@ html.lite .hero-drift { animation: none; }
 .pass-ticket::after { right: -10px; clip-path: inset(0 50% 0 0); }
 .pass-stamp { animation: pass-stamp .55s cubic-bezier(.2,1.6,.4,1) both; }
 @keyframes pass-stamp { 0% { transform: scale(2.4) rotate(-18deg); opacity: 0; } 60% { transform: scale(.92) rotate(-10deg); opacity: 1; } 100% { transform: scale(1) rotate(-10deg); opacity: 1; } }
+
+/* A pass that counts: a light runs round its edge (green while it's in use) */
+@property --ring-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.live-ring {
+  padding: 2px;
+  background:
+    conic-gradient(from var(--ring-a), transparent 0 55%, color-mix(in srgb, var(--accent) 85%, transparent) 72%, #ffd59e 80%, transparent 92%),
+    color-mix(in srgb, var(--accent) 22%, var(--line));
+  animation: ring-spin 3.2s linear infinite;
+}
+.live-ring-on {
+  background:
+    conic-gradient(from var(--ring-a), transparent 0 50%, color-mix(in srgb, var(--safe) 90%, transparent) 70%, #c9ffd9 80%, transparent 92%),
+    color-mix(in srgb, var(--safe) 30%, var(--line));
+  box-shadow: 0 0 22px -6px color-mix(in srgb, var(--safe) 70%, transparent);
+  animation-duration: 2.2s;
+}
+@keyframes ring-spin { to { --ring-a: 360deg; } }
+.live-dot { animation: live-dot 1.6s ease-in-out infinite; }
+@keyframes live-dot { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--safe) 25%, transparent); } }
+html.lite .live-ring, html.lite .live-dot { animation: none; }
+@media (prefers-reduced-motion: reduce) { .live-ring, .live-dot { animation: none; } }
 
 /* outpass page: the ticket prints out of a slot, then gets stamped */
 .pass-print { animation: pass-print .7s cubic-bezier(.2,.85,.25,1) both; }

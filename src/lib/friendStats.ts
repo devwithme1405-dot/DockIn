@@ -43,6 +43,11 @@ export interface FriendStatsData {
   days?: Record<string, number[]>;
   /** Today's classes with times, for "who's free now". */
   today?: { date: string; classes: { from: string; to: string; name: string }[] };
+  /**
+   * The coming two weeks' classes with times, by date — so "Free now" works
+   * even on a day this friend hasn't opened DockIn yet.
+   */
+  week?: Record<string, { from: string; to: string; name: string }[]>;
 }
 
 export const pct = (present: number, total: number) => (total > 0 ? (present / total) * 100 : null);

@@ -140,6 +140,14 @@ async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
 
 export const adminRole = () => rpc<"owner" | "moderator" | null>("admin_role");
 export const overview = () => rpc<Overview>("admin_overview");
+/** Enrollment usernames: how many confirmed, and every name that had to move. */
+export const identitySummary = () =>
+  rpc<{
+    users: number;
+    verified: number;
+    unverified_named: number;
+    events: { at: string; kind: string; enrollment: string; username: string | null; other_username: string | null; detail: Record<string, unknown> }[];
+  }>("admin_identity");
 export const users = (q: string, filter: string, limit = 50, offset = 0) =>
   rpc<{ total: number; rows: AdminUser[] }>("admin_users", { p_q: q, p_filter: filter, p_limit: limit, p_offset: offset });
 export const userDetail = (id: string) => rpc<UserDetail>("admin_user", { p_id: id });
@@ -173,6 +181,7 @@ export const notify = (b: { title: string; body: string; path: string; audience:
   call<{ people: number; phones: number; targeted?: number; sent?: number; failed?: number; errors?: Record<string, number> }>("/api/admin/push", b);
 export const ban = (userId: string, reason: string, days: number | null) => call<{ ok: boolean; until: string | null }>("/api/admin/ban", { userId, reason, days });
 export const unban = (userId: string) => call<{ ok: boolean }>("/api/admin/ban", { userId, unban: true });
+export const serverHealth = () => call<{ checks: { id: string; label: string; ok: boolean; detail: string }[]; at: string }>("/api/admin/health");
 export const github = () => call<{ releases: { tag: string; name: string; published: string | null; downloads: number }[] }>("/api/admin/github");
 
 /** "5 min ago", "3 h ago", "2 d ago", or a date. */

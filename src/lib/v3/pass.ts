@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { DockIn, isNativeApp } from "../native";
 import { fmtTime, fromDateStr, toDateStr } from "../dates";
 import { needsProof, passSummary, type PassDraft } from "../outpass";
@@ -342,8 +343,41 @@ export async function fetchHistory(): Promise<CamuPass[]> {
   } catch {
     /* private mode: fine */
   }
+  historyListeners.forEach((f) => f());
   return items;
 }
+
+const historyListeners = new Set<() => void>();
+let lastRaw: string | null = null;
+let lastParsed: { at: number; items: CamuPass[] } | null = null;
+
+/** MyCamu's list as last read, live (updates whenever DockIn reads it again). */
+export function useCamuHistory(): { at: number; items: CamuPass[] } | null {
+  return useSyncExternalStore(
+    (f) => {
+      historyListeners.add(f);
+      return () => historyListeners.delete(f);
+    },
+    () => {
+      let raw: string | null = null;
+      try {
+        raw = localStorage.getItem(CACHE);
+      } catch {
+        /* private mode */
+      }
+      if (raw !== lastRaw) {
+        lastRaw = raw;
+        lastParsed = cachedHistory();
+      }
+      return lastParsed;
+    },
+    () => null,
+  );
+}
+
+/** Passes that count right now or later (submitted, approved, out). */
+export const liveCamu = (items: CamuPass[], today: string) =>
+  items.filter((c) => (c.state === "applied" || c.state === "approved" || c.state === "out") && c.toDate >= today && c.kind !== "other");
 
 // ------------------------------------------------------------ clashes & cancelling
 

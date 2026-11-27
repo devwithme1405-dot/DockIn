@@ -173,6 +173,8 @@ interface DockInPlugin {
   /** The phone's share sheet (WhatsApp, SMS…). Preview APK 3.0 and later. */
   shareText(options: { text: string; title?: string }): Promise<void>;
   clearCamuCaptured(): Promise<void>;
+  /** Preview APK: who the MyCamu sign-in on this phone says the student is. */
+  camuIdentity(): Promise<{ connected: boolean; enrollment: string; stuId: string; name: string }>;
   /** Preview APK: can DockIn submit a pass to MyCamu itself? */
   camuCanMakePass(): Promise<{ ok: boolean; connected?: boolean; taught?: boolean }>;
   /** Preview APK: submits a Day Out Pass to MyCamu and checks it is listed. */

@@ -384,6 +384,24 @@ public class DockInPlugin extends Plugin {
         }
     }
 
+    /**
+     * Who this phone's MyCamu sign-in says the student is: enrollment number,
+     * MyCamu's student id and name (for the DockIn username). Empty enrollment
+     * when MyCamu was connected before DockIn read it — sign in to MyCamu again.
+     */
+    @PluginMethod
+    public void camuIdentity(PluginCall call) {
+        Context c = getContext();
+        JSObject o = new JSObject();
+        boolean on = Camu.connected(c);
+        o.put("connected", on);
+        JSONObject id = on ? Camu.ids(c) : null;
+        o.put("enrollment", id == null ? "" : id.optString("enr", ""));
+        o.put("stuId", id == null ? "" : id.optString("StuID", ""));
+        o.put("name", id == null ? "" : id.optString("name", ""));
+        call.resolve(o);
+    }
+
     /** Can DockIn send a pass to MyCamu itself (signed in, and the login id learned)? */
     @PluginMethod
     public void camuCanMakePass(PluginCall call) {

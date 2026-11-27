@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, ChartNoAxesColumn, House, SquareCheckBig, UsersRound, UtensilsCrossed } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, House, MessagesSquare, SquareCheckBig, UsersRound, UtensilsCrossed } from "lucide-react";
 import { useUnreadChats } from "@/lib/chat";
 import { FRIENDS } from "@/lib/features";
 import { applyTextScale, applyTheme, ensureCategories, getProfile } from "@/lib/repo";
@@ -19,6 +19,9 @@ import { AppUpdate } from "./AppUpdate";
 import { ShareInbox } from "./ShareInbox";
 import { WidgetsSync } from "./WidgetsSync";
 import { V3Host } from "./v3/V3Host";
+import { usePreview } from "@/lib/v3/flags";
+import { useIdentityStatus } from "@/lib/identity";
+import { IdentityGate, NicknameAsk } from "./v3/Identity";
 import { BannedScreen } from "./AccountNotices";
 import { installErrorReports, startPresence, useBan } from "@/lib/presence";
 import { forgetPushToken } from "@/lib/push";
@@ -66,6 +69,16 @@ const TABS = [
   { href: "/cafeteria", label: "Cafeteria", icon: UtensilsCrossed },
   { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
   ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: UsersRound }] : []),
+];
+
+/** DockIn 3 (preview): Friends moves to the middle as a raised chat button. */
+const TABS_V3 = [
+  { href: "/", label: "Today", icon: House },
+  { href: "/attendance", label: "Attendance", icon: ChartNoAxesColumn },
+  { href: "/timetable", label: "Timetable", icon: CalendarDays },
+  ...(FRIENDS ? [{ href: "/circle", label: "Friends", icon: MessagesSquare, raised: true }] : []),
+  { href: "/cafeteria", label: "Cafeteria", icon: UtensilsCrossed },
+  { href: "/tasks", label: "Tasks", icon: SquareCheckBig },
 ];
 
 /**
@@ -425,6 +438,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isNativeApp() && ready && !onboarding && FRIENDS && <ShareInbox />}
         {isNativeApp() && ready && !onboarding && <WidgetsSync />}
         {ready && !onboarding && <V3Host />}
+        {ready && !onboarding && !ban && <IdentityLayer userId={userId} email={session?.user.email} name={profile?.name} />}
         {ban && (
           <BannedScreen
             ban={ban}
@@ -466,11 +480,29 @@ function BrandHold({ show }: { show: boolean }) {
   return <div className={cx("brand-hold", !show && "brand-hold-out")} aria-hidden />;
 }
 
+/**
+ * DockIn 3: a signed-in account not yet confirmed with MyCamu is asked to
+ * confirm (once per app open — "Remind me later" waits for the next open);
+ * a confirmed one without a nickname is asked for one.
+ */
+function IdentityLayer({ userId, email, name }: { userId: string | null; email: string | undefined; name: string | undefined }) {
+  const v3 = usePreview();
+  const status = useIdentityStatus(userId, v3);
+  const [later, setLater] = useState(false);
+  const [named, setNamed] = useState(false);
+  if (!v3 || !userId) return null;
+  if (status === "needed" && !later) return <IdentityGate email={email} onLater={() => setLater(true)} />;
+  if (status === "verified" && name !== undefined && !name.trim() && !named) return <NicknameAsk onDone={() => setNamed(true)} />;
+  return null;
+}
+
 function TabBar({ pathname }: { pathname: string }) {
   const attention = useNeedsAttention();
   const chats = useUnreadChats();
   const asks = useLiveQuery(() => db.friends.filter((f) => f.status === "pending" && f.theyAsked).count(), []) ?? 0;
   const unread = chats + asks;
+  const v3 = usePreview();
+  const tabs: { href: string; label: string; icon: typeof House; raised?: boolean }[] = v3 ? TABS_V3 : TABS;
   return (
     // A strip of stitched leather floating over the page; the current tab is a
     // glowing orange tile, the way a lit key looks on a desk.
@@ -481,11 +513,29 @@ function TabBar({ pathname }: { pathname: string }) {
       <ul
         className={cx(
           "glass-nav grid h-[70px] items-center gap-0.5 rounded-[26px] px-1.5",
-          TABS.length > 5 ? "grid-cols-6" : "grid-cols-5",
+          tabs.length > 5 ? "grid-cols-6" : "grid-cols-5",
         )}
       >
-        {TABS.map(({ href, label, icon: Icon }) => {
+        {tabs.map(({ href, label, icon: Icon, raised }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+          if (raised) {
+            const badge = unread;
+            return (
+              <li key={href} className="relative z-[2] flex justify-center">
+                <a href={href} aria-current={active ? "page" : undefined} aria-label={badge ? `${label}, ${badge} new` : label} className="nav-raised-wrap">
+                  <span className={cx("nav-raised", active && "nav-raised-on")}>
+                    <Icon size={24} strokeWidth={2.3} />
+                    {badge > 0 && (
+                      <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-[#6c3416] bg-danger px-1 text-[10.5px] font-bold text-white tabular-nums">
+                        {badge > 9 ? "9+" : badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className={cx("mt-0.5 text-[9.5px] font-bold tracking-[0.01em]", active ? "text-white" : "text-[#f6dcbd]/85")}>{label}</span>
+                </a>
+              </li>
+            );
+          }
           return (
             <li key={href} className="relative z-[1]">
               {/* A plain link: the shell turns the tap into an instant tab switch. */}

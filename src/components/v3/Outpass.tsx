@@ -1133,7 +1133,9 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
           <div className="space-y-3">
             {camuLive.map((c, i) => (
               <div key={c.id} className="ask-in" style={{ animationDelay: `${i * 50}ms` }}>
-                <CamuTicket c={c} onClick={() => setOpenCamu(c)} />
+                <div className="live-ring rounded-[18px]">
+                  <CamuTicket c={c} onClick={() => setOpenCamu(c)} />
+                </div>
               </div>
             ))}
             {localLive.map((p, i) => (

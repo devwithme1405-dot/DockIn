@@ -1,80 +1,113 @@
 "use client";
 
+import { useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { BadgeCheck, ChevronRight, DoorOpen, House, Sun } from "lucide-react";
-import { toDateStr } from "@/lib/dates";
+import { ChevronRight, DoorOpen, House, Sun } from "lucide-react";
+import { fmtTime, fromDateStr, toDateStr } from "@/lib/dates";
+import { isNativeApp } from "@/lib/native";
 import { usePreview } from "@/lib/v3/flags";
-import { verifyPass } from "@/lib/v3/pass";
+import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
 import { cx } from "../ui";
-import { passDay, PassStatusChip } from "./passParts";
+import { CamuChip } from "./CamuPasses";
+
+const day = (s: string) => fromDateStr(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 
 /**
- * Today's way into Outpass (preview build only): the pass that's live right
- * now if there is one, and one tap to start a day out or a leave.
+ * Today's way into Outpass (preview build only). It doesn't start a pass here —
+ * it opens the Outpass page. A pass that counts right now (or later) is shown
+ * with a light running round its edge, so it's found at a glance at the gate.
  */
 export function OutpassEntry({ className }: { className?: string }) {
   const on = usePreview();
   const today = toDateStr();
-  const live = useLiveQuery(
+  const camu = useCamuHistory();
+  // DockIn's own copies, for phones that haven't read MyCamu yet.
+  const local = useLiveQuery(
     () =>
       v3db.passes
         .orderBy("createdAt")
         .reverse()
-        .filter((p) => p.toDate >= today && p.status !== "cancelled" && p.status !== "rejected")
+        .filter((p) => p.toDate >= today && (p.status === "applied" || p.status === "approved"))
         .first(),
     [today],
   );
+
+  // Keep the list fresh while Today is open (quietly; the card updates by itself).
+  useEffect(() => {
+    if (!on || !isNativeApp()) return;
+    void fetchHistory().catch(() => {});
+  }, [on]);
+
   if (!on) return null;
+  const live: CamuPass | null = camu ? (liveCamu(camu.items, today).sort((a, b) => (a.fromDate + a.fromTime).localeCompare(b.fromDate + b.fromTime))[0] ?? null) : null;
+  const pass =
+    live ??
+    (local
+      ? ({
+          id: local.id,
+          kind: local.kind,
+          type: local.kind === "dayout" ? "Day Out Pass" : "Leave Out Pass",
+          fromDate: local.fromDate,
+          fromTime: local.fromTime,
+          toDate: local.toDate,
+          toTime: local.toTime,
+          reason: local.reason,
+          state: local.status === "approved" ? "approved" : "applied",
+          parent: local.status === "approved" ? "approved" : "pending",
+          files: 0,
+        } satisfies CamuPass)
+      : null);
+  const now = new Date();
+  const wall = `${today}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const running = !!pass && `${pass.fromDate}T${pass.fromTime || "00:00"}` <= wall && wall < `${pass.toDate}T${pass.toTime || "23:59"}`;
+
   return (
     <section className={cx("px-5", className)} aria-label="Outpass">
-      <div className="pass-ticket op-entry overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card shadow-[0_3px_0_var(--pbtn-lip)]">
-        <button
-          type="button"
-          onClick={() => (live ? openOutpass("history", undefined, live.id) : openOutpass("new"))}
-          className="flex w-full items-center gap-3 px-4 pt-3.5 pb-3 text-left transition active:scale-[0.99]"
-        >
+      <button
+        type="button"
+        onClick={() => openOutpass(pass ? "history" : "new")}
+        className="op-entry block w-full overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-3 px-4 py-3.5">
           <span className="op-door grid size-12 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent">
             <DoorOpen size={23} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="font-display block text-[17px] leading-tight font-extrabold">Outpass</span>
-            {live ? (
-              <span className="mt-0.5 block">
-                <span className="block truncate text-[12.5px] text-muted">
-                  {live.kind === "dayout" ? "Day out" : "Leave"} · {passDay(live)}
-                </span>
-                {live.camu && verifyPass(live, live.camu).every((c) => c.ok) && (
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-bold text-safe">
-                    <BadgeCheck size={14} /> Checked in MyCamu
-                  </span>
-                )}
-              </span>
-            ) : (
-              <span className="block text-[12.5px] text-muted">Type “kal 4 baje market” — done in seconds</span>
-            )}
+            <span className="block text-[12.5px] text-muted">Day out & leave — make, check and cancel</span>
           </span>
-          {live ? <PassStatusChip status={live.status} /> : <ChevronRight size={20} className="shrink-0 text-muted" />}
-        </button>
-        <div className="mx-4 border-t-2 border-dashed border-line" />
-        <div className="grid grid-cols-2 gap-2 p-3">
-          <button
-            type="button"
-            onClick={() => openOutpass("new", undefined, undefined, "dayout")}
-            className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13.5px] font-bold"
-          >
-            <Sun size={16} className="text-warn" /> Day out
-          </button>
-          <button
-            type="button"
-            onClick={() => openOutpass("new", undefined, undefined, "leave")}
-            className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13.5px] font-bold"
-          >
-            <House size={16} className="text-accent" /> Leave
-          </button>
-        </div>
-      </div>
+          <ChevronRight size={20} className="shrink-0 text-muted" />
+        </span>
+
+        {pass && (
+          <span className="block px-3 pb-3">
+            <span className={cx("live-ring block rounded-2xl", running && "live-ring-on")}>
+              <span className="flex items-center gap-3 rounded-[14px] bg-surface px-3 py-2.5">
+                <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", pass.kind === "dayout" ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent")}>
+                  {pass.kind === "dayout" ? <Sun size={17} /> : <House size={17} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-1.5">
+                    <span className={cx("size-2 shrink-0 rounded-full", running ? "live-dot bg-safe" : "bg-warn")} />
+                    <span className="text-[11px] font-extrabold tracking-[0.08em] text-muted uppercase">{running ? "Live now" : "Upcoming"}</span>
+                  </span>
+                  <span className="block truncate text-[13.5px] font-bold">
+                    {pass.type} · {day(pass.fromDate)}
+                  </span>
+                  <span className="block truncate text-[12px] text-muted">
+                    {pass.fromTime ? fmtTime(pass.fromTime) : ""}
+                    {pass.toDate !== pass.fromDate ? ` → ${day(pass.toDate)} ` : " → "}
+                    {pass.toTime ? fmtTime(pass.toTime) : ""}
+                  </span>
+                </span>
+                <CamuChip state={pass.state} />
+              </span>
+            </span>
+          </span>
+        )}
+      </button>
     </section>
   );
 }

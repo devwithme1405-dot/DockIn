@@ -13,6 +13,8 @@ import { dayClosure } from "@/lib/calendar";
 import { useEvents } from "@/lib/hooks";
 import { useStatsSnapshot } from "./StatsPublisher";
 import { Avatar, cx, useToast } from "./ui";
+import { usePreview } from "@/lib/v3/flags";
+import { fmtMins, freeNow } from "@/lib/freeNow";
 
 type Person = { id: string; name: string; avatar?: string; me: boolean; s: FriendStatsData | null };
 type Tab = "attendance" | "tasks" | "trip" | "free";
@@ -53,6 +55,7 @@ export function ComparePanel({
   const mine = useStatsSnapshot(true);
   const stats = useFriendStats();
   const [tab, setTab] = useState<Tab>("attendance");
+  const v3 = usePreview();
   const [editing, setEditing] = useState(startOnSharing);
   const share = profile?.shareStats ?? { attendance: false, tasks: false, schedule: false };
   const sharingAny = share.attendance || share.tasks || share.schedule;
@@ -157,7 +160,7 @@ export function ComparePanel({
         {tab === "attendance" && <AttendanceTab people={people} target={profile?.target ?? 75} />}
         {tab === "tasks" && <TasksTab people={people} />}
         {tab === "trip" && <TripTab people={people} />}
-        {tab === "free" && <FreeTab people={people} />}
+        {tab === "free" && (v3 ? <FreeTabV3 people={people} /> : <FreeTab people={people} />)}
 
         {silent.length > 0 && (
           <section className="mt-5">
@@ -686,3 +689,115 @@ function FreeTab({ people }: { people: Person[] }) {
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Free now — DockIn 3: everyone with a shared timetable, from their two-week
+// list; the class only one of you has; and when each of you is free next.
+
+function FreeTabV3({ people }: { people: Person[] }) {
+  const today = toDateStr();
+  const [now] = useState(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+  const [open, setOpen] = useState<string | null>(null);
+  const { rows, together } = freeNow(people, today, now);
+  const known = rows.filter((r) => r.slots);
+  const unknown = rows.filter((r) => !r.slots);
+  if (!known.length) return <Empty>No one&apos;s timetable is shared yet. Turn on “Timetable” above.</Empty>;
+
+  const sorted = [...known].sort((x, y) => Number(!!x.current) - Number(!!y.current) || Number(y.p.me) - Number(x.p.me));
+  const pct = (m: number) => `${((Math.min(Math.max(m, 480), 1080) - 480) / 600) * 100}%`;
+
+  return (
+    <div className="space-y-3">
+      <section className="tile-tint rounded-3xl p-4" style={{ "--tint": "#2f9c8c" } as CSSProperties}>
+        <p className="text-[12.5px] font-extrabold tracking-wide text-muted uppercase">When you&apos;re all free together</p>
+        <p className="mt-1 text-[17px] font-extrabold">
+          {together.length ? together.slice(0, 3).map(([a, b]) => `${fmtMins(a)} – ${b >= 1080 ? "evening" : fmtMins(b)}`).join("  ·  ") : "No common break left today"}
+        </p>
+      </section>
+      <ul className="space-y-2">
+        {sorted.map(({ p, slots, current, next, free }, i) => {
+          const only = slots!.filter((c) => c.only && c.b > now);
+          const freeNext = free.find(([a]) => a >= now) ?? free[0];
+          const line = current
+            ? `In ${current.name} till ${fmtMins(current.b)}${freeNext && freeNext[0] >= current.b ? ` · free ${fmtMins(freeNext[0])}${freeNext[1] < 1080 ? `–${fmtMins(freeNext[1])}` : " onwards"}` : ""}`
+            : next
+              ? `Free till ${fmtMins(next.a)} · then ${next.name}`
+              : slots!.length
+                ? "Done for today"
+                : "No classes today";
+          const isOpen = open === p.id;
+          return (
+            <li key={p.id} className="account-card anim-pop rounded-3xl p-3" style={{ "--d": `${i * 40}ms` } as CSSProperties}>
+              <button type="button" onClick={() => setOpen(isOpen ? null : p.id)} aria-expanded={isOpen} className="flex w-full items-center gap-3 text-left">
+                <span className="relative">
+                  <Avatar name={p.name} avatar={p.avatar} size={42} />
+                  <span className={cx("absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full ring-2 ring-surface", current ? "bg-danger" : "bg-safe")} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-bold">{p.name}</span>
+                  <span className="block truncate text-[12.5px] text-muted">{line}</span>
+                  {only.length > 0 && (
+                    <span className="mt-0.5 block truncate text-[12px] font-bold text-accent">
+                      Only {p.me ? "you" : p.name.split(" ")[0]}: {only.map((c) => `${c.name.replace(/\s*\(.*?\)/g, "")} ${fmtMins(c.a)}`).join(", ")}
+                    </span>
+                  )}
+                </span>
+                <span className={cx("shrink-0 rounded-full px-2.5 py-1 text-[12px] font-extrabold", current ? "bg-danger-soft text-danger" : "bg-safe-soft text-safe")}>
+                  {current ? "In class" : "Free"}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="anim-fade mt-3 space-y-2.5">
+                  {/* Today, 8 AM to 6 PM: classes as blocks, the ones only they have in orange. */}
+                  <div className="relative h-7 overflow-hidden rounded-lg bg-surface-2" aria-hidden>
+                    {slots!.map((c) => (
+                      <span
+                        key={`${c.from}-${c.name}`}
+                        className={cx("absolute top-0 bottom-0 rounded-md", c.only ? "bg-accent" : "bg-muted/45")}
+                        style={{ left: pct(c.a), width: `calc(${pct(c.b)} - ${pct(c.a)})` }}
+                      />
+                    ))}
+                    {now >= 480 && now <= 1080 && <span className="absolute top-0 bottom-0 w-0.5 bg-danger" style={{ left: pct(now) }} />}
+                  </div>
+                  <div className="flex justify-between text-[10.5px] font-semibold text-muted">
+                    <span>8 AM</span>
+                    <span>1 PM</span>
+                    <span>6 PM</span>
+                  </div>
+                  {slots!.length > 0 ? (
+                    <ul className="space-y-1">
+                      {slots!.map((c) => (
+                        <li key={`${c.from}-${c.name}`} className={cx("flex items-center gap-2 text-[13px]", c.b <= now && "opacity-50")}>
+                          <span className="w-[118px] shrink-0 text-muted tabular-nums">
+                            {fmtMins(c.a)} – {fmtMins(c.b)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                          {c.only && <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-extrabold text-accent">only {p.me ? "you" : "them"}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[13px] text-muted">No classes today.</p>
+                  )}
+                  {free.length > 0 && (
+                    <p className="text-[12.5px] font-semibold text-safe">
+                      Free {free.map(([a, b]) => `${fmtMins(a)}${b >= 1080 ? " onwards" : `–${fmtMins(b)}`}`).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {unknown.length > 0 && (
+        <p className="px-2 text-[12.5px] text-muted">
+          {unknown.map((r) => r.p.name).join(", ")} — today&apos;s timetable not shared yet (they need to open DockIn once after updating).
+        </p>
+      )}
+    </div>
+  );
+}

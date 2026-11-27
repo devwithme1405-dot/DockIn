@@ -86,11 +86,19 @@ public class CamuLoginActivity extends Activity {
     /** Reads the student's ids out of Camu's own saved state, or "" before sign-in. */
     private static final String READ_IDS =
             "(function(){try{var r=localStorage.getItem('persist:root');if(!r)return '';"
-                    + "var c=JSON.parse(JSON.parse(r).common||'{}');var p=c.Progression;"
+                    + "var cs=JSON.parse(r).common||'{}';var c=JSON.parse(cs);var p=c.Progression;"
                     + "if(!p||!p.StuID||!p.CmProgID&&!p._id)return '';"
                     + "var n=(c.loginDetails&&c.loginDetails.Name)||'';"
+                    // The enrollment number (e.g. S25CSEU0155): from a named field
+                    // first, else the college email's local part, else any value
+                    // that is exactly one. It becomes the DockIn username.
+                    + "var E=/^([A-Za-z]{1,2}\\d{2}[A-Za-z]{2,6}\\d{2,6})(@[A-Za-z0-9.-]+)?$/;"
+                    + "var en='',ld=c.loginDetails||{},ks=['EnrollmentNo','EnrNo','EnrlNo','RollNo','RegNo','AdmNo','StudentId','Email','EmailID','EmailId','email','UserName','LoginID','LoginId'];"
+                    + "for(var i=0;i<ks.length&&!en;i++){var v=ld[ks[i]]||p[ks[i]];var m=E.exec(String(v||'').trim());if(m)en=m[1].toUpperCase();}"
+                    + "if(!en){var re=/\"([A-Za-z]{1,2}\\d{2}[A-Za-z]{2,6}\\d{2,6})(?:@[A-Za-z0-9.-]+)?\"/g,mm,seen={};"
+                    + "while((mm=re.exec(cs))){seen[mm[1].toUpperCase()]=1;}var all=Object.keys(seen);if(all.length===1)en=all[0];}"
                     + "return JSON.stringify({InId:p.InId,PrID:p.PrID,CrID:p.CrID,DeptID:p.DeptID,SemID:p.SemID,"
-                    + "AcYr:p.AcYr,CmProgID:p._id||p.CmProgID,StuID:p.StuID,isFE:!!p.isFE,name:n,sem:p.SemName||''});"
+                    + "AcYr:p.AcYr,CmProgID:p._id||p.CmProgID,StuID:p.StuID,isFE:!!p.isFE,name:n,sem:p.SemName||'',enr:en});"
                     + "}catch(e){return ''}})()";
 
     /** Empties Camu's localStorage, sessionStorage and IndexedDB for its origin. */

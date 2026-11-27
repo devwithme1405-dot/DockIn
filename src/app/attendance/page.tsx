@@ -18,7 +18,8 @@ import { eventsOn, nextHoliday } from "@/lib/calendar";
 import { addDays, toDateStr, fmtDay, daysBetweenDates } from "@/lib/dates";
 import { countable, describe, fmtPct, ifYouMiss, weekChange } from "@/lib/attendance";
 import type { AttendanceState } from "@/lib/types";
-import { Chip, Sheet, cx, useCountUp } from "@/components/ui";
+import { Chip, Sheet, cx, inputCls, useCountUp } from "@/components/ui";
+import { usePreview } from "@/lib/v3/flags";
 import { BookTile, InkBar, InkRing, Notebook, PaperIconButton, Segmented, SectionTitle, TrendPill } from "@/components/Paper";
 
 type Filter = "all" | "danger" | "warn" | "safe";
@@ -79,6 +80,7 @@ export default function AttendancePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<View>("overview");
   const [targetOpen, setTargetOpen] = useState(false);
+  const v3 = usePreview();
   const events = useEvents();
   const today = toDateStr();
   // Attendance already ignores holidays; this is the screen saying so.
@@ -396,7 +398,7 @@ export default function AttendancePage() {
       <Sheet open={targetOpen} onClose={() => setTargetOpen(false)} title="Target attendance">
         <p className="mb-4 text-sm text-muted">DockIn compares every subject against this number.</p>
         <div className="flex flex-wrap gap-2.5 pb-2">
-          {[60, 65, 70, 75, 80, 85, 90].map((t) => (
+          {(v3 ? [50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100] : [60, 65, 70, 75, 80, 85, 90]).map((t) => (
             <Chip
               key={t}
               active={target === t}
@@ -409,8 +411,45 @@ export default function AttendancePage() {
             </Chip>
           ))}
         </div>
+        {v3 && <CustomTarget current={target} onSave={async (t) => {
+          await saveProfile({ target: t });
+          setTargetOpen(false);
+        }} />}
       </Sheet>
     </div>
+  );
+}
+
+/** Any whole-number target from 1 to 100 (DockIn 3). */
+function CustomTarget({ current, onSave }: { current: number; onSave: (t: number) => Promise<void> }) {
+  const [v, setV] = useState(String(current));
+  const n = Number(v);
+  const ok = /^\d{1,3}$/.test(v.trim()) && n >= 1 && n <= 100;
+  return (
+    <form
+      className="mt-3 flex items-center gap-2 border-t border-dashed border-line pt-4 pb-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok) void onSave(n);
+      }}
+    >
+      <label className="flex-1">
+        <span className="mb-1 block text-[13px] font-medium text-muted">Custom</span>
+        <span className="relative block">
+          <input
+            inputMode="numeric"
+            value={v}
+            onChange={(e) => setV(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
+            aria-label="Custom target percent"
+            className={cx(inputCls, "h-11 w-full pr-9 text-[15px]")}
+          />
+          <span className="absolute top-1/2 right-3 -translate-y-1/2 text-[15px] font-bold text-muted">%</span>
+        </span>
+      </label>
+      <button type="submit" disabled={!ok} className="btn-leather mt-6 h-11 rounded-xl px-5 text-[14px] disabled:opacity-50">
+        Set
+      </button>
+    </form>
   );
 }
 
