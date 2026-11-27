@@ -383,6 +383,13 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
 
   return (
     <div className="px-4 pt-3 pb-[calc(7rem+var(--sab))]">
+      {/* a time/date that has gone — up top, where it's seen, not buried below */}
+      {tried && problem && (
+        <div className="anim-pop mb-3 flex items-start gap-2 rounded-2xl border-2 border-danger bg-danger-soft px-3 py-2.5">
+          <XCircle size={17} className="mt-0.5 shrink-0 text-danger" />
+          <p className="text-[13px] font-bold text-danger">{problem}</p>
+        </div>
+      )}
       {/* say it */}
       <div className="op-hero relative overflow-hidden rounded-[22px] border-[1.5px] border-card-edge bg-card p-3.5 shadow-[0_3px_0_var(--pbtn-lip)]">
         <div className="flex items-center gap-2.5">
@@ -461,18 +468,18 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
               <div
                 key={`${reading.n}-${a.which}`}
                 className={cx(
-                  "ask-in rounded-2xl border-2 p-3 shadow-[0_2px_0_rgb(60_20_5/0.12)]",
-                  waiting ? "border-danger bg-danger-soft" : "border-accent bg-accent-soft",
+                  "anim-pop rounded-2xl border-2 p-3 shadow-[0_6px_18px_-8px_rgb(47_107_209/0.5)]",
+                  waiting ? "border-danger bg-danger-soft ring-2 ring-danger/25" : "border-run bg-run-soft ring-2 ring-run/25",
                 )}
-                style={{ animationDelay: `${250 + i * 80}ms` }}
+                style={{ "--d": `${120 + i * 90}ms` } as React.CSSProperties}
               >
                 <div className="mb-1.5 flex items-center gap-1.5">
-                  <span className={cx("grid size-5 place-items-center rounded-full text-[12px] font-black text-white", waiting ? "bg-danger" : "bg-accent")}>?</span>
-                  <span className={cx("text-[11px] font-extrabold tracking-wide uppercase", waiting ? "text-danger" : "text-accent")}>
-                    {waiting ? "Tap one to continue" : "Quick check"}
+                  <span className={cx("grid size-5 place-items-center rounded-full text-[12px] font-black text-white", waiting ? "bg-danger" : "bg-run")}>?</span>
+                  <span className={cx("text-[11px] font-extrabold tracking-wide uppercase", waiting ? "text-danger" : "text-run")}>
+                    {waiting ? "Tap one to continue" : "DockIn is asking"}
                   </span>
                 </div>
-                <p className="text-[14.5px] font-extrabold">
+                <p className="text-[15px] font-extrabold">
                   {a.which === "from" ? "Going out at" : "Back by"} {a.said} — morning or evening?
                 </p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -505,12 +512,12 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
             );
           })}
           {reading.needStart && (
-            <div className="ask-in rounded-2xl border-2 border-accent bg-accent-soft p-3 shadow-[0_2px_0_rgb(60_20_5/0.12)]" style={{ animationDelay: "250ms" }}>
+            <div className="anim-pop rounded-2xl border-2 border-run bg-run-soft p-3 shadow-[0_6px_18px_-8px_rgb(47_107_209/0.5)] ring-2 ring-run/25" style={{ "--d": "120ms" } as React.CSSProperties}>
               <div className="mb-1.5 flex items-center gap-1.5">
-                <span className="grid size-5 place-items-center rounded-full bg-accent text-[12px] font-black text-white">?</span>
-                <span className="text-[11px] font-extrabold tracking-wide text-accent uppercase">Quick check</span>
+                <span className="grid size-5 place-items-center rounded-full bg-run text-[12px] font-black text-white">?</span>
+                <span className="text-[11px] font-extrabold tracking-wide text-run uppercase">DockIn is asking</span>
               </div>
-              <p className="text-[14.5px] font-extrabold">When are you heading out?</p>
+              <p className="text-[15px] font-extrabold">When are you heading out?</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {startChoices(d.fromDate).map((t, j) => (
                   <button
@@ -740,9 +747,9 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           </p>
         )}
 
-        {tried && (problem || reasonMissing || unanswered.length > 0) && (
+        {tried && !problem && (reasonMissing || unanswered.length > 0) && (
           <p className="anim-pop text-[13px] font-semibold text-danger">
-            {problem ?? (unanswered.length ? `Tap AM or PM for ${unanswered[0].said} above.` : "Pick or write a reason.")}
+            {unanswered.length ? `Tap morning or evening for ${unanswered[0].said} above.` : "Pick or write a reason."}
           </p>
         )}
 

@@ -83,14 +83,16 @@ export async function forgetApprover(): Promise<void> {
 export type ApproveOutcome =
   /** Done — MyCamu approved it. */
   | { ok: true; status?: string }
-  /** DockIn opened the sign-in instead: not saved yet, not taught, or the session ended. */
-  | { ok: false; opened: true; state: ApproverState }
-  /** Couldn't do it and couldn't open the screen (web, or an odd failure). */
+  /** DockIn opened the sign-in instead — why says which case, so the UI can explain it. */
+  | { ok: false; opened: true; state: ApproverState; why: "setup" | "teach" | "expired" }
+  /** Couldn't do it and didn't open the screen (web, or a passing network error — just retry). */
   | { ok: false; opened: false; reason: string };
 
 /**
- * Approves one pass. Does it silently when DockIn already knows how; otherwise
- * opens the self-approval screen so the student does it once (and teaches it).
+ * Approves one pass. Silent once DockIn knows how. It only opens MyCamu when it
+ * genuinely has to — the login isn't set up, isn't taught yet, or the session
+ * ended — never for a passing network blip (that just asks to try again), so a
+ * set-up tap never surprises you by opening MyCamu.
  */
 export async function approvePass(id: string, note?: string): Promise<ApproveOutcome> {
   if (!isNativeApp()) return { ok: false, opened: false, reason: "web" };
@@ -99,17 +101,29 @@ export async function approvePass(id: string, note?: string): Promise<ApproveOut
     try {
       const r = await DockIn.approveSelf({ id });
       return { ok: true, status: r.status };
-    } catch {
-      // Not learned yet, session ended, or a hiccup — never a dead end: open the
-      // sign-in / approval screen so it always works (and re-learns if needed).
+    } catch (e) {
+      const code = codeOf(e);
+      if (code === "expired") return openScreen(note, "expired");
+      if (code === "teach") return openScreen(note, "teach");
+      // A passing network error — don't yank MyCamu open, just let them retry.
+      return { ok: false, opened: false, reason: "network" };
     }
   }
+  return openScreen(note, st.saved ? "teach" : "setup");
+}
+
+async function openScreen(note: string | undefined, why: "setup" | "teach" | "expired"): Promise<ApproveOutcome> {
   try {
     const after = await connectApprover(note);
-    return { ok: false, opened: true, state: after };
+    return { ok: false, opened: true, state: after, why };
   } catch (e) {
     return { ok: false, opened: false, reason: e instanceof Error && e.message ? e.message : "network" };
   }
+}
+
+function codeOf(e: unknown): string {
+  if (e && typeof e === "object" && "code" in e) return String((e as { code?: unknown }).code ?? "");
+  return "";
 }
 
 /** Capacitor's rejection when the installed app doesn't carry a native method. */

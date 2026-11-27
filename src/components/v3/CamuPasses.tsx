@@ -193,10 +193,16 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
         // Reflect it on DockIn's own copy at once, so the "approve" button turns into "approved".
         void v3db.passes.filter((p) => p.camuId === camuId).modify({ status: "approved", updatedAt: Date.now() });
         setCelebrate(true);
-      } else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
-      else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
-      else if (r.reason === "network" || !r.reason) toast.show("Couldn't reach MyCamu — try again.");
-      else toast.show(r.reason);
+      } else if (r.opened) {
+        toast.show(
+          r.why === "expired"
+            ? "Approval sign-in expired — just sign in again."
+            : r.why === "teach"
+              ? "Approve it here once — then DockIn does it for you."
+              : "Sign in with your approval login to approve from here.",
+        );
+      } else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
+      else toast.show("Couldn't reach MyCamu — try again.");
     } finally {
       setBusy(false);
     }
