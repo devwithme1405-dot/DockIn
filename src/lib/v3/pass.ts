@@ -224,19 +224,32 @@ export async function sendPass(p: PassDraft, proof?: Blob | null): Promise<SendR
 }
 
 /** Brings the statuses of passes DockIn sent up to date from MyCamu's list. Returns how many changed. */
-export async function refreshFromCamu(passes: { id: string; camuId?: string; status: PassStatus }[]): Promise<number> {
-  const mine = passes.filter((p) => p.camuId);
-  if (!mine.length || !isNativeApp()) return 0;
+export async function refreshFromCamu(
+  passes: (Partial<Pick<PassDraft, "kind" | "fromDate" | "fromTime" | "toTime" | "reason">> & { id: string; camuId?: string; status: PassStatus })[],
+): Promise<number> {
+  if (!passes.length || !isNativeApp()) return 0;
   const r = await DockIn.camuPasses();
-  const list = JSON.parse(r.items || "[]") as Record<string, unknown>[];
-  const byId = new Map(list.filter((x) => typeof x._id === "string").map((x) => [x._id as string, x]));
+  const raw = JSON.parse(r.items || "[]") as Record<string, unknown>[];
+  const byId = new Map(raw.filter((x) => typeof x._id === "string").map((x) => [x._id as string, x]));
+  const parsed = camuHistory(raw);
   let changed = 0;
-  for (const p of mine) {
-    const rec = byId.get(p.camuId!);
+  for (const p of passes) {
+    let rec = p.camuId ? byId.get(p.camuId) : undefined;
+    let camuId = p.camuId;
+    // Made in DockIn (no camuId yet): find it in MyCamu by what it is — cancelled
+    // records included — and adopt that record, so its status just follows MyCamu
+    // from now on with nothing to mark by hand.
+    if (!rec && p.kind && p.fromDate) {
+      const m = findInHistory(p, parsed);
+      if (m) {
+        rec = byId.get(m.id);
+        camuId = m.id;
+      }
+    }
     if (!rec) continue;
     const st = statusOf(rec);
-    if (st !== p.status) {
-      await v3db.passes.update(p.id, { status: st, updatedAt: Date.now() });
+    if (st !== p.status || camuId !== p.camuId) {
+      await v3db.passes.update(p.id, { status: st, camuId, updatedAt: Date.now() });
       changed++;
     }
   }
@@ -494,12 +507,16 @@ export function verifyPass(p: PassDraft, c: CamuPass | null): Check[] {
 }
 
 /** Finds this pass in MyCamu's list (by id, else by type, day and times). */
-export function findInHistory(p: PassDraft & { camuId?: string }, list: CamuPass[]): CamuPass | null {
-  return (
-    (p.camuId ? list.find((c) => c.id === p.camuId) : undefined) ??
-    list.find((c) => c.kind === p.kind && c.fromDate === p.fromDate && c.fromTime === p.fromTime && c.toTime === p.toTime && c.state !== "cancelled" && c.state !== "rejected") ??
-    null
-  );
+export function findInHistory(p: Partial<Pick<PassDraft, "kind" | "fromDate" | "fromTime" | "toTime">> & { camuId?: string }, list: CamuPass[]): CamuPass | null {
+  if (p.camuId) {
+    const byId = list.find((c) => c.id === p.camuId);
+    if (byId) return byId;
+  }
+  const same = (c: CamuPass) => c.kind === p.kind && c.fromDate === p.fromDate && c.fromTime === p.fromTime && c.toTime === p.toTime;
+  // An active pass wins, but a cancelled or rejected one still counts — so a pass
+  // made in DockIn that was later cancelled in MyCamu shows as cancelled on its
+  // own, instead of being stuck on "not applied yet" asking to be marked by hand.
+  return list.find((c) => same(c) && c.state !== "cancelled" && c.state !== "rejected") ?? list.find(same) ?? null;
 }
 
 // ------------------------------------------------------------ teaching DockIn
