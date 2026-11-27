@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, Loader2, LogIn, LogOut, RefreshCw, ShieldAlert, Stamp, Sun, UserCheck, XCircle } from "lucide-react";
 import { DockIn } from "@/lib/native";
 import { approvePass, connectApprover } from "@/lib/approver";
@@ -120,6 +121,51 @@ export function awaitingApproval(c: CamuPass): boolean {
   return c.state === "applied" && c.parent === "pending";
 }
 
+const CONFETTI = ["#209660", "#e8892f", "#8a4520", "#2f7fe8", "#d84a7a", "#f0c419"];
+
+/** A short "Approved!" burst, shown over everything when a pass is approved. */
+function ApprovedBurst({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 1700);
+    return () => clearTimeout(t);
+  }, [onDone]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="celebrate-dim" onClick={onDone} role="status" aria-label="Approved">
+      <div className="celebrate-card">
+        <span aria-hidden>
+          {Array.from({ length: 12 }, (_, i) => {
+            const a = (i / 12) * Math.PI * 2;
+            const dist = 90 + (i % 3) * 22;
+            return (
+              <span
+                key={i}
+                className="celebrate-confetti"
+                style={{
+                  background: CONFETTI[i % CONFETTI.length],
+                  animation: `celebrate-fly ${700 + (i % 4) * 120}ms cubic-bezier(.2,.7,.3,1) ${120 + (i % 5) * 30}ms forwards`,
+                  // @ts-expect-error custom properties
+                  "--cx": `${Math.cos(a) * dist}px`,
+                  "--cy": `${Math.sin(a) * dist - 30}px`,
+                  "--cr": `${(i % 2 ? 1 : -1) * 220}deg`,
+                }}
+              />
+            );
+          })}
+        </span>
+        <span className="celebrate-ring">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path className="celebrate-tick" d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
+        <p className="text-[19px] font-extrabold">Approved!</p>
+        <p className="text-[13px] text-muted">Your pass is good to go 🎉</p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /**
  * Approve this pass from inside DockIn with the college's self-approval login.
  * Does it on its own once DockIn has learned how; before that it opens the
@@ -129,6 +175,7 @@ export function awaitingApproval(c: CamuPass): boolean {
 export function ApproveNow({ camuId, label = "Approve now", className }: { camuId?: string; label?: string; className?: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
   const note = "Sign in with your approval login and approve your pass — DockIn will remember it.";
 
   async function go() {
@@ -142,10 +189,9 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
       }
       const r = await approvePass(camuId, note);
       if (r.ok) {
-        toast.show("Approved ✓");
         void fetchHistory().catch(() => []);
-      }
-      else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
+        setCelebrate(true);
+      } else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
       else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
       else if (r.reason === "network" || !r.reason) toast.show("Couldn't reach MyCamu — try again.");
       else toast.show(r.reason);
@@ -155,14 +201,17 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void go()}
-      disabled={busy}
-      className={cx("btn-leather inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] disabled:opacity-60", className)}
-    >
-      {busy ? <Loader2 size={15} className="animate-spin" /> : <Stamp size={15} />} {label}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => void go()}
+        disabled={busy}
+        className={cx("btn-leather inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] disabled:opacity-60", className)}
+      >
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <Stamp size={15} />} {label}
+      </button>
+      {celebrate && <ApprovedBurst onDone={() => setCelebrate(false)} />}
+    </>
   );
 }
 

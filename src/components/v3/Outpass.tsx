@@ -14,6 +14,7 @@ import {
   GraduationCap,
   House,
   ImagePlus,
+  Mail,
   Mic,
   Moon,
   PenLine,
@@ -31,7 +32,8 @@ import {
 } from "lucide-react";
 import { useBackClose } from "@/lib/backClose";
 import { addDays, fmtTime, toDateStr } from "@/lib/dates";
-import { isNativeApp, onPhone } from "@/lib/native";
+import { DockIn, isNativeApp, onPhone } from "@/lib/native";
+import { WARDEN_EMAIL, wardenMailBody, wardenMailto } from "@/lib/wardenMail";
 import {
   DAYOUT_END,
   needsProof,
@@ -678,6 +680,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
         {needsProof(d) && (
           <div className="ask-in">
             <p className="mb-1.5 text-[13px] font-medium text-muted">Parent-approval mail (screenshot)</p>
+            {!proof && <WardenMail d={d} />}
             {proof ? (
               <div className="anim-pop flex items-center gap-3 rounded-2xl border border-line bg-surface p-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -818,6 +821,63 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           {busy && straight ? "Sending to MyCamu…" : straight ? "Submit to MyCamu" : "Make the pass"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ warden mail
+
+/**
+ * The leave-out mail, written and ready to send. DockIn fills in the student's
+ * own name and enrollment and the dates/times; they send it, screenshot it, and
+ * attach that below.
+ */
+function WardenMail({ d }: { d: PassDraft }) {
+  const toast = useToast();
+  const [who, setWho] = useState<{ name: string; enrollment: string }>({ name: "", enrollment: "" });
+
+  useEffect(() => {
+    let live = true;
+    if (isNativeApp()) {
+      DockIn.camuIdentity()
+        .then((id) => {
+          if (live) setWho({ name: id.name || "", enrollment: id.enrollment || "" });
+        })
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const input = { ...who, fromDate: d.fromDate, fromTime: d.fromTime, toDate: d.toDate, toTime: d.toTime };
+  const body = wardenMailBody(input);
+
+  async function copy(text: string, msg: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show(msg);
+    } catch {
+      toast.show("Couldn't copy — select the text and copy by hand.");
+    }
+  }
+
+  return (
+    <div className="mb-2.5 rounded-2xl border border-line bg-surface p-3">
+      <p className="text-[13px] font-bold">Warden mail — written for you</p>
+      <p className="mt-0.5 text-[12px] text-muted">Send this, then screenshot the sent mail and attach it below.</p>
+      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-card p-2.5 font-sans text-[12px] leading-snug">{body}</pre>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <a href={wardenMailto(input)} className="btn-leather inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
+          <Mail size={15} /> Open mail
+        </a>
+        <button type="button" onClick={() => void copy(body, "Mail copied")} className="btn-paper inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
+          <Copy size={15} /> Copy mail
+        </button>
+      </div>
+      <button type="button" onClick={() => void copy(WARDEN_EMAIL, "Warden email copied")} className="mt-1.5 w-full rounded-xl px-1 py-1.5 text-left text-[12px] text-muted active:bg-black/5">
+        To: <b className="font-bold">{WARDEN_EMAIL}</b> · tap to copy
+      </button>
     </div>
   );
 }

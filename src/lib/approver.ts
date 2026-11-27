@@ -80,13 +80,9 @@ export async function approvePass(id: string, note?: string): Promise<ApproveOut
     try {
       const r = await DockIn.approveSelf({ id });
       return { ok: true, status: r.status };
-    } catch (e) {
-      // "teach" (not learned yet) or "expired" (session ended): fall through to
-      // the screen. A real network error we report.
-      const code = codeOf(e);
-      if (code !== "teach" && code !== "expired") {
-        return { ok: false, opened: false, reason: code || "network" };
-      }
+    } catch {
+      // Not learned yet, session ended, or a hiccup — never a dead end: open the
+      // sign-in / approval screen so it always works (and re-learns if needed).
     }
   }
   try {
@@ -95,11 +91,6 @@ export async function approvePass(id: string, note?: string): Promise<ApproveOut
   } catch (e) {
     return { ok: false, opened: false, reason: e instanceof Error && e.message ? e.message : "network" };
   }
-}
-
-function codeOf(e: unknown): string {
-  if (e && typeof e === "object" && "code" in e) return String((e as { code?: unknown }).code ?? "");
-  return "";
 }
 
 /** Capacitor's rejection when the installed app doesn't carry a native method. */

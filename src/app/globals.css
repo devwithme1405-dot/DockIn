@@ -1719,3 +1719,41 @@ html.lite .bot-fab::after, html.lite .ask-halo, html.lite .voice-ring { animatio
 @keyframes adm-drawer { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 html.lite .adm-top, html.lite .adm-bottom { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--card); }
 @media (prefers-reduced-motion: reduce) { .adm-enter, .adm-drawer { animation: none; } }
+
+/* ===================== Approved celebration ===================== */
+.celebrate-dim {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  background: rgb(0 0 0 / 0.28);
+  animation: fade-in .18s ease both;
+}
+.celebrate-card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 34px;
+  border-radius: 28px;
+  background: var(--card);
+  box-shadow: 0 1px 0 rgb(var(--shadow-ink) / 0.06), 0 24px 60px -24px rgb(var(--shadow-ink) / 0.6);
+  animation: celebrate-pop .5s cubic-bezier(.2,.9,.3,1.3) both;
+}
+@keyframes celebrate-pop { from { opacity: 0; transform: scale(.8) translateY(8px); } to { opacity: 1; transform: none; } }
+.celebrate-ring {
+  display: grid; place-items: center;
+  width: 84px; height: 84px; border-radius: 999px;
+  background: #209660; color: #fff;
+  box-shadow: 0 10px 24px -8px rgb(32 150 96 / 0.7);
+  animation: celebrate-ring .5s cubic-bezier(.2,.9,.3,1.5) both;
+}
+@keyframes celebrate-ring { 0% { transform: scale(.3); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+.celebrate-tick { stroke-dasharray: 26; stroke-dashoffset: 26; animation: celebrate-tick .4s .22s ease forwards; }
+@keyframes celebrate-tick { to { stroke-dashoffset: 0; } }
+.celebrate-confetti { position: absolute; top: 42px; left: 50%; width: 10px; height: 10px; border-radius: 2px; opacity: 0; }
+@keyframes celebrate-fly {
+  0% { opacity: 1; transform: translate(-50%, 0) scale(.6) rotate(0deg); }
+  100% { opacity: 0; transform: translate(var(--cx), var(--cy)) scale(1) rotate(var(--cr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-card, .celebrate-ring, .celebrate-tick, .celebrate-confetti { animation: none; }
+  .celebrate-tick { stroke-dashoffset: 0; }
+  .celebrate-confetti { display: none; }
+}
