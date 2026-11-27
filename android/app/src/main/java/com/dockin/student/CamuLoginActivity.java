@@ -106,8 +106,13 @@ public class CamuLoginActivity extends Activity {
                     + "for(var i=0;i<ks.length&&!en;i++){var v=ld[ks[i]]||p[ks[i]];var m=E.exec(String(v||'').trim());if(m)en=m[1].toUpperCase();}"
                     + "if(!en){var re=/\"([A-Za-z]{1,2}\\d{2}[A-Za-z]{2,6}\\d{2,6})(?:@[A-Za-z0-9.-]+)?\"/g,mm,seen={};"
                     + "while((mm=re.exec(cs))){seen[mm[1].toUpperCase()]=1;}var all=Object.keys(seen);if(all.length===1)en=all[0];}"
+                    // MyCamu's sign-in state carries the login's own id (loggedInId).
+                    // Read it from the signed-in user object so a pass can be made
+                    // without the student ever teaching it by hand first.
+                    + "var uid='',uk=['LoggedInId','loggedInId','UsrId','UsrID','UserId','UserID','userId','_id'];"
+                    + "for(var u=0;u<uk.length&&!uid;u++){var uv=ld[uk[u]];if(uv&&/^[a-f0-9]{24}$/.test(String(uv)))uid=String(uv);}"
                     + "return JSON.stringify({InId:p.InId,PrID:p.PrID,CrID:p.CrID,DeptID:p.DeptID,SemID:p.SemID,"
-                    + "AcYr:p.AcYr,CmProgID:p._id||p.CmProgID,StuID:p.StuID,isFE:!!p.isFE,name:n,sem:p.SemName||'',enr:en});"
+                    + "AcYr:p.AcYr,CmProgID:p._id||p.CmProgID,StuID:p.StuID,isFE:!!p.isFE,name:n,sem:p.SemName||'',enr:en,loggedInId:uid});"
                     + "}catch(e){return ''}})()";
 
     /** Empties Camu's localStorage, sessionStorage and IndexedDB for its origin. */

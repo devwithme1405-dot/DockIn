@@ -509,6 +509,25 @@ export function useAttendanceData(target: number): {
   return { data: local, camu: null, native };
 }
 
+let loginIdTried = false;
+/**
+ * Sessions that signed in before DockIn read the login id saved their ids
+ * without it, so making a pass would ask to "teach" MyCamu. Re-read the ids once,
+ * quietly (the renew rides the session already saved — no sign-in, no prompt),
+ * so day outs just work. Best-effort; if anything is off it simply does nothing.
+ */
+export async function ensureCamuLoginId(): Promise<void> {
+  if (!isNativeApp() || loginIdTried) return;
+  loginIdTried = true;
+  try {
+    const r = await DockIn.camuCanMakePass();
+    if (r.ok || r.connected === false) return;
+    await DockIn.renewCamu();
+  } catch {
+    /* best-effort */
+  }
+}
+
 export async function connectCamu(): Promise<void> {
   set(await DockIn.connectCamu());
 }

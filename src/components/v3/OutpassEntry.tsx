@@ -6,6 +6,7 @@ import { ChevronRight, DoorOpen, House, Sun } from "lucide-react";
 import { fmtTime, fromDateStr, toDateStr } from "@/lib/dates";
 import { isNativeApp } from "@/lib/native";
 import { usePreview } from "@/lib/v3/flags";
+import { ensureCamuLoginId } from "@/lib/college";
 import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
@@ -38,6 +39,7 @@ export function OutpassEntry({ className }: { className?: string }) {
   useEffect(() => {
     if (!on || !isNativeApp()) return;
     void fetchHistory().catch(() => {});
+    void ensureCamuLoginId();
   }, [on]);
 
   if (!on) return null;

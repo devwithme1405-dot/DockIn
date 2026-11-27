@@ -53,6 +53,13 @@ final class Camu {
     static void save(Context c, String cookie, JSONObject ids, String userAgent) {
         Vault.put(c, V_COOKIE, cookie);
         prefs(c).edit().putString(K_IDS, ids.toString()).putString(K_UA, userAgent).apply();
+        // The sign-in state carries the login's own id; keep it so a pass can go
+        // straight into MyCamu without the student teaching it first. A real pass
+        // still corrects it (learnLoginId) if ever needed.
+        String login = ids.optString("loggedInId", "");
+        if (!login.isEmpty() && prefs(c).getString(K_LOGIN, "").isEmpty()) {
+            prefs(c).edit().putString(K_LOGIN, login).apply();
+        }
     }
 
     static void forget(Context c) {
