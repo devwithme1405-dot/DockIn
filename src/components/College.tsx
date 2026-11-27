@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, Stamp, TriangleAlert } from "lucide-react";
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
-import { DockIn } from "@/lib/native";
+import { DockIn, isNativeApp } from "@/lib/native";
 import type { CamuState, LmsState } from "@/lib/native";
 import { approverState, connectApprover, forgetApprover, type ApproverState } from "@/lib/approver";
 import { usePreview } from "@/lib/v3/flags";
@@ -100,8 +100,21 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
   const { state, native } = useCollege();
   const { busy, run } = useBusy();
   const camu = state.camu;
-  if (!native) return null;
+  const [who, setWho] = useState<{ name: string; enrollment: string }>({ name: "", enrollment: "" });
   const on = !!camu?.connected && !camu.expired;
+
+  useEffect(() => {
+    if (!(isNativeApp() && on)) return;
+    let live = true;
+    DockIn.camuIdentity()
+      .then((id) => live && setWho({ name: id.name || "", enrollment: id.enrollment || "" }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [on, camu?.syncedAt]);
+
+  if (!native) return null;
 
   return (
     <Row
@@ -129,7 +142,29 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
           </Action>
         )
       }
-    />
+    >
+      {on && (
+        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-line pt-2.5">
+          <p className="min-w-0 truncate text-[12px] text-muted">
+            {who.enrollment || who.name ? (
+              <>
+                Signed in as <b className="font-bold text-ink">{who.name || who.enrollment}</b>
+                {who.name && who.enrollment ? ` · ${who.enrollment}` : ""}
+              </>
+            ) : (
+              "Signed into MyCamu."
+            )}
+          </p>
+          <button
+            onClick={() => run(async () => { await connectCamu(); onDone?.(); })}
+            disabled={busy}
+            className="shrink-0 rounded-full px-2.5 py-1 text-[12.5px] font-bold text-accent active:bg-accent-soft disabled:opacity-60"
+          >
+            Not you? Re-verify
+          </button>
+        </div>
+      )}
+    </Row>
   );
 }
 

@@ -2,6 +2,8 @@
 
 import { AnnouncementBar } from "@/components/AccountNotices";
 import { OutpassEntry } from "@/components/v3/OutpassEntry";
+import { usePreview } from "@/lib/v3/flags";
+import { openOutpass } from "@/lib/v3/ui";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -13,6 +15,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  DoorOpen,
   GraduationCap,
   Layers,
   Minus,
@@ -53,6 +56,7 @@ export default function TodayPage() {
   const profile = useLiveQuery(() => getProfile(), []);
   const { today, hm } = useNow();
   const [bell, setBell] = useState(false);
+  const preview = usePreview();
   const target = profile?.target ?? 75;
 
   const { data, camu, native } = useAttendanceData(target);
@@ -160,6 +164,11 @@ export default function TodayPage() {
             <p className="font-display text-[24px] font-extrabold tracking-[-0.035em]">DockIn</p>
           </div>
           <div className="flex items-center gap-2.5">
+            {preview && (
+              <PaperIconButton label="Outpass" onClick={() => openOutpass("new")}>
+                <DoorOpen size={19} strokeWidth={2.3} />
+              </PaperIconButton>
+            )}
             <PaperIconButton label="Updates" onClick={() => setBell(true)} dot={urgent}>
               <Bell size={19} strokeWidth={2.3} />
             </PaperIconButton>
