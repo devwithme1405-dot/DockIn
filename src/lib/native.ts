@@ -188,6 +188,8 @@ interface DockInPlugin {
     proofName: string;
     proofType: string;
   }): Promise<CamuSendResult>;
+  /** Preview APK: cancels one of the student's MyCamu passes and checks MyCamu shows it cancelled. */
+  camuCancel(options: { id: string }): Promise<{ cancelled: boolean; already?: boolean; code?: string }>;
   /** Preview APK: MyCamu's own list of passes and leaves (JSON). */
   camuPasses(): Promise<{ items: string }>;
   /** JSON array (as text) of the requests the Camu page sent while open in DockIn. */

@@ -528,6 +528,60 @@ public class DockInPlugin extends Plugin {
         });
     }
 
+    /**
+     * Cancels one of the student's passes in MyCamu, then reads MyCamu's list
+     * to be sure it now shows cancelled. Only a pass in this student's own list
+     * can be cancelled. Resolves {cancelled, code?}.
+     */
+    @PluginMethod
+    public void camuCancel(final PluginCall call) {
+        final Context c = getContext();
+        final String id = call.getString("id", "");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                JSObject out = new JSObject();
+                try {
+                    JSONObject p = Camu.byId(Camu.passes(c), id);
+                    if (p == null) throw new IllegalArgumentException("That pass isn't in your MyCamu list.");
+                    if (Camu.isCancelled(p)) {
+                        out.put("cancelled", true);
+                        out.put("already", true);
+                        call.resolve(out);
+                        return;
+                    }
+                    String code = "";
+                    Exception sendFailed = null;
+                    try {
+                        code = Camu.cancelPass(c, id);
+                    } catch (IOException e) {
+                        sendFailed = e;
+                    }
+                    boolean done = false;
+                    for (int i = 0; i < 4 && !done; i++) {
+                        if (i > 0) Thread.sleep(1000);
+                        try {
+                            JSONObject now = Camu.byId(Camu.passes(c), id);
+                            done = now == null || Camu.isCancelled(now);
+                        } catch (IOException e) {
+                            if (i == 3 && sendFailed == null) sendFailed = e;
+                        }
+                    }
+                    if (!done && sendFailed != null) throw sendFailed;
+                    out.put("cancelled", done);
+                    if (!code.isEmpty()) out.put("code", code);
+                    call.resolve(out);
+                } catch (Camu.Expired e) {
+                    call.reject("MyCamu sign-in has ended.", "expired");
+                } catch (IllegalArgumentException e) {
+                    call.reject(e.getMessage(), "invalid");
+                } catch (Exception e) {
+                    call.reject("Couldn't reach MyCamu.", "network");
+                }
+            }
+        }, "dockin-camu-cancel").start();
+    }
+
     /** MyCamu's own list of the student's passes (to bring statuses up to date). */
     @PluginMethod
     public void camuPasses(final PluginCall call) {

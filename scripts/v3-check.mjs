@@ -100,6 +100,14 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
         sentDayOuts: [],
         camuList: direct
           ? [
+              (() => {
+                const d = (n) => {
+                  const x = new Date();
+                  x.setDate(x.getDate() + n);
+                  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+                };
+                return { _id: "6b091aa9d7ae0a838b050ed3", lvId: "lv-block", frdt: `${d(2)}T06:00:00.000Z`, todt: `${d(4)}T19:00:00.000Z`, rson: "Home", prntAp: "SUB", status: "SUB", passTyCode: "LEAVE_OUT_PASS", passTyNme: "Leave Out Pass" };
+              })(),
               { _id: "old-1", lvId: "lv-old", frdt: "2026-11-25T18:32:00.000Z", todt: "2026-11-25T19:00:00.000Z", rson: "Outing", prntAp: "APPRVD", status: "CMPT", isCOut: true, cOutDt: "2026-11-25T13:02:44.000Z", isCIn: true, cInDt: "2026-11-25T15:23:35.000Z", passTyCode: "DOP", passTyNme: "Day Out Pass", prntName: "MAHESH" },
               { Rson: "Outing", _id: "twin", LvTy: "Leave", start: "2026-11-25T00:00:00.000Z", end: "2026-11-25T00:00:00.000Z", Stus: "Submitted", refId: "lv-old" },
             ]
@@ -153,6 +161,13 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
           const rec = { _id: `leave-${phone.sentLeaves.length}`, lvId: `lvl-${phone.sentLeaves.length}`, passTyCode: "LEAVE_OUT_PASS", passTyNme: "Leave Out Pass", frdt: `${o.fromDate}T${o.fromTime}:00.000Z`, todt: `${o.toDate}T${o.toTime}:00.000Z`, rson: o.reason, atcmnt: [{ atchNm: o.proofName }], prntAp: "SUB", status: "SUB" };
           phone.camuList.unshift(rec);
           return { made: true, record: JSON.stringify(rec) };
+        },
+        camuCancel: (o) => {
+          const p = phone.camuList.find((x) => x._id === o.id);
+          if (!p) throw Object.assign(new Error("That pass isn't in your MyCamu list."), { code: "invalid" });
+          p.status = "CNCL";
+          phone.cancelled = (phone.cancelled ?? []).concat(o.id);
+          return { cancelled: true, code: "CNCL" };
         },
         camuPasses: () => ({ items: JSON.stringify(phone.camuList) }),
         listen: (o) => {
@@ -369,9 +384,28 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await page.screenshot({ path: `${SHOTS}/op-sent.png` });
   });
 
+  await step("a pass that would clash shows the MyCamu pass in the way, cancellable right there", async () => {
+    await pass(page).getByRole("button", { name: "New pass" }).last().click();
+    await line(page, "parso 4 baje market");
+    await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
+    const review = page.getByRole("dialog", { name: "Send this to MyCamu?" });
+    const clash = review.getByRole("alert", { name: "Clashes in MyCamu" });
+    await clash.getByText("This pass in MyCamu overlaps it:").waitFor({ timeout: 4000 });
+    await clash.getByText("Leave Out Pass").waitFor();
+    if (!(await review.getByRole("button", { name: "Cancel the clash first" }).isDisabled())) throw new Error("could send over a clash");
+    await page.screenshot({ path: `${SHOTS}/op-clash.png` });
+    await clash.getByRole("button", { name: "Cancel this pass" }).click();
+    await clash.getByRole("button", { name: "Yes, cancel" }).click();
+    await review.getByRole("button", { name: "Yes, send it" }).waitFor({ timeout: 5000 });
+    const st = await phoneState(page);
+    if (st.cancelled?.at(-1) !== "6b091aa9d7ae0a838b050ed3") throw new Error("didn't cancel the right pass");
+    await review.getByRole("button", { name: "Yes, send it" }).click();
+    await pass(page).getByText("Sent to MyCamu").waitFor({ timeout: 5000 });
+  });
+
   await step("MyCamu's refusal is shown in words, nothing saved", async () => {
     await pass(page).getByRole("button", { name: "New pass" }).last().click();
-    await line(page, "kal 3 baje bank");
+    await line(page, "kal subah 8 se 11 bank");
     await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
     await page.getByRole("dialog", { name: "Send this to MyCamu?" }).getByRole("button", { name: "Yes, send it" }).click();
     await pass(page).getByRole("alert").getByText(/overlaps this time/).waitFor({ timeout: 3000 });
@@ -381,7 +415,10 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
 
   await step("a leave with its screenshot goes straight in too, and is checked", async () => {
     await pass(page).getByRole("button", { name: "Make the pass" }).or(pass(page).getByRole("button", { name: "Submit to MyCamu" })).first().waitFor();
-    await line(page, "kal se 3 din ghar");
+    const nm = new Date();
+    nm.setMonth(nm.getMonth() + 1);
+    const mon = nm.toLocaleString("en", { month: "short" }).toLowerCase();
+    await line(page, `20 ${mon} se 22 ${mon} ghar`);
     if (await pass(page).getByRole("button", { name: "Submit to MyCamu" }).count()) throw new Error("leave without screenshot offered straight send");
     const chooser = page.waitForEvent("filechooser");
     await pass(page).getByRole("button", { name: /Attach the screenshot/ }).click();
@@ -406,7 +443,11 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).getByText("Approved").first().waitFor({ timeout: 3000 });
     await pass(page).getByText("Back in").first().waitFor({ timeout: 3000 });
     await pass(page).getByText(/Out 6:32 pm/i).first().waitFor({ timeout: 3000 });
-    if ((await pass(page).getByText("Day Out Pass").count()) !== 2) throw new Error("twin leave shown, or pass missing");
+    await pass(page).getByRole("group", { name: "Status" }).getByRole("button", { name: /Cancelled/ }).click();
+    if ((await pass(page).locator(".pass-ticket").count()) !== 1) throw new Error("cancelled filter");
+    await pass(page).getByText("Leave Out Pass").first().waitFor();
+    await page.screenshot({ path: `${SHOTS}/op-filter.png` });
+    await pass(page).getByRole("group", { name: "Status" }).getByRole("button", { name: "Any status" }).click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${SHOTS}/op-camu-history.png` });
     await pass(page).getByText("Back in").first().click();

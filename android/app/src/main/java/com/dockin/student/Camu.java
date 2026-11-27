@@ -382,6 +382,36 @@ final class Camu {
         return data(c, "/api/Leave/crtLv", leaveBody(id, login, fromDay, from, toDay, to, reason, fileName, attId, atchId));
     }
 
+    private static final java.util.regex.Pattern OBJECT_ID = java.util.regex.Pattern.compile("[a-f0-9]{24}");
+
+    /**
+     * Cancels a pass the way MyCamu's own button does (captured 27 Nov 2026):
+     * GET /api/gatepasses/cancelstatus/{the pass's _id}. Returns MyCamu's code
+     * ("CNCL" when it took it).
+     */
+    static String cancelPass(Context c, String passId) throws IOException, Expired, JSONException {
+        if (passId == null || !OBJECT_ID.matcher(passId).matches()) throw new IllegalArgumentException("That pass can't be cancelled from here.");
+        need(c);
+        JSONObject out = output(Net.get(BASE + "/api/gatepasses/cancelstatus/" + passId, headers(c)));
+        JSONObject d = out.optJSONObject("data");
+        return d == null ? "" : d.optString("code", "");
+    }
+
+    /** A pass from MyCamu's list by its id, or null. */
+    static JSONObject byId(JSONArray list, String passId) {
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject p = list.optJSONObject(i);
+            if (p != null && passId.equals(p.optString("_id", ""))) return p;
+        }
+        return null;
+    }
+
+    /** Has MyCamu marked this pass cancelled? */
+    static boolean isCancelled(JSONObject p) {
+        String st = (p.optString("status", "") + " " + p.optString("prntAp", "") + " " + p.optString("stfAp", "") + " " + p.optString("Stus", "")).toUpperCase();
+        return st.contains("CNCL") || st.contains("CANC");
+    }
+
     /** The student's passes and leaves, as MyCamu's leave page lists them. */
     static JSONArray passes(Context c) throws IOException, Expired, JSONException {
         JSONObject id = need(c);

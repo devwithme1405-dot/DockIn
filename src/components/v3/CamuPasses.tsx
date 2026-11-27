@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, LogIn, LogOut, RefreshCw, ShieldAlert, Sun, UserCheck, XCircle } from "lucide-react";
-import { DockIn, isNativeApp } from "@/lib/native";
+import { DockIn } from "@/lib/native";
 import { fmtTime, fromDateStr } from "@/lib/dates";
 import type { PassDraft } from "@/lib/outpass";
-import { fetchHistory, findInHistory, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
+import { cancelInCamu, cancellable, fetchHistory, findInHistory, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
 import { v3db, type PassRecord } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
-import { Sheet, cx } from "../ui";
+import { Sheet, cx, useToast } from "../ui";
 
 const day = (s: string) => (s ? fromDateStr(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
 const clock = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "");
@@ -118,23 +118,7 @@ export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () 
             <Steps c={c} big />
           </div>
           {c.files > 0 && <p className="text-[12.5px] text-muted">{c.files === 1 ? "1 file attached in MyCamu" : `${c.files} files attached in MyCamu`}</p>}
-          {cancellable(c) && isNativeApp() && (
-            <div className="rounded-2xl border border-danger/40 bg-danger-soft/40 p-3">
-              <button
-                type="button"
-                onClick={() =>
-                  void DockIn.openCamu({
-                    path: "/v2/leaveManagement",
-                    note: `Cancel: ${c.type} · ${day(c.fromDate)} ${c.fromTime ? fmtTime(c.fromTime) : ""} — tap it below and cancel. DockIn notes how, to do it itself next time.`,
-                  })
-                }
-                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-danger text-[14px] font-bold text-white"
-              >
-                <Ban size={16} /> Cancel this pass
-              </button>
-              <p className="mt-1.5 text-center text-[11.5px] text-muted">Opens MyCamu on your passes — cancel it there.</p>
-            </div>
-          )}
+          {cancellable(c) && <CancelPass c={c} onDone={onClose} />}
           {(c.kind === "dayout" || c.kind === "leave") && (
             <button
               type="button"
@@ -231,11 +215,81 @@ export function VerifyCard({ p }: { p: PassRecord }) {
   );
 }
 
-/** Still ahead and not yet used at the gate: MyCamu lets it be cancelled. */
-function cancellable(c: CamuPass): boolean {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return (c.state === "applied" || c.state === "approved") && !c.outAt && c.toDate >= today && c.kind !== "other";
+/**
+ * Cancel in MyCamu from DockIn: one tap to ask, one to confirm, then MyCamu's
+ * list is read to be sure it took.
+ */
+export function CancelPass({ c, onDone, compact }: { c: CamuPass; onDone?: () => void; compact?: boolean }) {
+  const toast = useToast();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<{ message: string; open?: boolean } | null>(null);
+
+  async function go() {
+    setBusy(true);
+    setErr(null);
+    const r = await cancelInCamu(c.id);
+    if (r.ok) {
+      await fetchHistory().catch(() => []);
+      // DockIn's own copy of it follows.
+      const mine = await v3db.passes.filter((p) => p.camuId === c.id).toArray();
+      for (const p of mine) await v3db.passes.update(p.id, { status: "cancelled", updatedAt: Date.now() });
+      toast.show(`${c.type} cancelled in MyCamu`);
+      setBusy(false);
+      setAsk(false);
+      onDone?.();
+      return;
+    }
+    setErr(r);
+    setBusy(false);
+  }
+
+  if (!ask) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAsk(true)}
+        className={cx(
+          "inline-flex items-center justify-center gap-1.5 rounded-xl font-bold",
+          compact ? "h-9 px-3 text-[12.5px] text-danger" : "h-11 w-full bg-danger text-[14px] text-white",
+        )}
+      >
+        <Ban size={compact ? 14 : 16} /> Cancel this pass
+      </button>
+    );
+  }
+  return (
+    <div className="anim-pop rounded-2xl border border-danger/40 bg-danger-soft/50 p-3">
+      <p className="text-[13.5px] font-bold">
+        Cancel {c.type} · {day(c.fromDate)}
+        {c.fromTime ? ` ${fmtTime(c.fromTime)}` : ""} in MyCamu?
+      </p>
+      <p className="mt-0.5 text-[12px] text-muted">This can&apos;t be undone — you&apos;d have to apply again.</p>
+      {err && (
+        <p className="mt-1.5 text-[12.5px] font-semibold text-danger">
+          {err.message}{" "}
+          {err.open && (
+            <button type="button" className="underline" onClick={() => void DockIn.openCamu({ path: "/v2/leaveManagement", note: `Cancel: ${c.type} · ${day(c.fromDate)}` })}>
+              Open MyCamu
+            </button>
+          )}
+        </p>
+      )}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button type="button" disabled={busy} onClick={() => setAsk(false)} className="btn-paper h-10 rounded-xl text-[13px]">
+          Keep it
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void go()}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-danger text-[13px] font-bold text-white"
+        >
+          {busy ? <RefreshCw size={14} className="animate-spin" /> : <Ban size={14} />} Yes, cancel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /** Does this pass DockIn holds appear in MyCamu's list? */

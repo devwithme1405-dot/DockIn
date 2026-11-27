@@ -55,6 +55,8 @@ import {
   type DirectState,
   parentText,
   cachedHistory,
+  cancellable,
+  clashes,
   fetchHistory,
   refreshFromCamu,
   sendable,
@@ -72,7 +74,7 @@ import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Segmented } from "../Paper";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
-import { CamuPassSheet, CamuTicket, inCamu, VerifyCard } from "./CamuPasses";
+import { CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
 
@@ -198,6 +200,8 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const [refusal, setRefusal] = useState<string | null>(null);
   /** The one-look summary before a pass goes into MyCamu. */
   const [review, setReview] = useState(false);
+  /** MyCamu passes that overlap this one (null: still checking). */
+  const [blockers, setBlockers] = useState<CamuPass[] | null>(null);
   /** This phone can send a day out to MyCamu itself. */
   const [direct, setDirect] = useState<DirectState | null>(null);
   const pick = useRef<HTMLInputElement>(null);
@@ -263,6 +267,14 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
 
   const straight = direct === "ready" && sendable(d, proof);
 
+  /** Reads MyCamu and finds the live passes this one would collide with. */
+  function checkClashes(p: PassDraft = d) {
+    setBlockers(null);
+    fetchHistory()
+      .then((list) => setBlockers(clashes(p, list)))
+      .catch(() => setBlockers([]));
+  }
+
   /** Times with both AM and PM possible, still not tapped. */
   const unanswered = reading?.asks.filter((a) => a.must) ?? [];
 
@@ -277,6 +289,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
     // Straight into MyCamu: one look at the whole pass first.
     if (toCamu && straight) {
       setReview(true);
+      checkClashes();
       return;
     }
     setBusy(true);
@@ -302,6 +315,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
       const r = await sendPass(clean, proof);
       if (r.kind === "refused") {
         setRefusal(r.message);
+        checkClashes(clean);
         return;
       }
       if (r.kind === "made") {
@@ -711,13 +725,19 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
               </p>
             )}
           </div>
+          <Clashes blockers={blockers} onChange={() => checkClashes()} />
           <p className="text-center text-[12.5px] text-muted">DockIn sends it, then reads it back from MyCamu to check every field.</p>
           <div className="grid grid-cols-[1fr_1.6fr] gap-2">
             <button type="button" onClick={() => setReview(false)} className="btn-paper h-12 rounded-2xl text-[14.5px] font-bold">
               Change
             </button>
-            <button type="button" onClick={() => void send()} className="btn-leather inline-flex h-12 items-center justify-center gap-2 rounded-2xl text-[15px]">
-              <Send size={17} /> Yes, send it
+            <button
+              type="button"
+              disabled={!!blockers?.length}
+              onClick={() => void send()}
+              className="btn-leather inline-flex h-12 items-center justify-center gap-2 rounded-2xl text-[15px] disabled:opacity-50"
+            >
+              <Send size={17} /> {blockers?.length ? "Cancel the clash first" : "Yes, send it"}
             </button>
           </div>
         </div>
@@ -731,6 +751,11 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
             <XCircle size={16} /> MyCamu didn&apos;t take it
           </p>
           <p className="mt-1 text-[13px]">{refusal}</p>
+          {!!blockers?.length && (
+            <div className="mt-2">
+              <Clashes blockers={blockers} onChange={() => checkClashes()} />
+            </div>
+          )}
           <button
             type="button"
             onClick={() => void sendToCamu({ ...d, reason: d.reason.trim() })}
@@ -852,6 +877,36 @@ function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void
   );
 }
 
+/** "This one is in the way" — the overlapping MyCamu passes, each cancellable right here. */
+function Clashes({ blockers, onChange }: { blockers: CamuPass[] | null; onChange: () => void }) {
+  if (blockers === null) {
+    return (
+      <p className="flex items-center justify-center gap-1.5 text-[12.5px] text-muted">
+        <RefreshCw size={13} className="animate-spin" /> Checking MyCamu for clashes…
+      </p>
+    );
+  }
+  if (!blockers.length) return null;
+  return (
+    <div className="anim-pop space-y-2 rounded-2xl border-[1.5px] border-warn/60 bg-warn-soft/50 p-3 text-left" role="alert" aria-label="Clashes in MyCamu">
+      <p className="text-[13.5px] font-extrabold">
+        {blockers.length === 1 ? "This pass in MyCamu overlaps it:" : `These ${blockers.length} passes in MyCamu overlap it:`}
+      </p>
+      <p className="-mt-1 text-[12px] text-muted">MyCamu won&apos;t take a new one over it. Cancel it here, or pick another time.</p>
+      {blockers.map((c) => (
+        <div key={c.id} className="space-y-1.5">
+          <CamuTicket c={c} />
+          {cancellable(c) ? (
+            <CancelPass c={c} onDone={onChange} />
+          ) : (
+            <p className="text-[12px] font-semibold text-muted">This one can&apos;t be cancelled from DockIn (already in use).</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Step({ n, title, done, delay, children }: { n: number; title: string; done?: boolean; delay: number; children: React.ReactNode }) {
   return (
     <li className="ask-in flex gap-3 rounded-2xl border border-line bg-surface p-3" style={{ animationDelay: `${delay}ms` }}>
@@ -919,6 +974,7 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   const [openId, setOpenId] = useState<string | null>(focus);
   const [openCamu, setOpenCamu] = useState<CamuPass | null>(null);
   const [filter, setFilter] = useState<"all" | PassKind>("all");
+  const [status, setStatus] = useState<StatusGroup | "all">("all");
   /** MyCamu's own list: shown from the last read at once, then refreshed. */
   const [camu, setCamu] = useState<{ at: number; items: CamuPass[] } | null>(() => cachedHistory());
   const native = isNativeApp();
@@ -970,9 +1026,11 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   if (!passes) return null;
   const fromCamu = camu?.items ?? null;
   const pick = <T extends { kind: string }>(xs: T[]) => (filter === "all" ? xs : xs.filter((x) => x.kind === filter));
+  const byStatus = <T,>(xs: T[], group: (x: T) => StatusGroup) => (status === "all" ? xs : xs.filter((x) => group(x) === status));
 
   // Passes only DockIn knows about (saved, or not found in MyCamu).
-  const onlyHere = pick(fromCamu ? passes.filter((p) => !inCamu(p, fromCamu)) : passes);
+  const onlyHereAll = pick(fromCamu ? passes.filter((p) => !inCamu(p, fromCamu)) : passes);
+  const onlyHere = byStatus(onlyHereAll, localGroup);
   const current = passes.find((p) => p.id === openId) ?? null;
 
   if (!passes.length && !fromCamu?.length) {
@@ -995,7 +1053,12 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   const counted = fromCamu
     ? fromCamu.filter((c) => c.fromDate.slice(0, 7) === month && c.state !== "cancelled" && c.kind !== "other")
     : passes.filter((p) => p.fromDate.slice(0, 7) === month && p.status !== "cancelled");
-  const camuShown = fromCamu ? pick(fromCamu) : [];
+  const camuKind = fromCamu ? pick(fromCamu) : [];
+  const camuShown = byStatus(camuKind, camuGroup);
+  // How many of each, for the status chips (only the ones that exist).
+  const groupCount = new Map<StatusGroup, number>();
+  for (const c of camuKind) groupCount.set(camuGroup(c), (groupCount.get(camuGroup(c)) ?? 0) + 1);
+  for (const p of onlyHereAll) groupCount.set(localGroup(p), (groupCount.get(localGroup(p)) ?? 0) + 1);
   const camuLive = camuShown.filter((c) => c.toDate >= today && c.state !== "cancelled" && c.state !== "rejected" && c.state !== "back");
   const camuPast = camuShown.filter((c) => !camuLive.includes(c));
   const localLive = onlyHere.filter((p) => p.toDate >= today && p.status !== "cancelled" && p.status !== "rejected");
@@ -1037,6 +1100,26 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
           </button>
         )}
       </div>
+
+      {groupCount.size > 1 && (
+        <div className="-mt-2 flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="Status">
+          {(["all", ...GROUPS.filter((g) => groupCount.has(g))] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setStatus(g)}
+              aria-pressed={status === g}
+              className={cx(
+                "lip-sm inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] transition",
+                status === g ? "btn-leather" : "btn-paper",
+              )}
+            >
+              {g === "all" ? "Any status" : GROUP_LABEL[g]}
+              {g !== "all" && <span className="tnum opacity-70">{groupCount.get(g)}</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       {fromCamu && (
         <p className="-mt-2 px-1 text-[11.5px] text-muted">
@@ -1096,6 +1179,22 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
     </div>
   );
 }
+
+/** History's status groups, in the order the chips show. */
+type StatusGroup = "submitted" | "approved" | "used" | "cancelled" | "rejected" | "notsent";
+const GROUPS: StatusGroup[] = ["submitted", "approved", "used", "cancelled", "rejected", "notsent"];
+const GROUP_LABEL: Record<StatusGroup, string> = {
+  submitted: "Submitted",
+  approved: "Approved",
+  used: "Used",
+  cancelled: "Cancelled",
+  rejected: "Rejected",
+  notsent: "Not sent",
+};
+const camuGroup = (c: CamuPass): StatusGroup =>
+  c.state === "applied" ? "submitted" : c.state === "out" || c.state === "back" ? "used" : c.state;
+const localGroup = (p: PassRecord): StatusGroup =>
+  p.status === "saved" ? "notsent" : p.status === "applied" ? "submitted" : p.status;
 
 function Count({ label, value }: { label: string; value: number }) {
   return (

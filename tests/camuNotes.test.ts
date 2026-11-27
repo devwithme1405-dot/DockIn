@@ -74,3 +74,40 @@ describe("MyCamu's pass list", () => {
     expect(verifyPass({ kind: "dayout", leaveType: "Leave", fromDate: "2026-11-27", fromTime: "08:00", toDate: "2026-11-27", toTime: "19:00", reason: "x" }, null).every((c) => !c.ok)).toBe(true);
   });
 });
+
+import { cancellable, clashes, type CamuPass } from "@/lib/v3/pass";
+
+const cp = (o: Partial<CamuPass>): CamuPass => ({
+  id: "x", kind: "dayout", type: "Day Out Pass", fromDate: "2026-11-28", fromTime: "15:00", toDate: "2026-11-28", toTime: "19:00",
+  reason: "", state: "applied", parent: "pending", files: 0, ...o,
+});
+const AT = new Date(2026, 10, 27, 10, 0);
+
+describe("which MyCamu pass is in the way", () => {
+  const leave = cp({ id: "L", kind: "leave", type: "Leave Out Pass", fromDate: "2026-11-27", fromTime: "06:00", toDate: "2026-12-03", toTime: "19:00" });
+  const dayout = cp({ id: "D" });
+  const draft = (o: Partial<{ fromDate: string; fromTime: string; toDate: string; toTime: string; kind: "dayout" | "leave" }>) => ({
+    kind: "dayout" as const, leaveType: "Leave" as const, reason: "x", fromDate: "2026-12-01", fromTime: "15:00", toDate: "2026-12-01", toTime: "19:00", ...o,
+  });
+
+  it("a leave blocks a day out inside it, not after it", () => {
+    expect(clashes(draft({}), [leave], AT).map((c) => c.id)).toEqual(["L"]);
+    expect(clashes(draft({ fromDate: "2026-12-04", toDate: "2026-12-04" }), [leave], AT)).toEqual([]);
+  });
+
+  it("a 3–7 pm day out blocks a leave from 5 pm, not one from 7 pm", () => {
+    expect(clashes(draft({ kind: "leave", fromDate: "2026-11-28", fromTime: "17:00", toDate: "2026-11-30" }), [dayout], AT).map((c) => c.id)).toEqual(["D"]);
+    expect(clashes(draft({ kind: "leave", fromDate: "2026-11-28", fromTime: "19:00", toDate: "2026-11-30" }), [dayout], AT)).toEqual([]);
+  });
+
+  it("cancelled, rejected, finished and past passes don't block", () => {
+    for (const state of ["cancelled", "rejected", "back"] as const) expect(clashes(draft({}), [{ ...leave, state }], AT)).toEqual([]);
+    expect(clashes(draft({ fromDate: "2026-11-27", toDate: "2026-11-27" }), [cp({ fromDate: "2026-11-26", toDate: "2026-11-26" })], AT)).toEqual([]);
+  });
+
+  it("only passes not yet used can be cancelled", () => {
+    expect(cancellable(dayout, AT)).toBe(true);
+    expect(cancellable({ ...dayout, outAt: "2026-11-28T10:00:00Z", state: "out" }, AT)).toBe(false);
+    expect(cancellable({ ...dayout, state: "cancelled" }, AT)).toBe(false);
+  });
+});

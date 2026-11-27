@@ -1,7 +1,7 @@
 "use client";
 
 import { DockIn, isNativeApp } from "../native";
-import { fmtTime, fromDateStr } from "../dates";
+import { fmtTime, fromDateStr, toDateStr } from "../dates";
 import { needsProof, passSummary, type PassDraft } from "../outpass";
 import { whatsappUrl } from "../money";
 import { v3db, type PassStatus } from "./store";
@@ -343,6 +343,49 @@ export async function fetchHistory(): Promise<CamuPass[]> {
     /* private mode: fine */
   }
   return items;
+}
+
+// ------------------------------------------------------------ clashes & cancelling
+
+/** Still counts in MyCamu (not cancelled, rejected or finished). */
+const live = (c: CamuPass) => c.state === "applied" || c.state === "approved" || c.state === "out";
+const startOf = (c: { fromDate: string; fromTime: string }) => `${c.fromDate}T${c.fromTime || "00:00"}`;
+const endOf = (c: { toDate: string; toTime: string }) => `${c.toDate}T${c.toTime || "23:59"}`;
+
+/**
+ * The MyCamu passes that stop this one: any live pass whose time overlaps it
+ * (a leave 27 Nov–3 Dec blocks a day out on 1 Dec; a day out 3–7 pm blocks a
+ * leave from 5 pm). MyCamu refuses the new one until those are cancelled.
+ */
+export function clashes(p: PassDraft, list: CamuPass[], now: Date = new Date()): CamuPass[] {
+  const s = startOf(p);
+  const e = endOf(p);
+  const nowWall = `${toDateStr(now)}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return list.filter((c) => live(c) && c.kind !== "other" && endOf(c) > nowWall && startOf(c) < e && s < endOf(c));
+}
+
+/** Can DockIn cancel this MyCamu pass (still ahead, not used at the gate)? */
+export function cancellable(c: CamuPass, now: Date = new Date()): boolean {
+  return (c.state === "applied" || c.state === "approved") && !c.outAt && c.toDate >= toDateStr(now) && c.kind !== "other";
+}
+
+/**
+ * Cancels a pass in MyCamu the way MyCamu's button does, and checks MyCamu
+ * shows it cancelled. "open" means this phone can't (older app): cancel in MyCamu.
+ */
+export async function cancelInCamu(id: string): Promise<{ ok: true } | { ok: false; message: string; open?: boolean }> {
+  if (!isNativeApp()) return { ok: false, message: "Cancel it in MyCamu.", open: true };
+  try {
+    const r = await DockIn.camuCancel({ id });
+    if (r.cancelled || r.code === "CNCL") return { ok: true };
+    return { ok: false, message: `MyCamu didn't cancel it${r.code ? ` (${r.code.toLowerCase()})` : ""}. Try in MyCamu.`, open: true };
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "invalid") return { ok: false, message: (e as Error).message };
+    if (code === "expired") return { ok: false, message: "MyCamu sign-in has ended — open MyCamu to sign in.", open: true };
+    if (code === "network") return { ok: false, message: "Couldn't reach MyCamu. Try again in a moment." };
+    return { ok: false, message: "This app can't cancel yet — cancel it in MyCamu.", open: true };
+  }
 }
 
 // ------------------------------------------------------------ verification

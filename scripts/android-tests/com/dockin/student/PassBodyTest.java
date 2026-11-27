@@ -103,6 +103,18 @@ public class PassBodyTest {
                 .put(new JSONObject().put("_id", "lo").put("passTyCode", "LEAVE_OUT_PASS").put("frdt", "2026-12-03T14:00:00.000Z").put("todt", "2026-12-11T19:00:00.000Z").put("status", "SUB"));
         JSONObject lf = Camu.findLeaveOut(ll, "2026-12-03", "14:00", "2026-12-11", "19:00");
         eq("finds the leave", "lo", lf == null ? null : lf.optString("_id"));
+        org.json.JSONArray cl = new org.json.JSONArray()
+                .put(new JSONObject().put("_id", "6b091aa9d7ae0a838b050ed3").put("status", "CNCL"))
+                .put(new JSONObject().put("_id", "6b091aa9d7ae0a838b050ed4").put("status", "SUB"));
+        eq("cancelled found", true, Camu.isCancelled(Camu.byId(cl, "6b091aa9d7ae0a838b050ed3")));
+        eq("submitted not cancelled", false, Camu.isCancelled(Camu.byId(cl, "6b091aa9d7ae0a838b050ed4")));
+        try {
+            Camu.cancelPass(null, "../../api/x");
+            fails++;
+            System.out.println("FAIL a made-up id was accepted for cancelling");
+        } catch (IllegalArgumentException e) {
+            // right: only a MyCamu id
+        }
         System.out.println(fails == 0 ? "Day Out and Leave Out bodies match MyCamu's form." : fails + " problem(s)");
         System.exit(fails == 0 ? 0 : 1);
     }
