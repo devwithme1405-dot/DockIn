@@ -107,7 +107,7 @@ export async function shareText(text: string, title = "Share"): Promise<void> {
 
 /** What happened when DockIn sent a Day Out to MyCamu itself. */
 export type SendResult =
-  | { kind: "made"; camuId?: string; status: "applied" | "approved" }
+  | { kind: "made"; camuId?: string; status: "applied" | "approved"; record: CamuPass | null; already: boolean }
   /** MyCamu said no, in its own words: show it, don't save. */
   | { kind: "refused"; message: string }
   /** DockIn can't send it itself (old APK, not taught, signed out, offline): open MyCamu instead. */
@@ -115,7 +115,7 @@ export type SendResult =
 
 /** MyCamu's answer codes, in plain words. */
 const CODES: Record<string, string> = {
-  DUP_GATEPASS_EXISTS: "MyCamu already has a pass for this time. Cancel that one in MyCamu first, or pick another time.",
+  DUP_GATEPASS_EXISTS: "MyCamu has another pass or leave that overlaps this time. Cancel that one in MyCamu first, or pick another time.",
   LEAVE_MISSING_ON_WORKING_DAY: "MyCamu says this is a working day and wants a leave for it before a day out.",
 };
 
@@ -171,14 +171,20 @@ export async function sendDayOut(p: PassDraft): Promise<SendResult> {
   try {
     const r = await DockIn.camuDayOut({ date: p.fromDate, from: p.fromTime, to: p.toTime, reason: p.reason });
     if (r.made) {
-      let rec: Record<string, unknown> = {};
+      let raw: Record<string, unknown> = {};
       try {
-        rec = JSON.parse(r.record ?? "{}");
+        raw = JSON.parse(r.record ?? "{}");
       } catch {
         /* the pass is there either way */
       }
-      const st = statusOf(rec);
-      return { kind: "made", camuId: typeof rec._id === "string" ? rec._id : undefined, status: st === "approved" ? "approved" : "applied" };
+      const st = statusOf(raw);
+      return {
+        kind: "made",
+        camuId: typeof raw._id === "string" ? raw._id : undefined,
+        status: st === "approved" ? "approved" : "applied",
+        record: camuPassOf(raw),
+        already: !!(r as { already?: boolean }).already,
+      };
     }
     if (r.code === "NOT_IN_LIST") return { kind: "open", why: "unsure" };
     return { kind: "refused", message: codeWords(r.code ?? "UNKNOWN") };
@@ -207,6 +213,146 @@ export async function refreshFromCamu(passes: { id: string; camuId?: string; sta
     }
   }
   return changed;
+}
+
+
+// ------------------------------------------------------------ MyCamu's own list
+
+/** One pass (or leave) as MyCamu lists it, in DockIn's words. */
+export interface CamuPass {
+  id: string;
+  kind: "dayout" | "leave" | "other";
+  /** MyCamu's name for it: "Day Out Pass", "Leave Out Pass", "Leave"… */
+  type: string;
+  fromDate: string;
+  fromTime: string;
+  toDate: string;
+  toTime: string;
+  reason: string;
+  state: "applied" | "approved" | "rejected" | "cancelled" | "out" | "back";
+  /** Parent approval. */
+  parent: "pending" | "approved" | "rejected";
+  parentName?: string;
+  /** Real times (ISO), when known. */
+  appliedAt?: string;
+  parentAt?: string;
+  outAt?: string;
+  inAt?: string;
+  files: number;
+}
+
+const up = (x: unknown) => String(x ?? "").toUpperCase();
+/** MyCamu writes pass times as Indian wall-clock with a "Z": read them as written. */
+const wallDate = (x: unknown) => String(x ?? "").slice(0, 10);
+const wallTime = (x: unknown) => String(x ?? "").slice(11, 16);
+
+export function camuPassOf(r: Record<string, unknown>): CamuPass | null {
+  if (typeof r._id !== "string") return null;
+  const gate = typeof r.frdt === "string";
+  const code = up(r.passTyCode);
+  const name = String(r.passTyNme ?? r.LvTy ?? "Pass");
+  const parentRaw = up(r.prntAp);
+  const parent: CamuPass["parent"] = parentRaw.includes("REJ") ? "rejected" : parentRaw === "APPRVD" ? "approved" : "pending";
+  const all = [up(r.status), up(r.stfAp), parentRaw, up(r.Stus)].join(" ");
+  let state: CamuPass["state"] = "applied";
+  if (all.includes("REJ")) state = "rejected";
+  else if (all.includes("CANC") || all.includes("CNCL")) state = "cancelled";
+  else if (r.isCIn === true || up(r.status) === "CMPT") state = "back";
+  else if (r.isCOut === true) state = "out";
+  else if (parent === "approved" || up(r.Stus).includes("APPROV")) state = "approved";
+  const att = Array.isArray(r.atcmnt) ? r.atcmnt.length : Array.isArray(r.Attachments) ? r.Attachments.length : 0;
+  return {
+    id: r._id,
+    kind: code === "DOP" ? "dayout" : code.includes("LEAVE") || /leave/i.test(name) ? "leave" : "other",
+    type: name,
+    fromDate: gate ? wallDate(r.frdt) : wallDate(r.start),
+    fromTime: gate ? wallTime(r.frdt) : "",
+    toDate: gate ? wallDate(r.todt) : wallDate(r.end),
+    toTime: gate ? wallTime(r.todt) : "",
+    reason: String(r.rson ?? r.Rson ?? "").trim(),
+    state,
+    parent,
+    parentName: typeof r.prntName === "string" && r.prntName ? r.prntName : undefined,
+    appliedAt: typeof r.CrAt === "string" ? r.CrAt : undefined,
+    parentAt: typeof r.prntApAt === "string" ? r.prntApAt : undefined,
+    outAt: typeof r.cOutDt === "string" ? r.cOutDt : undefined,
+    inAt: typeof r.cInDt === "string" ? r.cInDt : undefined,
+    files: att,
+  };
+}
+
+/**
+ * MyCamu's list made readable: each gate pass once (its twin attendance-leave
+ * entry dropped), newest first.
+ */
+export function camuHistory(list: Record<string, unknown>[]): CamuPass[] {
+  const gateIds = new Set(list.filter((r) => typeof r.frdt === "string").map((r) => String(r.lvId ?? "")));
+  return list
+    .filter((r) => typeof r.frdt === "string" || !gateIds.has(String(r.refId ?? "")))
+    .map(camuPassOf)
+    .filter((p): p is CamuPass => !!p && !!p.fromDate)
+    .sort((a, b) => (b.fromDate + b.fromTime).localeCompare(a.fromDate + a.fromTime));
+}
+
+const CACHE = "dockin-camu-passes";
+
+/** The last list read from MyCamu (works offline). */
+export function cachedHistory(): { at: number; items: CamuPass[] } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CACHE) || "null");
+    return v && Array.isArray(v.items) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads MyCamu's list now (and keeps it for offline). Throws when MyCamu can't be reached. */
+export async function fetchHistory(): Promise<CamuPass[]> {
+  const r = await DockIn.camuPasses();
+  const items = camuHistory(JSON.parse(r.items || "[]"));
+  try {
+    localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), items }));
+  } catch {
+    /* private mode: fine */
+  }
+  return items;
+}
+
+// ------------------------------------------------------------ verification
+
+/** One line of "what you asked for" against "what MyCamu has". */
+export interface Check {
+  label: string;
+  want: string;
+  got: string;
+  ok: boolean;
+}
+
+const dateWords = (s: string) => (s ? fromDateStr(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
+
+/**
+ * Field by field, the pass as asked against the pass as MyCamu holds it — so a
+ * glance at the gate says it is right.
+ */
+export function verifyPass(p: PassDraft, c: CamuPass | null): Check[] {
+  const got = c ?? { kind: "other", fromDate: "", fromTime: "", toDate: "", toTime: "", reason: "" };
+  const norm = (x: string) => x.trim().toLowerCase().replace(/\s+/g, " ");
+  return [
+    { label: "Pass", want: p.kind === "dayout" ? "Day Out" : "Leave Out", got: c ? (c.kind === "dayout" ? "Day Out" : c.kind === "leave" ? "Leave Out" : c.type) : "—", ok: !!c && c.kind === p.kind },
+    { label: "Date", want: dateWords(p.fromDate) + (p.toDate !== p.fromDate ? ` → ${dateWords(p.toDate)}` : ""), got: c ? dateWords(got.fromDate) + (got.toDate !== got.fromDate ? ` → ${dateWords(got.toDate)}` : "") : "—", ok: got.fromDate === p.fromDate && got.toDate === p.toDate },
+    { label: "Out", want: fmtTime(p.fromTime), got: got.fromTime ? fmtTime(got.fromTime) : "—", ok: got.fromTime === p.fromTime },
+    { label: "Back by", want: fmtTime(p.toTime), got: got.toTime ? fmtTime(got.toTime) : "—", ok: got.toTime === p.toTime },
+    { label: "Reason", want: p.reason, got: got.reason || "—", ok: norm(got.reason) === norm(p.reason) },
+  ];
+}
+
+/** Finds this pass in MyCamu's list (by id, else by type, day and times). */
+export function findInHistory(p: PassDraft & { camuId?: string }, list: CamuPass[]): CamuPass | null {
+  return (
+    (p.camuId ? list.find((c) => c.id === p.camuId) : undefined) ??
+    list.find((c) => c.kind === p.kind && c.fromDate === p.fromDate && c.fromTime === p.fromTime && c.toTime === p.toTime && c.state !== "cancelled" && c.state !== "rejected") ??
+    null
+  );
 }
 
 // ------------------------------------------------------------ teaching DockIn

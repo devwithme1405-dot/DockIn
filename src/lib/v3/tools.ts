@@ -1,7 +1,7 @@
 import { camuSummary, classesOn, cleanName, collegeNow, holidayOn } from "../college";
 import { addDays, fmtDayLong, relativeDayLabel, toDateStr, weekdayOf } from "../dates";
 import { db } from "../db";
-import { DAYOUT_END, needsProof, type PassDraft } from "../outpass";
+import { DAYOUT_END, needsProof, PASS_START, type PassDraft } from "../outpass";
 import { addTask, getProfile } from "../repo";
 import { newId, v3db, type Action, type Card, type PassRecord, type Stat } from "./store";
 
@@ -190,7 +190,10 @@ export function tidyPass(d: PassDraft): PassDraft {
   if (p.kind === "dayout") {
     p.toDate = p.fromDate;
     if (!p.toTime || p.toTime > DAYOUT_END) p.toTime = DAYOUT_END;
-  } else if (p.toDate < p.fromDate) p.toDate = p.fromDate;
+  } else {
+    if (p.toDate < p.fromDate) p.toDate = p.fromDate;
+    if (p.toTime > DAYOUT_END) p.toTime = DAYOUT_END;
+  }
   if (!p.reason || p.reason === ".") p.reason = p.kind === "dayout" ? "Personal work" : "Going home";
   return p;
 }
@@ -200,7 +203,11 @@ export function passProblem(p: PassDraft, hasProof: boolean, now = new Date()): 
   const today = toDateStr(now);
   if (p.fromDate < today) return "The start date has already gone.";
   if (p.toDate < p.fromDate || (p.toDate === p.fromDate && p.toTime <= p.fromTime)) return "It ends before it starts.";
-  if (p.kind === "dayout" && p.toTime > DAYOUT_END) return "A day out pass ends by 7 PM.";
+  if (p.toTime > DAYOUT_END) return "A pass has to end by 7:00 pm — MyCamu won't take later.";
+  if (p.fromTime < PASS_START) return "A pass can start from 6:00 am.";
+  if (p.kind === "dayout" && p.fromDate !== p.toDate) return "A day out is for one day — use a leave for more.";
+  const nowHm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (p.toDate === today && p.toTime <= nowHm) return "That time has already gone today.";
   if (needsProof(p) && !hasProof) return "A leave needs the parent-approval mail screenshot.";
   return null;
 }

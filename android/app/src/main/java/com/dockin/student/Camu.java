@@ -284,6 +284,25 @@ final class Camu {
         return data(c, "/api/Leave/crtLv", dayOutBody(id, login, day, from, to, reason));
     }
 
+    /**
+     * The Day Out for exactly this day and these times in MyCamu's list, if it
+     * is there and not rejected or cancelled. MyCamu's list is the truth: its
+     * answer to the submit itself can say "duplicate" for a pass it just made.
+     */
+    static JSONObject findDayOut(JSONArray list, String day, String from, String to) {
+        String start = day + "T" + from;
+        String end = day + "T" + to;
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject p = list.optJSONObject(i);
+            if (p == null || !"DOP".equals(p.optString("passTyCode", ""))) continue;
+            if (!p.optString("frdt", "").startsWith(start) || !p.optString("todt", "").startsWith(end)) continue;
+            String st = (p.optString("status", "") + " " + p.optString("prntAp", "") + " " + p.optString("stfAp", "")).toUpperCase();
+            if (st.contains("REJ") || st.contains("CANC") || st.contains("CNCL")) continue;
+            return p;
+        }
+        return null;
+    }
+
     /** The student's passes and leaves, as MyCamu's leave page lists them. */
     static JSONArray passes(Context c) throws IOException, Expired, JSONException {
         JSONObject id = need(c);

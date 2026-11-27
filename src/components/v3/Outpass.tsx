@@ -34,6 +34,7 @@ import { isNativeApp, onPhone } from "@/lib/native";
 import {
   DAYOUT_END,
   needsProof,
+  PASS_START,
   readPass,
   REASONS,
   startChoices,
@@ -53,12 +54,15 @@ import {
   directState,
   type DirectState,
   parentText,
+  cachedHistory,
+  fetchHistory,
   refreshFromCamu,
   sendDayOut,
   sendToCamu,
   shareText,
   isWrite,
   type CamuNotes,
+  type CamuPass,
 } from "@/lib/v3/pass";
 import { v3db, type PassRecord, type PassStatus } from "@/lib/v3/store";
 import { passProblem, savePass } from "@/lib/v3/tools";
@@ -67,6 +71,7 @@ import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Segmented } from "../Paper";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
+import { CamuPassSheet, CamuTicket, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
 
@@ -190,6 +195,8 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const [busy, setBusy] = useState(false);
   /** MyCamu said no — its reason, in plain words. */
   const [refusal, setRefusal] = useState<string | null>(null);
+  /** The one-look summary before a pass goes into MyCamu. */
+  const [review, setReview] = useState(false);
   /** This phone can send a day out to MyCamu itself. */
   const [direct, setDirect] = useState<DirectState | null>(null);
   const pick = useRef<HTMLInputElement>(null);
@@ -255,40 +262,72 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
 
   const straight = direct === "ready" && d.kind === "dayout";
 
-  async function save(toCamu: boolean) {
+  /** Times with both AM and PM possible, still not tapped. */
+  const unanswered = reading?.asks.filter((a) => a.must) ?? [];
+
+  function blocked(): boolean {
     setTried(true);
     setRefusal(null);
-    if (problem || reasonMissing) return;
+    return !!(problem || reasonMissing || unanswered.length);
+  }
+
+  async function save(toCamu: boolean) {
+    if (blocked()) return;
+    // Straight into MyCamu: one look at the whole pass first.
+    if (toCamu && straight) {
+      setReview(true);
+      return;
+    }
     setBusy(true);
     const clean = { ...d, reason: d.reason.trim() };
     try {
-      if (toCamu && clean.kind === "dayout") {
-        const r = await sendDayOut(clean);
-        if (r.kind === "refused") {
-          setRefusal(r.message);
-          return;
-        }
-        if (r.kind === "made") {
-          const id = await savePass(clean, undefined, "manual");
-          await v3db.passes.update(id, { status: r.status, camuId: r.camuId, sentByDockIn: true, updatedAt: Date.now() });
-          onSaved(id);
-          return;
-        }
-        if (r.why === "expired") toast.show("MyCamu sign-in ended — opening MyCamu to sign in");
-        else if (r.why === "unsure") toast.show("Couldn't confirm it in MyCamu — check there before sending again");
-        else if (r.why === "network") toast.show("Couldn't reach MyCamu — opening it instead");
-        if (r.why === "unsure") {
-          // It may have gone through: save it, but don't open MyCamu to send it twice.
-          const id = await savePass(clean, undefined, "manual");
-          onSaved(id);
-          return;
-        }
-      }
       const id = await savePass(clean, proof ?? undefined, "manual");
       if (toCamu) {
         const how = await sendToCamu(clean, proof ?? undefined).catch(() => "copied" as const);
         if (how === "copied") toast.show("Details copied — paste them in MyCamu");
       }
+      onSaved(id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** After the review: send to MyCamu, then trust only MyCamu's own list. */
+  async function send() {
+    setReview(false);
+    setBusy(true);
+    const clean = { ...d, reason: d.reason.trim() };
+    try {
+      const r = await sendDayOut(clean);
+      if (r.kind === "refused") {
+        setRefusal(r.message);
+        return;
+      }
+      if (r.kind === "made") {
+        const id = await savePass(clean, undefined, "manual");
+        await v3db.passes.update(id, {
+          status: r.status,
+          camuId: r.camuId,
+          camu: r.record ?? undefined,
+          verifiedAt: Date.now(),
+          sentByDockIn: true,
+          updatedAt: Date.now(),
+        });
+        if (r.already) toast.show("It was already in MyCamu — not sent again");
+        onSaved(id);
+        return;
+      }
+      if (r.why === "unsure") {
+        // It may have gone through: save it, but don't open MyCamu to send it twice.
+        const id = await savePass(clean, undefined, "manual");
+        await v3db.passes.update(id, { sentByDockIn: true, updatedAt: Date.now() });
+        toast.show("Couldn't confirm it in MyCamu yet — check before sending again");
+        onSaved(id);
+        return;
+      }
+      toast.show(r.why === "expired" ? "MyCamu sign-in ended — opening MyCamu" : "Couldn't reach MyCamu — opening it instead");
+      const id = await savePass(clean, undefined, "manual");
+      await sendToCamu(clean).catch(() => "copied");
       onSaved(id);
     } finally {
       setBusy(false);
@@ -364,26 +403,51 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
       {/* the quick questions */}
       {reading && (reading.asks.length > 0 || reading.needStart) && (
         <div className="mt-3 space-y-2.5">
-          {reading.asks.map((a, i) => (
-            <div key={`${reading.n}-${a.which}`} className="ask-in rounded-2xl border-[1.5px] border-accent/40 bg-accent-soft/50 p-3" style={{ animationDelay: `${250 + i * 80}ms` }}>
-              <p className="text-[13.5px] font-bold">
-                {a.which === "from" ? "Leaving at" : "Back by"} {a.said} — morning or evening?
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {a.options.map((t, j) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => answer(a, t)}
-                    className="btn-paper lip-sm inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-extrabold"
-                  >
-                    {j === 0 ? <Sunrise size={17} className="text-warn" /> : <Moon size={16} className="text-accent" />}
-                    {fmtTime(t).toUpperCase()}
-                  </button>
-                ))}
+          {reading.asks.map((a, i) => {
+            const current = a.which === "from" ? d.fromTime : d.toTime;
+            const waiting = a.must && tried;
+            return (
+              <div
+                key={`${reading.n}-${a.which}`}
+                className={cx(
+                  "ask-in rounded-2xl border-[1.5px] p-3",
+                  waiting ? "border-danger/60 bg-danger-soft/40" : "border-accent/40 bg-accent-soft/50",
+                )}
+                style={{ animationDelay: `${250 + i * 80}ms` }}
+              >
+                <p className="text-[13.5px] font-bold">
+                  {a.which === "from" ? "Going out at" : "Back by"} {a.said} — AM or PM?
+                  {!a.must && <span className="ml-1 font-semibold text-muted">· tap to confirm</span>}
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {a.options.map((t, j) => {
+                    const ok = a.valid[j];
+                    const on = !a.must && ok && current === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        disabled={!ok}
+                        onClick={() => answer(a, t)}
+                        aria-pressed={on}
+                        className={cx(
+                          "lip-sm inline-flex h-12 flex-col items-center justify-center rounded-xl text-[15px] font-extrabold leading-tight",
+                          on ? "btn-leather" : "btn-paper",
+                          !ok && "opacity-45",
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          {j === 0 ? <Sunrise size={16} className={on ? "" : "text-warn"} /> : <Moon size={15} className={on ? "" : "text-accent"} />}
+                          {fmtTime(t).toUpperCase()}
+                        </span>
+                        {!ok && <span className="text-[10.5px] font-bold text-muted">{t > DAYOUT_END ? "after 7 PM" : t < PASS_START ? "before 6 AM" : "not possible"}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {reading.needStart && (
             <div className="ask-in rounded-2xl border-[1.5px] border-accent/40 bg-accent-soft/50 p-3" style={{ animationDelay: "250ms" }}>
               <p className="text-[13.5px] font-bold">When are you heading out?</p>
@@ -606,9 +670,36 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           </p>
         )}
 
-        {tried && (problem || reasonMissing) && <p className="anim-pop text-[13px] font-semibold text-danger">{problem ?? "Pick or write a reason."}</p>}
+        {tried && (problem || reasonMissing || unanswered.length > 0) && (
+          <p className="anim-pop text-[13px] font-semibold text-danger">
+            {problem ?? (unanswered.length ? `Tap AM or PM for ${unanswered[0].said} above.` : "Pick or write a reason.")}
+          </p>
+        )}
 
       </div>
+
+      <Sheet open={review} onClose={() => setReview(false)} title="Send this to MyCamu?">
+        <div className="space-y-4 pb-1">
+          <div className="pass-ticket overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-center">
+            <p className="pt-4 text-[12px] font-bold tracking-[0.12em] text-muted uppercase">{d.kind === "dayout" ? "Day Out Pass" : "Leave Out Pass"}</p>
+            <p className="font-display mt-1 text-[22px] font-extrabold">{dayShort(d.fromDate)}</p>
+            <p className="font-display text-[30px] leading-tight font-extrabold tnum">
+              {fmtTime(d.fromTime)} <span className="text-muted">→</span> {fmtTime(d.toTime)}
+            </p>
+            <div className="mx-4 my-3 border-t-2 border-dashed border-line" />
+            <p className="px-4 pb-4 text-[15px] font-bold">“{d.reason.trim()}”</p>
+          </div>
+          <p className="text-center text-[12.5px] text-muted">DockIn sends it, then reads it back from MyCamu to check every field.</p>
+          <div className="grid grid-cols-[1fr_1.6fr] gap-2">
+            <button type="button" onClick={() => setReview(false)} className="btn-paper h-12 rounded-2xl text-[14.5px] font-bold">
+              Change
+            </button>
+            <button type="button" onClick={() => void send()} className="btn-leather inline-flex h-12 items-center justify-center gap-2 rounded-2xl text-[15px]">
+              <Send size={17} /> Yes, send it
+            </button>
+          </div>
+        </div>
+      </Sheet>
 
       {/* actions */}
       <div className="glass-bar fixed inset-x-0 bottom-0 z-10 mx-auto flex w-full max-w-md flex-wrap gap-2 px-4 pt-2.5 pb-[max(0.875rem,var(--sab))]">
@@ -671,6 +762,12 @@ function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void
           {sent && p.status === "applied" ? "Sent" : applied ? STATUS_LABEL[p.status].split(" ")[0] : "Ready"}
         </span>
       </div>
+
+      {sent && (
+        <div className="mt-4 w-full">
+          <VerifyCard p={p} />
+        </div>
+      )}
 
       <ol className="mt-5 w-full space-y-2.5 text-left">
         {sent ? (
@@ -798,42 +895,71 @@ const dayShort = (s: string) => new Date(`${s}T00:00:00`).toLocaleDateString("en
 function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusDone: () => void; onNew: () => void }) {
   const passes = useLiveQuery(() => v3db.passes.orderBy("createdAt").reverse().toArray(), []);
   const [openId, setOpenId] = useState<string | null>(focus);
-  const [checking, setChecking] = useState(false);
+  const [openCamu, setOpenCamu] = useState<CamuPass | null>(null);
+  const [filter, setFilter] = useState<"all" | PassKind>("all");
+  /** MyCamu's own list: shown from the last read at once, then refreshed. */
+  const [camu, setCamu] = useState<{ at: number; items: CamuPass[] } | null>(() => cachedHistory());
+  const native = isNativeApp();
+  const [loading, setLoading] = useState(native);
+  const [offline, setOffline] = useState(false);
   const toast = useToast();
-  const anySent = !!passes?.some((p) => p.camuId);
 
-  async function check(quiet: boolean) {
-    setChecking(true);
+  async function load(loud: boolean) {
+    if (!native) return;
+    setLoading(true);
     try {
-      const n = await refreshFromCamu(await v3db.passes.toArray());
-      if (!quiet) toast.show(n ? `${n} updated from MyCamu` : "Up to date with MyCamu");
+      const items = await fetchHistory();
+      setCamu({ at: Date.now(), items });
+      setOffline(false);
+      // DockIn's own copies follow MyCamu.
+      await refreshFromCamu(await v3db.passes.toArray()).catch(() => 0);
+      if (loud) toast.show("Up to date with MyCamu");
     } catch {
-      if (!quiet) toast.show("Couldn't reach MyCamu");
+      setOffline(true);
+      if (loud) toast.show("Couldn't reach MyCamu");
     } finally {
-      setChecking(false);
+      setLoading(false);
     }
   }
 
-  // Approvals happen in MyCamu: bring them in when History opens.
+  // Read MyCamu as History opens (the cached list shows meanwhile).
   useEffect(() => {
+    if (!isNativeApp()) return;
     let gone = false;
-    void v3db.passes.toArray().then((all) => {
-      if (!gone && all.some((p) => p.camuId)) void refreshFromCamu(all).catch(() => 0);
-    });
+    fetchHistory()
+      .then(async (items) => {
+        if (gone) return;
+        setCamu({ at: Date.now(), items });
+        setOffline(false);
+        await refreshFromCamu(await v3db.passes.toArray()).catch(() => 0);
+      })
+      .catch(() => {
+        if (!gone) setOffline(true);
+      })
+      .finally(() => {
+        if (!gone) setLoading(false);
+      });
     return () => {
       gone = true;
     };
   }, []);
-  const [filter, setFilter] = useState<"all" | PassKind>("all");
+
   const today = toDateStr();
   if (!passes) return null;
-  if (!passes.length) {
+  const fromCamu = camu?.items ?? null;
+  const pick = <T extends { kind: string }>(xs: T[]) => (filter === "all" ? xs : xs.filter((x) => x.kind === filter));
+
+  // Passes only DockIn knows about (saved, or not found in MyCamu).
+  const onlyHere = pick(fromCamu ? passes.filter((p) => !inCamu(p, fromCamu)) : passes);
+  const current = passes.find((p) => p.id === openId) ?? null;
+
+  if (!passes.length && !fromCamu?.length) {
     return (
       <div className="flex flex-col items-center px-6 pt-12 pb-10 text-center">
         <div className="anim-float">
           <DockBot size={110} />
         </div>
-        <h2 className="font-display mt-3 text-[20px] font-extrabold">No outpasses yet</h2>
+        <h2 className="font-display mt-3 text-[20px] font-extrabold">{loading ? "Reading MyCamu…" : "No outpasses yet"}</h2>
         <p className="mt-1 text-[13.5px] text-muted">Make one in a few seconds — just type “kal 4 baje market”.</p>
         <button type="button" onClick={onNew} className="btn-leather mt-5 h-11 rounded-2xl px-5">
           Make a pass
@@ -842,17 +968,23 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
       </div>
     );
   }
-  const shown = filter === "all" ? passes : passes.filter((p) => p.kind === filter);
-  const live = shown.filter((p) => p.toDate >= today && p.status !== "cancelled" && p.status !== "rejected");
-  const past = shown.filter((p) => !live.includes(p));
-  const current = passes.find((p) => p.id === openId) ?? null;
-  const month = passes.filter((p) => p.fromDate.slice(0, 7) === today.slice(0, 7) && p.status !== "cancelled");
+
+  const month = today.slice(0, 7);
+  const counted = fromCamu
+    ? fromCamu.filter((c) => c.fromDate.slice(0, 7) === month && c.state !== "cancelled" && c.kind !== "other")
+    : passes.filter((p) => p.fromDate.slice(0, 7) === month && p.status !== "cancelled");
+  const camuShown = fromCamu ? pick(fromCamu) : [];
+  const camuLive = camuShown.filter((c) => c.toDate >= today && c.state !== "cancelled" && c.state !== "rejected" && c.state !== "back");
+  const camuPast = camuShown.filter((c) => !camuLive.includes(c));
+  const localLive = onlyHere.filter((p) => p.toDate >= today && p.status !== "cancelled" && p.status !== "rejected");
+  const localPast = onlyHere.filter((p) => !localLive.includes(p));
+
   return (
     <div className="space-y-5 px-4 pt-3 pb-10">
       <div className="grid grid-cols-3 gap-2">
-        <Count label="This month" value={month.length} />
-        <Count label="Day outs" value={month.filter((p) => p.kind === "dayout").length} />
-        <Count label="Leaves" value={month.filter((p) => p.kind === "leave").length} />
+        <Count label="This month" value={counted.length} />
+        <Count label="Day outs" value={counted.filter((p) => p.kind === "dayout").length} />
+        <Count label="Leaves" value={counted.filter((p) => p.kind === "leave").length} />
       </div>
       <div className="flex items-center gap-1.5">
         {(
@@ -871,40 +1003,65 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
             {label}
           </button>
         ))}
-        {anySent && (
+        {native && (
           <button
             type="button"
-            onClick={() => void check(false)}
-            disabled={checking}
+            onClick={() => void load(true)}
+            disabled={loading}
+            aria-label="Refresh from MyCamu"
             className="ml-auto inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12.5px] font-bold text-accent"
           >
-            <RefreshCw size={14} className={cx(checking && "animate-spin")} /> MyCamu
+            <RefreshCw size={14} className={cx(loading && "animate-spin")} /> MyCamu
           </button>
         )}
       </div>
-      {live.length > 0 && (
+
+      {fromCamu && (
+        <p className="-mt-2 px-1 text-[11.5px] text-muted">
+          From MyCamu · {offline ? "offline, showing " : ""}updated {new Date(camu!.at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })}
+        </p>
+      )}
+
+      {camuLive.length + localLive.length > 0 && (
         <section>
           <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Upcoming & active</h3>
           <div className="space-y-3">
-            {live.map((p, i) => (
-              <div key={p.id} className="ask-in" style={{ animationDelay: `${i * 50}ms` }}>
+            {camuLive.map((c, i) => (
+              <div key={c.id} className="ask-in" style={{ animationDelay: `${i * 50}ms` }}>
+                <CamuTicket c={c} onClick={() => setOpenCamu(c)} />
+              </div>
+            ))}
+            {localLive.map((p, i) => (
+              <div key={p.id} className="ask-in" style={{ animationDelay: `${(camuLive.length + i) * 50}ms` }}>
                 <Ticket p={p} onClick={() => setOpenId(p.id)} />
               </div>
             ))}
           </div>
         </section>
       )}
-      {past.length > 0 && (
+      {camuPast.length > 0 && (
         <section>
-          <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Past</h3>
+          <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Past · from MyCamu</h3>
+          <div className="space-y-3">
+            {camuPast.slice(0, 60).map((c) => (
+              <div key={c.id} className="opacity-85">
+                <CamuTicket c={c} onClick={() => setOpenCamu(c)} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      {localPast.length > 0 && (
+        <section>
+          <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">{fromCamu ? "Only in DockIn" : "Past"}</h3>
           <div className="space-y-3 opacity-80">
-            {past.map((p) => (
+            {localPast.map((p) => (
               <Ticket key={p.id} p={p} onClick={() => setOpenId(p.id)} />
             ))}
           </div>
         </section>
       )}
-      {!live.length && !past.length && <p className="py-6 text-center text-[13.5px] text-muted">None of these yet.</p>}
+      {!camuShown.length && !onlyHere.length && <p className="py-6 text-center text-[13.5px] text-muted">None of these yet.</p>}
       <TeachCamu />
       <PassSheet
         p={current}
@@ -913,6 +1070,7 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
           onFocusDone();
         }}
       />
+      <CamuPassSheet c={openCamu} onClose={() => setOpenCamu(null)} />
     </div>
   );
 }

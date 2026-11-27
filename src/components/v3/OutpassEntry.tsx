@@ -1,9 +1,10 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronRight, DoorOpen, House, Sun } from "lucide-react";
+import { BadgeCheck, ChevronRight, DoorOpen, House, Sun } from "lucide-react";
 import { toDateStr } from "@/lib/dates";
 import { usePreview } from "@/lib/v3/flags";
+import { verifyPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
 import { cx } from "../ui";
@@ -40,10 +41,15 @@ export function OutpassEntry({ className }: { className?: string }) {
           <span className="min-w-0 flex-1">
             <span className="font-display block text-[17px] leading-tight font-extrabold">Outpass</span>
             {live ? (
-              <span className="mt-0.5 flex items-center gap-1.5">
-                <span className="truncate text-[12.5px] text-muted">
+              <span className="mt-0.5 block">
+                <span className="block truncate text-[12.5px] text-muted">
                   {live.kind === "dayout" ? "Day out" : "Leave"} · {passDay(live)}
                 </span>
+                {live.camu && verifyPass(live, live.camu).every((c) => c.ok) && (
+                  <span className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-bold text-safe">
+                    <BadgeCheck size={14} /> Checked in MyCamu
+                  </span>
+                )}
               </span>
             ) : (
               <span className="block text-[12.5px] text-muted">Type “kal 4 baje market” — done in seconds</span>

@@ -1,3 +1,4 @@
+import type { CamuPass } from "./pass";
 import Dexie, { type Table } from "dexie";
 import type { PassDraft } from "../outpass";
 
@@ -23,6 +24,10 @@ export interface PassRecord extends PassDraft {
   camuId?: string;
   /** Sent to MyCamu by DockIn (not just saved here). */
   sentByDockIn?: boolean;
+  /** The pass as MyCamu holds it, last time DockIn checked. */
+  camu?: CamuPass;
+  /** When DockIn last read it back from MyCamu (ms). */
+  verifiedAt?: number;
 }
 
 /** One line in the assistant chat. */

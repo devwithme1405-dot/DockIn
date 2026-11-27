@@ -75,6 +75,8 @@ async function step(name, fn) {
     console.log(`ok   ${name}`);
   } catch (e) {
     problems.push(`${name}: ${e.message.split("\n")[0]}`);
+    const pages = browser.contexts().flatMap((c) => c.pages());
+    await pages.at(-1)?.screenshot({ path: `${SHOTS}/FAIL-${ok + problems.length}.png` }).catch(() => {});
     console.log(`FAIL ${name}: ${e.message.split("\n")[0]}`);
   }
 }
@@ -91,7 +93,18 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
   page.on("pageerror", (e) => problems.push(`uncaught: ${e.message}`));
   await page.addInitScript(
     ({ channel, camu, direct }) => {
-      const phone = { calls: [], notes: [], spoken: [], sentDayOuts: [] };
+      const phone = {
+        calls: [],
+        notes: [],
+        spoken: [],
+        sentDayOuts: [],
+        camuList: direct
+          ? [
+              { _id: "old-1", lvId: "lv-old", frdt: "2026-11-25T18:32:00.000Z", todt: "2026-11-25T19:00:00.000Z", rson: "Outing", prntAp: "APPRVD", status: "CMPT", isCOut: true, cOutDt: "2026-11-25T13:02:44.000Z", isCIn: true, cInDt: "2026-11-25T15:23:35.000Z", passTyCode: "DOP", passTyNme: "Day Out Pass", prntName: "MAHESH" },
+              { Rson: "Outing", _id: "twin", LvTy: "Leave", start: "2026-11-25T00:00:00.000Z", end: "2026-11-25T00:00:00.000Z", Stus: "Submitted", refId: "lv-old" },
+            ]
+          : [],
+      };
       const listeners = {};
       let nextId = 1;
       const fire = (event, data) => {
@@ -126,13 +139,16 @@ async function phone({ channel = "preview", theme = "light", direct = false } = 
           ]),
         }),
         clearCamuCaptured: () => ({}),
-        camuCanMakePass: () => ({ ok: direct }),
+        camuCanMakePass: () => ({ ok: direct, connected: true, taught: direct }),
         camuDayOut: (o) => {
           phone.sentDayOuts.push(o);
           if (o.reason === "Bank work") return { made: false, code: "DUP_GATEPASS_EXISTS" };
-          return { made: true, record: JSON.stringify({ _id: "camu-pass-1", passTyCode: "DOP", prntAp: "SUB", status: "SUB" }) };
+          const rec = { _id: `camu-${phone.sentDayOuts.length}`, lvId: `lv-${phone.sentDayOuts.length}`, passTyCode: "DOP", passTyNme: "Day Out Pass", frdt: `${o.date}T${o.from}:00.000Z`, todt: `${o.date}T${o.to}:00.000Z`, rson: o.reason, prntAp: "SUB", status: "SUB", CrAt: new Date().toISOString() };
+          phone.camuList.unshift({ ...rec, prntAp: "APPRVD", prntName: "MAHESH" });
+          // MyCamu's quirk: it says "duplicate" for the pass it has just made.
+          return { made: true, code: "DUP_GATEPASS_EXISTS", record: JSON.stringify(rec) };
         },
-        camuPasses: () => ({ items: JSON.stringify([{ _id: "camu-pass-1", passTyCode: "DOP", prntAp: "APPRVD", status: "SUB" }]) }),
+        camuPasses: () => ({ items: JSON.stringify(phone.camuList) }),
         listen: (o) => {
           phone.lang = o.lang;
           setTimeout(() => fire("speech", { type: "state", state: "ready" }), 100);
@@ -235,11 +251,13 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
   await step("'kal 6 baje market' asks morning or evening, and fills Market", async () => {
     await line(page, "kal 6 baje market");
     await pass(page).getByText("Got it").waitFor({ timeout: 3000 });
-    await pass(page).getByText(/Leaving at 6:00 — morning or evening\?/).waitFor({ timeout: 3000 });
+    await pass(page).getByText(/Going out at 6:00 — AM or PM\?/).waitFor({ timeout: 3000 });
+    await pass(page).getByRole("button", { name: "Make the pass" }).click();
+    await pass(page).getByText("Tap AM or PM for 6:00 above.").waitFor({ timeout: 2000 });
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${SHOTS}/op-ask.png` });
     await pass(page).getByRole("button", { name: "6:00 PM" }).click();
-    if (await pass(page).getByText(/morning or evening/).count()) throw new Error("question stayed");
+    if (await pass(page).getByText(/AM or PM\?/).count()) throw new Error("question stayed");
     if ((await pass(page).getByLabel("From time").inputValue()) !== "18:00") throw new Error("time not set");
     if ((await pass(page).getByRole("button", { name: "Market", exact: true }).getAttribute("aria-pressed")) !== "true") throw new Error("reason chip not picked");
     await pass(page).getByText(/then DockIn sends day outs itself/).waitFor({ timeout: 2000 });
@@ -266,7 +284,8 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
   await step("a day out without a reason asks for one; 'Write my own' works", async () => {
     await pass(page).getByRole("button", { name: "New pass" }).last().click();
     await line(page, "kal 4 baje day out");
-    if (await pass(page).getByText(/morning or evening/).count()) throw new Error("asked about 4 PM");
+    await pass(page).getByText(/Going out at 4:00 — AM or PM\?.*tap to confirm/).waitFor({ timeout: 2000 });
+    if (!(await pass(page).getByRole("button", { name: /4:00 AM/ }).isDisabled())) throw new Error("4 AM tappable");
     if ((await pass(page).getByLabel("From time").inputValue()) !== "16:00") throw new Error("4 baje is not 4 PM");
     await pass(page).getByRole("button", { name: "Make the pass" }).click();
     await pass(page).getByText("Pick or write a reason.").waitFor({ timeout: 2000 });
@@ -326,12 +345,16 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
 
 {
   const { ctx, page } = await phone({ direct: true });
-  await step("taught phone: a day out goes straight into MyCamu", async () => {
+  await step("taught phone: review, send, MyCamu's 'duplicate' ignored, read back and checked", async () => {
     await page.getByRole("region", { name: "Outpass" }).getByRole("button", { name: "Day out" }).click();
-    await line(page, "kal 4 baje market");
+    await line(page, "kl 4 bje mkt");
     await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
-    await pass(page).getByText("Sent to MyCamu").waitFor({ timeout: 4000 });
-    await pass(page).getByText("Submitted in MyCamu").waitFor({ timeout: 2000 });
+    const review = page.getByRole("dialog", { name: "Send this to MyCamu?" });
+    await review.getByText("4:00 pm → 7:00 pm").waitFor({ timeout: 3000 });
+    await page.screenshot({ path: `${SHOTS}/op-review.png` });
+    await review.getByRole("button", { name: "Yes, send it" }).click();
+    await pass(page).getByText("Sent to MyCamu").waitFor({ timeout: 5000 });
+    await pass(page).getByText("Checked in MyCamu — all correct").waitFor({ timeout: 3000 });
     const st = await phoneState(page);
     const sent = st.sentDayOuts.at(-1);
     if (!sent || sent.from !== "16:00" || sent.to !== "19:00" || sent.reason !== "Market") throw new Error(`sent ${JSON.stringify(sent)}`);
@@ -344,16 +367,24 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).getByRole("button", { name: "New pass" }).last().click();
     await line(page, "kal 3 baje bank");
     await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
-    await pass(page).getByRole("alert").getByText(/already has a pass for this time/).waitFor({ timeout: 3000 });
+    await page.getByRole("dialog", { name: "Send this to MyCamu?" }).getByRole("button", { name: "Yes, send it" }).click();
+    await pass(page).getByRole("alert").getByText(/overlaps this time/).waitFor({ timeout: 3000 });
     await page.screenshot({ path: `${SHOTS}/op-refused.png` });
     if ((await page.evaluate(() => window.__phone.get().notes.length)) !== 0) throw new Error("opened MyCamu");
   });
 
-  await step("a leave still opens MyCamu; History brings approval in from MyCamu", async () => {
-    await line(page, "kal se 2 din ghar");
-    if (!(await pass(page).getByRole("button", { name: "Make the pass" }).count())) throw new Error("leave says submit");
-    await pass(page).getByRole("tab", { name: /History/ }).or(pass(page).getByRole("radio", { name: /History/ })).or(pass(page).getByText(/^History/)).first().click();
-    await pass(page).getByText("Approved").first().waitFor({ timeout: 4000 });
+  await step("History shows MyCamu's own passes: approval, out and back times", async () => {
+    await pass(page).getByText(/^History/).first().click();
+    await pass(page).getByText(/From MyCamu · updated/).waitFor({ timeout: 4000 });
+    await pass(page).getByText("Approved").first().waitFor({ timeout: 3000 });
+    await pass(page).getByText("Back in").first().waitFor({ timeout: 3000 });
+    await pass(page).getByText(/Out 6:32 pm/i).first().waitFor({ timeout: 3000 });
+    if ((await pass(page).getByText("Day Out Pass").count()) !== 2) throw new Error("twin leave shown, or pass missing");
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${SHOTS}/op-camu-history.png` });
+    await pass(page).getByText("Back in").first().click();
+    await page.getByText(/Parent ok · MAHESH/).waitFor({ timeout: 3000 });
+    await page.screenshot({ path: `${SHOTS}/op-camu-sheet.png` });
   });
   await ctx.close();
 }

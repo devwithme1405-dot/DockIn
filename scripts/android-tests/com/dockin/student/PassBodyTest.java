@@ -55,6 +55,15 @@ public class PassBodyTest {
         refuses("back before out", "2026-12-03", "15:00", "14:00", "x");
         refuses("no reason", "2026-12-03", "10:00", "12:00", "  ");
         refuses("bad date", "3 Dec", "10:00", "12:00", "x");
+        // MyCamu's list decides whether a pass was made.
+        org.json.JSONArray list = new org.json.JSONArray()
+                .put(new JSONObject().put("_id", "rej").put("passTyCode", "DOP").put("frdt", "2026-11-27T17:00:00.000Z").put("todt", "2026-11-27T19:00:00.000Z").put("status", "REJ"))
+                .put(new JSONObject().put("_id", "leave").put("passTyCode", "LEAVE_OUT_PASS").put("frdt", "2026-11-27T17:00:00.000Z").put("todt", "2026-11-27T19:00:00.000Z"))
+                .put(new JSONObject().put("_id", "other").put("passTyCode", "DOP").put("frdt", "2026-11-27T17:00:00.000Z").put("todt", "2026-11-27T18:00:00.000Z").put("status", "SUB"))
+                .put(new JSONObject().put("_id", "mine").put("passTyCode", "DOP").put("frdt", "2026-11-27T17:00:00.000Z").put("todt", "2026-11-27T19:00:00.000Z").put("status", "SUB").put("prntAp", "SUB"));
+        JSONObject f = Camu.findDayOut(list, "2026-11-27", "17:00", "19:00");
+        eq("finds the matching day out", "mine", f == null ? null : f.optString("_id"));
+        eq("other day: none", null, Camu.findDayOut(list, "2026-11-28", "17:00", "19:00"));
         System.out.println(fails == 0 ? "Day Out body matches MyCamu's form." : fails + " problem(s)");
         System.exit(fails == 0 ? 0 : 1);
     }

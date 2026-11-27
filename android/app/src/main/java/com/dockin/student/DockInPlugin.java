@@ -26,6 +26,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import java.io.IOException;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -411,41 +412,49 @@ public class DockInPlugin extends Plugin {
             public void run() {
                 JSObject out = new JSObject();
                 try {
-                    JSONObject res = Camu.makeDayOut(c, day, from, to, reason);
-                    Object data = res.opt("data");
-                    String code = data instanceof JSONObject ? ((JSONObject) data).optString("code", "") : "";
-                    Object errors = res.opt("errors");
-                    if (!code.isEmpty()) {
-                        out.put("made", false);
-                        out.put("code", code);
+                    // Already there (sent twice, or made in MyCamu)? Don't send it again.
+                    JSONObject had = Camu.findDayOut(Camu.passes(c), day, from, to);
+                    if (had != null) {
+                        out.put("made", true);
+                        out.put("already", true);
+                        out.put("record", had.toString());
                         call.resolve(out);
                         return;
                     }
-                    if (errors != null && errors != JSONObject.NULL) {
-                        out.put("made", false);
-                        out.put("code", "ERRORS");
-                        out.put("raw", String.valueOf(errors));
-                        call.resolve(out);
-                        return;
+                    String code = "";
+                    Exception sendFailed = null;
+                    try {
+                        JSONObject res = Camu.makeDayOut(c, day, from, to, reason);
+                        Object data = res.opt("data");
+                        code = data instanceof JSONObject ? ((JSONObject) data).optString("code", "") : "";
+                        Object errors = res.opt("errors");
+                        if (code.isEmpty() && errors != null && errors != JSONObject.NULL) code = "ERRORS";
+                    } catch (IOException e) {
+                        // It may still have reached MyCamu: the list decides.
+                        sendFailed = e;
                     }
-                    // MyCamu's answer to a good pass has not been seen yet, so the
-                    // pass list is the proof: the new Day Out must be in it.
+                    // MyCamu sometimes answers DUP_GATEPASS_EXISTS for the pass it has
+                    // just made, so whatever it said, its list decides — read a few
+                    // times while it catches up.
                     JSONObject found = null;
-                    JSONArray list = Camu.passes(c);
-                    String start = day + "T" + from;
-                    for (int i = 0; i < list.length(); i++) {
-                        JSONObject p = list.optJSONObject(i);
-                        if (p != null && "DOP".equals(p.optString("passTyCode")) && p.optString("frdt").startsWith(start)) {
-                            found = p;
-                            break;
+                    for (int i = 0; i < 4 && found == null; i++) {
+                        if (i > 0) Thread.sleep(1200);
+                        try {
+                            found = Camu.findDayOut(Camu.passes(c), day, from, to);
+                        } catch (IOException e) {
+                            if (i == 3 && sendFailed == null) sendFailed = e;
                         }
                     }
-                    out.put("made", found != null);
-                    if (found != null) out.put("record", found.toString());
-                    else {
-                        out.put("code", "NOT_IN_LIST");
-                        out.put("raw", String.valueOf(data));
+                    if (found != null) {
+                        out.put("made", true);
+                        out.put("record", found.toString());
+                        if (!code.isEmpty()) out.put("code", code);
+                        call.resolve(out);
+                        return;
                     }
+                    if (sendFailed != null && code.isEmpty()) throw sendFailed;
+                    out.put("made", false);
+                    out.put("code", code.isEmpty() ? "NOT_IN_LIST" : code);
                     call.resolve(out);
                 } catch (Camu.Expired e) {
                     call.reject("MyCamu sign-in has ended.", "expired");
