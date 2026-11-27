@@ -143,7 +143,9 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
       const r = await approvePass(camuId, note);
       if (r.ok) toast.show("Approved ✓");
       else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
-      else toast.show(r.reason === "web" ? "Open DockIn on your phone to approve." : "Couldn't reach MyCamu — try again.");
+      else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
+      else if (r.reason === "network" || !r.reason) toast.show("Couldn't reach MyCamu — try again.");
+      else toast.show(r.reason);
     } finally {
       setBusy(false);
     }

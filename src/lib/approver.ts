@@ -37,11 +37,17 @@ export async function approverState(): Promise<ApproverState> {
  * approval username and password, and (when a pass is open) approves it once, so
  * DockIn can do it on its own afterwards. Resolves with the new state.
  */
+/** This phone's app is too old for self-approval (the native side isn't there). */
+export const OLD_APP = "Update DockIn to the latest app — this version doesn't have self-approval yet.";
+
 export async function connectApprover(note?: string): Promise<ApproverState> {
-  if (!isNativeApp()) return OFF;
+  if (!isNativeApp()) throw new Error("Open DockIn on your phone to connect self-approval.");
   try {
     return await DockIn.openApprover({ path: APPROVE_PATH, note });
-  } catch {
+  } catch (e) {
+    // The sign-in screen opening and later closing is a success; the only quick
+    // rejection is an app that doesn't have this method yet.
+    if (unimplemented(e)) throw new Error(OLD_APP);
     return approverState();
   }
 }
@@ -83,11 +89,24 @@ export async function approvePass(id: string, note?: string): Promise<ApproveOut
       }
     }
   }
-  const after = await connectApprover(note);
-  return { ok: false, opened: true, state: after };
+  try {
+    const after = await connectApprover(note);
+    return { ok: false, opened: true, state: after };
+  } catch (e) {
+    return { ok: false, opened: false, reason: e instanceof Error && e.message ? e.message : "network" };
+  }
 }
 
 function codeOf(e: unknown): string {
   if (e && typeof e === "object" && "code" in e) return String((e as { code?: unknown }).code ?? "");
   return "";
+}
+
+/** Capacitor's rejection when the installed app doesn't carry a native method. */
+function unimplemented(e: unknown): boolean {
+  const parts =
+    e && typeof e === "object"
+      ? `${String((e as { message?: unknown }).message ?? "")} ${String((e as { code?: unknown }).code ?? "")}`
+      : String(e);
+  return /not implemented|unimplemented/i.test(parts);
 }
