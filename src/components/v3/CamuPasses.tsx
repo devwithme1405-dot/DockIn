@@ -6,7 +6,7 @@ import { DockIn } from "@/lib/native";
 import { approvePass, connectApprover } from "@/lib/approver";
 import { fmtTime, fromDateStr } from "@/lib/dates";
 import type { PassDraft } from "@/lib/outpass";
-import { cancelInCamu, cancellable, fetchHistory, findInHistory, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
+import { cancelInCamu, cancellable, fetchHistory, findInHistory, markCancelledLocally, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
 import { v3db, type PassRecord } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
 import { Sheet, cx, useToast } from "../ui";
@@ -286,14 +286,16 @@ export function CancelPass({ c, onDone, compact }: { c: CamuPass; onDone?: () =>
     setErr(null);
     const r = await cancelInCamu(c.id);
     if (r.ok) {
-      await fetchHistory().catch(() => []);
-      // DockIn's own copy of it follows.
+      // Show it cancelled at once; MyCamu's list catches up in its own time.
+      markCancelledLocally(c.id);
       const mine = await v3db.passes.filter((p) => p.camuId === c.id).toArray();
       for (const p of mine) await v3db.passes.update(p.id, { status: "cancelled", updatedAt: Date.now() });
       toast.show(`${c.type} cancelled in MyCamu`);
       setBusy(false);
       setAsk(false);
       onDone?.();
+      // Pull MyCamu's list in the background so everything else stays fresh too.
+      void fetchHistory().catch(() => []);
       return;
     }
     setErr(r);

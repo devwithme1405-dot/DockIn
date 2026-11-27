@@ -334,10 +334,29 @@ export function cachedHistory(): { at: number; items: CamuPass[] } | null {
   }
 }
 
+/**
+ * Passes just cancelled from DockIn. MyCamu's own list lags a few seconds behind
+ * its cancel, so until the list catches up these stay cancelled in the view
+ * instead of flickering back to active on the next read.
+ */
+const pendingCancel = new Set<string>();
+
+function withPending(items: CamuPass[]): CamuPass[] {
+  if (!pendingCancel.size) return items;
+  return items.map((p) => {
+    if (!pendingCancel.has(p.id)) return p;
+    if (p.state === "cancelled" || p.state === "rejected") {
+      pendingCancel.delete(p.id); // MyCamu now agrees
+      return p;
+    }
+    return { ...p, state: "cancelled" };
+  });
+}
+
 /** Reads MyCamu's list now (and keeps it for offline). Throws when MyCamu can't be reached. */
 export async function fetchHistory(): Promise<CamuPass[]> {
   const r = await DockIn.camuPasses();
-  const items = camuHistory(JSON.parse(r.items || "[]"));
+  const items = withPending(camuHistory(JSON.parse(r.items || "[]")));
   try {
     localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), items }));
   } catch {
@@ -345,6 +364,24 @@ export async function fetchHistory(): Promise<CamuPass[]> {
   }
   historyListeners.forEach((f) => f());
   return items;
+}
+
+/**
+ * Show a pass as cancelled right now, before MyCamu's list catches up. The next
+ * few reads keep it cancelled (see {@link fetchHistory}).
+ */
+export function markCancelledLocally(camuId: string): void {
+  pendingCancel.add(camuId);
+  const cur = cachedHistory();
+  if (cur) {
+    const items = cur.items.map((p) => (p.id === camuId ? { ...p, state: "cancelled" as const } : p));
+    try {
+      localStorage.setItem(CACHE, JSON.stringify({ at: cur.at, items }));
+    } catch {
+      /* private mode */
+    }
+  }
+  historyListeners.forEach((f) => f());
 }
 
 const historyListeners = new Set<() => void>();
