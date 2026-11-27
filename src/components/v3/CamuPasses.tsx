@@ -176,7 +176,7 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
-  const note = "Sign in with your approval login and approve your pass — DockIn will remember it.";
+  const note = "Sign in with your parent's approval login and approve your pass — DockIn will remember it.";
 
   async function go() {
     if (busy) return;
@@ -184,7 +184,7 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
     try {
       if (!camuId) {
         const st = await connectApprover(note);
-        if (st.saved) toast.show("Approval login saved — approve a pass once and then it's automatic.");
+        if (st.saved) toast.show("Parent's approval login saved — approve a pass once and then it's automatic.");
         return;
       }
       const r = await approvePass(camuId, note);
@@ -199,7 +199,7 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
             ? "Approval sign-in expired — just sign in again."
             : r.why === "teach"
               ? "Approve it here once — then DockIn does it for you."
-              : "Sign in with your approval login to approve from here.",
+              : "Sign in with your parent's approval login to approve from here.",
         );
       } else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
       else toast.show("Couldn't reach MyCamu — try again.");

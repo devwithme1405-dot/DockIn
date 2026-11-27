@@ -3,11 +3,8 @@
 import { AnnouncementBar } from "@/components/AccountNotices";
 import { OutpassEntry } from "@/components/v3/OutpassEntry";
 import { WhatsNew } from "@/components/WhatsNew";
-import { ConnectApprover } from "@/components/College";
-import { useApproverState } from "@/lib/approver";
 import { usePreview } from "@/lib/v3/flags";
 import { openOutpass } from "@/lib/v3/ui";
-import { Stamp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -61,9 +58,6 @@ export default function TodayPage() {
   const { today, hm } = useNow();
   const [bell, setBell] = useState(false);
   const preview = usePreview();
-  const approver = useApproverState();
-  const approverOn = approver.saved || approver.hasCreds;
-  const [showApprover, setShowApprover] = useState(false);
   const target = profile?.target ?? 75;
 
   const { data, camu, native } = useAttendanceData(target);
@@ -165,11 +159,6 @@ export default function TodayPage() {
   return (
     <div className="page-wash stagger">
       <WhatsNew />
-      <Sheet open={showApprover} onClose={() => setShowApprover(false)} title="Self-approval">
-        <div className="pb-2">
-          <ConnectApprover onDone={() => setShowApprover(false)} />
-        </div>
-      </Sheet>
       <StickyBar className="px-5 pb-2">
         <div className="flex h-12 items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -181,22 +170,6 @@ export default function TodayPage() {
               <PaperIconButton label="Outpass" onClick={() => openOutpass("new")}>
                 <DoorOpen size={19} strokeWidth={2.3} />
               </PaperIconButton>
-            )}
-            {preview && (
-              <button
-                type="button"
-                onClick={() => setShowApprover(true)}
-                aria-label={approverOn ? "Self-approval on" : "Set up self-approval"}
-                className={cx(
-                  "relative grid size-10 place-items-center rounded-full text-white shadow-[0_3px_0_rgb(0_0_0/0.18)] transition active:translate-y-[2px]",
-                  approverOn ? "bg-[#1f9d57]" : "bg-[#f0872b]",
-                )}
-              >
-                <Stamp size={18} strokeWidth={2.4} />
-                {approverOn && (
-                  <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full border-2 border-[var(--bg)] bg-[#19c268]" />
-                )}
-              </button>
             )}
             <PaperIconButton label="Updates" onClick={() => setBell(true)} dot={urgent}>
               <Bell size={19} strokeWidth={2.3} />

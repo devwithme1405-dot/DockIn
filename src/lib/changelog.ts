@@ -25,7 +25,7 @@ export const RELEASES: Release[] = [
     app: true,
     items: [
       "Make a pass by just saying it: type or speak “kal 4 baje market” and DockIn fills the whole MyCamu form in seconds.",
-      "Approve your own gate pass in one tap — save your college approval login once, and DockIn approves it for you, no second app and no signing in again.",
+      "Approve your own gate pass in one tap — save your parent's approval login once, and DockIn approves it for you, no second app and no signing in again.",
       "It stays signed in: DockIn renews the approval session on its own, so you set it up once and forget it.",
       "Leave Out Pass: DockIn writes the warden mail for you — your name, enrollment, dates and times — ready to send.",
       "A cancelled pass now shows cancelled at once, and every pass keeps its real status straight from MyCamu.",

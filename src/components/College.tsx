@@ -233,13 +233,13 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
     <Row
       icon={<Stamp size={19} />}
       done={on}
-      title={on ? "Self-approval on" : "Self-approval"}
+      title={on ? "Parents approval login on" : "Parents approval login"}
       body={
         on
           ? st.taught
             ? `Approve your own passes in one tap${st.user ? ` · ${st.user}` : ""}.`
             : "Sign in once and approve a pass — then it's automatic."
-          : "Approve your own gate pass from inside DockIn. Save your college approval login (username & password) — DockIn fills it in and keeps you signed in."
+          : "Approve your own gate pass from inside DockIn. Save your parent's approval login (username & password) — DockIn fills it in and keeps you signed in."
       }
       compact={compact}
       action={
@@ -300,7 +300,7 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
             {busy && <Loader2 size={15} className="animate-spin" />} Save &amp; sign in
           </button>
           <p className="text-[12px] text-muted">
-            Saved encrypted on this phone only. DockIn fills your college approval login (you pick your institution once) and keeps the session alive.
+            Saved encrypted on this phone only. DockIn fills your parent&apos;s approval login (you pick your institution once) and keeps the session alive.
           </p>
         </form>
       )}

@@ -22,6 +22,7 @@ import {
   Send,
   Share2,
   Sparkles,
+  Stamp,
   Sun,
   Sunrise,
   Trash2,
@@ -30,6 +31,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { ConnectApprover } from "@/components/College";
 import { useBackClose } from "@/lib/backClose";
 import { addDays, fmtTime, toDateStr } from "@/lib/dates";
 import { DockIn, isNativeApp, onPhone } from "@/lib/native";
@@ -133,9 +135,17 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
   const camuList = useCamuHistory();
   const count = camuList ? camuList.items.length : local;
   const liveCount = camuList ? liveCamu(camuList.items, toDateStr()).length : 0;
+  const [showApprover, setShowApprover] = useState(false);
+  const approver = useApproverState();
+  const approverOn = approver.saved || approver.hasCreds;
 
   return (
     <div className="ask-screen paper-page fixed inset-0 z-[56] mx-auto flex w-full max-w-md flex-col" role="dialog" aria-label="Outpass">
+      <Sheet open={showApprover} onClose={() => setShowApprover(false)} title="Parents approval login">
+        <div className="pb-2">
+          <ConnectApprover onDone={() => setShowApprover(false)} />
+        </div>
+      </Sheet>
       <header className="op-head relative z-10 overflow-hidden px-3 pt-[calc(var(--sat,0px)+0.5rem)] pb-3 text-white">
         <div className="relative flex items-center gap-2">
           <button type="button" onClick={closeOutpass} aria-label="Back" className="grid size-10 place-items-center rounded-full bg-white/15 text-white active:scale-95">
@@ -147,6 +157,18 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
               {liveCount ? `${liveCount} active · ` : ""}Day out & leave, straight to MyCamu
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowApprover(true)}
+            aria-label={approverOn ? "Parents approval login on" : "Set up parents approval login"}
+            className={cx(
+              "relative grid size-11 place-items-center rounded-2xl text-white shadow-[0_3px_0_rgb(0_0_0/0.22)] transition active:translate-y-[2px]",
+              approverOn ? "bg-[#1f9d57]" : "bg-[#f0872b]",
+            )}
+          >
+            <Stamp size={20} strokeWidth={2.4} />
+            {approverOn && <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-[#2bd778] shadow-[0_0_0_2px_rgba(60,20,5,0.5)]" />}
+          </button>
           <span className="op-door grid size-11 place-items-center rounded-2xl bg-white/15" aria-hidden>
             <DoorOpen size={22} />
           </span>
@@ -974,7 +996,7 @@ function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void
             </>
           ) : (
             <p className="text-[12.5px] text-muted">
-              Waiting for approval — your parent or warden approves it in MyCamu. Set up self-approval (Profile) to do it yourself in one tap.
+              Waiting for approval — your parent or warden approves it in MyCamu. Set up the parents approval login to do it yourself in one tap.
             </p>
           )}
         </Step>

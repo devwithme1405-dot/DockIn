@@ -26,7 +26,7 @@ const FEATURES = [
     Icon: Stamp,
     cls: "bg-safe-soft text-safe",
     title: "Approve it yourself — one tap",
-    body: "Save your college approval login once. Then approve your own gate pass right here — no second app, no signing in again.",
+    body: "Save your parent's approval login once. Then approve your own gate pass right here — no second app, no signing in again.",
   },
   {
     Icon: Mail,
@@ -39,6 +39,7 @@ const FEATURES = [
 export function WhatsNew() {
   const preview = usePreview();
   const [show, setShow] = useState(false);
+  const [armed, setArmed] = useState(false);
 
   useEffect(() => {
     if (!preview) return;
@@ -49,23 +50,35 @@ export function WhatsNew() {
       /* private mode */
     }
     if (seen) return;
-    const t = setTimeout(() => {
-      setShow(true);
-      try {
-        localStorage.setItem(SEEN, "1");
-      } catch {
-        /* private mode */
-      }
-    }, 900);
+    const t = setTimeout(() => setShow(true), 900);
     return () => clearTimeout(t);
   }, [preview]);
 
+  // Let the backdrop dismiss only after it has settled, so a stray tap as it
+  // appears can't close it instantly.
+  useEffect(() => {
+    if (!show) return;
+    const t = setTimeout(() => setArmed(true), 500);
+    return () => clearTimeout(t);
+  }, [show]);
+
   if (!show || typeof document === "undefined") return null;
 
-  const close = () => setShow(false);
+  // Dismiss for good — remembered so it never comes back.
+  const dismiss = () => {
+    setShow(false);
+    try {
+      localStorage.setItem(SEEN, "1");
+    } catch {
+      /* private mode */
+    }
+  };
+  const onDim = () => {
+    if (armed) dismiss();
+  };
 
   return createPortal(
-    <div className="wn-dim" onClick={close} role="dialog" aria-modal="true" aria-label="What's new in DockIn">
+    <div className="wn-dim" onClick={onDim} role="dialog" aria-modal="true" aria-label="What's new in DockIn">
       <div className="wn-card" onClick={(e) => e.stopPropagation()}>
         {/* hero */}
         <div className="wn-hero">
@@ -80,7 +93,7 @@ export function WhatsNew() {
             <Stamp size={22} />
           </span>
 
-          <button type="button" onClick={close} aria-label="Close" className="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-white/15 text-white active:bg-white/25">
+          <button type="button" onClick={dismiss} aria-label="Close" className="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-white/15 text-white active:bg-white/25">
             <X size={18} />
           </button>
 
@@ -115,14 +128,14 @@ export function WhatsNew() {
           <button
             type="button"
             onClick={() => {
-              close();
+              dismiss();
               openOutpass("new");
             }}
             className="btn-leather flex h-[3.25rem] w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-bold"
           >
             Make a pass <ArrowRight size={19} />
           </button>
-          <button type="button" onClick={close} className="mt-2 h-10 w-full rounded-2xl text-[13.5px] font-bold text-muted active:bg-black/5">
+          <button type="button" onClick={dismiss} className="mt-2 h-10 w-full rounded-2xl text-[13.5px] font-bold text-muted active:bg-black/5">
             Maybe later
           </button>
         </div>
