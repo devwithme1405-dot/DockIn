@@ -22,7 +22,6 @@ import {
   Send,
   Share2,
   Sparkles,
-  Stamp,
   Sun,
   Sunrise,
   Trash2,
@@ -80,7 +79,6 @@ import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
 import { useApproverState } from "@/lib/approver";
-import { ConnectApprover } from "@/components/College";
 import { ApproveNow, CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
@@ -131,9 +129,6 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
   const [tab, setTab] = useState<"new" | "history">(start.tab);
   const [saved, setSaved] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(start.focus ?? null);
-  const approver = useApproverState();
-  const approverOn = approver.saved || approver.hasCreds;
-  const [showApprover, setShowApprover] = useState(false);
   const local = useLiveQuery(() => v3db.passes.count(), []) ?? 0;
   const camuList = useCamuHistory();
   const count = camuList ? camuList.items.length : local;
@@ -190,29 +185,6 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {!saved && (
-          <div className="mx-4 mt-3">
-            <button
-              type="button"
-              onClick={() => setShowApprover(true)}
-              className={cx(
-                "flex w-full items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-left active:scale-[.99]",
-                approverOn ? "border-safe/40 bg-safe-soft/50" : "border-line bg-surface",
-              )}
-            >
-              <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", approverOn ? "bg-safe-soft text-safe" : "bg-accent-soft text-accent")}>
-                <Stamp size={17} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <b className="block text-[13.5px] font-bold">Self-approval</b>
-                <span className="block text-[11.5px] text-muted">{approverOn ? "Approve your own passes in one tap" : "Set it up to approve your own passes"}</span>
-              </span>
-              <span className={cx("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold", approverOn ? "bg-safe text-white" : "bg-line text-muted")}>
-                {approverOn ? "ON" : "OFF"}
-              </span>
-            </button>
-          </div>
-        )}
         {saved ? (
           <Saved
             id={saved}
@@ -229,12 +201,6 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
           <History focus={focus} onFocusDone={() => setFocus(null)} onNew={() => setTab("new")} />
         )}
       </div>
-
-      <Sheet open={showApprover} onClose={() => setShowApprover(false)} title="Self-approval">
-        <div className="pb-2">
-          <ConnectApprover onDone={() => setShowApprover(false)} />
-        </div>
-      </Sheet>
     </div>
   );
 }
