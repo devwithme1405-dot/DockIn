@@ -4,23 +4,17 @@ import { useEffect, useSyncExternalStore } from "react";
 import { DockIn, isNativeApp } from "../native";
 
 /**
- * DockIn 3 (assistant, outpass) is a test build for now. Its screens ship with
- * everyone's app but stay hidden unless this phone runs the preview APK (the
- * one shared by link). The answer is remembered so the next launch shows the
- * floating button at once, with no flicker.
- *
- * On the web, `localStorage["dockin-v3"] = "1"` turns it on (for testing).
+ * DockIn 3 (assistant, outpass, self-approval) is live for everyone now.
+ * These flags used to gate the screens to the preview APK; they stay as the one
+ * switch every DockIn 3 surface reads, so the whole set can be turned on or off
+ * in one place, and now they're on for all builds.
  */
 const KEY = "dockin-channel";
 const listeners = new Set<() => void>();
 let asked = false;
 
 function read(): boolean {
-  try {
-    return localStorage.getItem("dockin-v3") === "1" || localStorage.getItem(KEY) === "preview";
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 function ask() {
