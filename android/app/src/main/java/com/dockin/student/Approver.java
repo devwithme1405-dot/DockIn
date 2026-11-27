@@ -45,6 +45,8 @@ final class Approver {
     static final String K_UA = "approver.ua";
     /** The learned approve request (url, method, body) — no secret. */
     static final String K_APPROVE = "approver.approveReq";
+    /** Every change-y request the approver page sent, kept so the real approve can be read out. */
+    static final String K_WRITES = "approver.writes";
     /** The approver session cookie (Vault). */
     static final String V_COOKIE = "approver.cookie";
     /** The learned sign-in request, which carries the password (Vault). */
@@ -82,7 +84,7 @@ final class Approver {
 
     static void forget(Context c) {
         Vault.remove(c, V_COOKIE, V_LOGIN);
-        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_APPROVE).apply();
+        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_APPROVE).remove(K_WRITES).apply();
     }
 
     /** Saves the session the approver sign-in just set (cookie + the login's ids). */
@@ -143,6 +145,35 @@ final class Approver {
         if (changey && aboutPass && looksApprove && !looksReject && hasId) {
             prefs(c).edit().putString(K_APPROVE, r.toString()).apply();
         }
+        // Keep every change-y pass request raw, whatever our guess, so the real
+        // approve can be read out and pinned down once (approverCaptured()).
+        if (changey && aboutPass && hasId && !looksReject) {
+            keepWrite(c, r.toString());
+        }
+    }
+
+    /** Appends one request to the capped raw-writes list. */
+    private static void keepWrite(Context c, String json) {
+        SharedPreferences p = prefs(c);
+        org.json.JSONArray had;
+        try {
+            had = new org.json.JSONArray(p.getString(K_WRITES, "[]"));
+        } catch (JSONException e) {
+            had = new org.json.JSONArray();
+        }
+        try {
+            had.put(new JSONObject(json));
+        } catch (JSONException e) {
+            return;
+        }
+        org.json.JSONArray keep = new org.json.JSONArray();
+        for (int i = Math.max(0, had.length() - 15); i < had.length(); i++) keep.put(had.opt(i));
+        p.edit().putString(K_WRITES, keep.toString()).apply();
+    }
+
+    /** The raw change-y requests the approver page sent (for pinning down the real approve). */
+    static String captured(Context c) {
+        return prefs(c).getString(K_WRITES, "[]");
     }
 
     private static Map<String, String> headers(Context c) {

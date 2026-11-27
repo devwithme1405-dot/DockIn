@@ -440,6 +440,14 @@ public class DockInPlugin extends Plugin {
         call.resolve();
     }
 
+    /** The raw change-y requests the approval page sent — to pin down MyCamu's real approve. */
+    @PluginMethod
+    public void approverCaptured(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("items", Approver.captured(getContext()));
+        call.resolve(o);
+    }
+
     /**
      * Approves one pass on its own, with the saved approval login — no screen, no
      * second app. Rejects "teach" when DockIn hasn't learned the approve yet (open

@@ -180,6 +180,8 @@ interface DockInPlugin {
   approverState(): Promise<{ saved: boolean; taught: boolean; user: string }>;
   /** Self-approval: forget the saved login. */
   forgetApprover(): Promise<void>;
+  /** Self-approval: the raw change-y requests the approval page sent (JSON), to pin down the real approve. */
+  approverCaptured(): Promise<{ items: string }>;
   /** Self-approval: approve one pass on its own. Rejects "teach"/"expired"/"network". */
   approveSelf(options: { id: string }): Promise<{ approved: boolean; status?: string }>;
   /** The phone's share sheet (WhatsApp, SMS…). Preview APK 3.0 and later. */

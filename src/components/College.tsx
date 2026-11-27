@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, Stamp, TriangleAlert } from "lucide-react";
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
+import { DockIn } from "@/lib/native";
 import type { CamuState, LmsState } from "@/lib/native";
 import { approverState, connectApprover, forgetApprover, type ApproverState } from "@/lib/approver";
 import { usePreview } from "@/lib/v3/flags";
@@ -144,6 +145,7 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
   const { native } = useCollege();
   const preview = usePreview();
   const { busy, run } = useBusy();
+  const toast = useToast();
   const [st, setSt] = useState<ApproverState>({ saved: false, taught: false, user: "" });
 
   useEffect(() => {
@@ -189,7 +191,28 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
           </Action>
         )
       }
-    />
+    >
+      {on && (
+        <button
+          type="button"
+          onClick={() =>
+            run(async () => {
+              const { items } = await DockIn.approverCaptured();
+              const text = (items || "[]").trim();
+              try {
+                await navigator.clipboard.writeText(text);
+                toast.show(text === "[]" ? "Nothing captured yet — approve one pass first." : "Copied — paste it to Claude so auto-approve can be set up.");
+              } catch {
+                toast.show("Couldn't copy — take a screenshot of this instead.");
+              }
+            })
+          }
+          className="mt-3 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-[12px] text-muted"
+        >
+          Setup helper: approve one pass, then tap here to copy what MyCamu sent (send it to Claude).
+        </button>
+      )}
+    </Row>
   );
 }
 
