@@ -21,6 +21,7 @@ import android.content.SharedPreferences;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
+import android.webkit.JsResult;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebStorage;
@@ -111,16 +112,16 @@ public class CamuLoginActivity extends Activity {
                     + "if(b instanceof FormData){var o={};b.forEach(function(v,k){o[k]=(v&&v.name!==undefined&&v.size!==undefined)"
                     + "?{file:v.name,type:v.type,size:v.size}:String(v).slice(0,2000);});return JSON.stringify({formData:o});}"
                     + "return String(b).slice(0,2000);}catch(e){return '?'}}"
-                    + "var AN=/google-analytics|googletagmanager|doubleclick|facebook\\.|clarity\\.ms|hotjar|sentry|mixpanel|segment\\.io/i;"
+                    + "var CH=/canc|cncl|cnl|withdr|revok|delet|dlt|remov|rmv|updt|update|stus|status|lv\\b|leave|gatepass/i;var AN=/google-analytics|googletagmanager|doubleclick|facebook\\.|clarity\\.ms|hotjar|sentry|mixpanel|segment\\.io/i;"
                     + "function note(m,u,b,st,r){try{if(AN.test(String(u)))return;DockInCapture.note(JSON.stringify({at:Date.now(),page:location.pathname+location.hash,"
                     + "method:m,url:String(u),body:body(b),status:st,answer:String(r||'').slice(0,3000)}));}catch(e){}}"
                     + "var O=XMLHttpRequest.prototype.open,S=XMLHttpRequest.prototype.send;"
                     + "XMLHttpRequest.prototype.open=function(m,u){this.__m=m;this.__u=u;return O.apply(this,arguments);};"
-                    + "XMLHttpRequest.prototype.send=function(b){var x=this;if(x.__m&&String(x.__m).toUpperCase()!=='GET'){"
+                    + "XMLHttpRequest.prototype.send=function(b){var x=this;if(x.__m&&(String(x.__m).toUpperCase()!=='GET'||CH.test(String(x.__u)))){"
                     + "x.addEventListener('loadend',function(){var r='';try{r=x.responseType===''||x.responseType==='text'?x.responseText:'';}catch(e){}"
                     + "note(x.__m,x.__u,b,x.status,r);});}return S.apply(this,arguments);};"
                     + "if(window.fetch){var F=window.fetch;window.fetch=function(i,o){var m=(o&&o.method)||(i&&typeof i!=='string'&&i.method)||'GET';var p=F.apply(this,arguments);"
-                    + "if(String(m).toUpperCase()!=='GET'){p.then(function(res){res.clone().text().then(function(t){note(m,(typeof i==='string'?i:(i&&i.url))||res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
+                    + "if(String(m).toUpperCase()!=='GET'||CH.test(String(typeof i==='string'?i:(i&&i.url)))){p.then(function(res){res.clone().text().then(function(t){note(m,(typeof i==='string'?i:(i&&i.url))||res.url,o&&o.body,res.status,t);});}).catch(function(){});}"
                     + "return p;};}})()";
 
     /** Words that mark a leave / gate-pass request in what Camu sends. */
@@ -407,6 +408,56 @@ public class CamuLoginActivity extends Activity {
             }
         });
         w.setWebChromeClient(new WebChromeClient() {
+            // MyCamu asks "Are you sure?" before cancelling. Without these, Android
+            // answers such questions "no" on its own and nothing happens.
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, final JsResult result) {
+                if (isFinishing()) return false;
+                new AlertDialog.Builder(CamuLoginActivity.this)
+                        .setMessage(message)
+                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int which) {
+                                result.confirm();
+                            }
+                        })
+                        .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                            @Override
+                            public void onCancel(DialogInterface d) {
+                                result.confirm();
+                            }
+                        })
+                        .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, final JsResult result) {
+                if (isFinishing()) return false;
+                new AlertDialog.Builder(CamuLoginActivity.this)
+                        .setMessage(message)
+                        .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int which) {
+                                result.confirm();
+                            }
+                        })
+                        .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface d, int which) {
+                                result.cancel();
+                            }
+                        })
+                        .setOnCancelListener(new DialogInterface.OnCancelListener() {
+                            @Override
+                            public void onCancel(DialogInterface d) {
+                                result.cancel();
+                            }
+                        })
+                        .show();
+                return true;
+            }
+
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
                 WebView child = new WebView(CamuLoginActivity.this);
