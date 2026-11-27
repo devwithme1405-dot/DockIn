@@ -14,7 +14,6 @@ import {
   GraduationCap,
   House,
   ImagePlus,
-  Loader2,
   Mail,
   Mic,
   Moon,
@@ -23,7 +22,6 @@ import {
   Send,
   Share2,
   Sparkles,
-  Stamp,
   Sun,
   Sunrise,
   Trash2,
@@ -59,6 +57,7 @@ import {
   directState,
   type DirectState,
   cachedHistory,
+  onHistoryChange,
   liveCamu,
   useCamuHistory,
   cancellable,
@@ -79,7 +78,8 @@ import { closeOutpass, openOutpass, useV3Screens } from "@/lib/v3/ui";
 import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
-import { connectApprover, useApproverState } from "@/lib/approver";
+import { useApproverState } from "@/lib/approver";
+import { ConnectApprover } from "@/components/College";
 import { ApproveNow, CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
@@ -186,7 +186,11 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        {!saved && <ApproverChip />}
+        {!saved && (
+          <div className="mx-4 mt-3">
+            <ConnectApprover compact />
+          </div>
+        )}
         {saved ? (
           <Saved
             id={saved}
@@ -844,44 +848,6 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   );
 }
 
-// ------------------------------------------------------------ self-approval chip
-
-/** A quick self-approval set-up / status at the top of Outpass, next to Profile. */
-function ApproverChip() {
-  const approver = useApproverState();
-  const [busy, setBusy] = useState(false);
-
-  if (approver.saved) {
-    return (
-      <div className="mx-4 mt-3 flex items-center gap-2 rounded-2xl border border-safe/30 bg-safe-soft/50 px-3 py-2">
-        <Stamp size={16} className="text-safe" />
-        <span className="flex-1 text-[12.5px] font-bold text-safe">Self-approval on{approver.user ? ` · ${approver.user}` : ""}</span>
-        <span className="text-[11px] text-muted">one-tap approve</span>
-      </div>
-    );
-  }
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => {
-        setBusy(true);
-        void connectApprover("Sign in with your approval login and approve one pass — then it's one tap.").finally(() => setBusy(false));
-      }}
-      className="mx-4 mt-3 flex w-[calc(100%-2rem)] items-center gap-2.5 rounded-2xl border border-line bg-surface px-3 py-2.5 text-left active:scale-[.99]"
-    >
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-        <Stamp size={17} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <b className="block text-[13px] font-bold">Approve your own passes</b>
-        <span className="block text-[11.5px] text-muted">Connect your college approval login — one tap after.</span>
-      </span>
-      {busy ? <Loader2 size={16} className="shrink-0 animate-spin text-muted" /> : <ChevronLeft size={17} className="shrink-0 rotate-180 text-muted" />}
-    </button>
-  );
-}
-
 // ------------------------------------------------------------ warden mail
 
 /**
@@ -1148,6 +1114,9 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   const [loading, setLoading] = useState(native);
   const [offline, setOffline] = useState(false);
   const toast = useToast();
+
+  // An optimistic cancel (or any cached-list change) updates this list at once.
+  useEffect(() => onHistoryChange(() => setCamu(cachedHistory())), []);
 
   async function load(loud: boolean) {
     if (!native) return;

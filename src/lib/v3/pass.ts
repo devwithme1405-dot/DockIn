@@ -388,6 +388,12 @@ const historyListeners = new Set<() => void>();
 let lastRaw: string | null = null;
 let lastParsed: { at: number; items: CamuPass[] } | null = null;
 
+/** Run fn whenever DockIn's cached MyCamu list changes (an optimistic cancel, or a fresh read). */
+export function onHistoryChange(fn: () => void): () => void {
+  historyListeners.add(fn);
+  return () => historyListeners.delete(fn);
+}
+
 /** MyCamu's list as last read, live (updates whenever DockIn reads it again). */
 export function useCamuHistory(): { at: number; items: CamuPass[] } | null {
   return useSyncExternalStore(

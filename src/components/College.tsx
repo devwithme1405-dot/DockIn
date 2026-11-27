@@ -5,7 +5,7 @@ import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, Stamp, TriangleAler
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
 import { DockIn, isNativeApp } from "@/lib/native";
 import type { CamuState, LmsState } from "@/lib/native";
-import { approverState, connectApprover, forgetApprover, type ApproverState } from "@/lib/approver";
+import { approverState, connectApprover, forgetApprover, saveApproverCreds, type ApproverState } from "@/lib/approver";
 import { usePreview } from "@/lib/v3/flags";
 import { cx, inputCls, useToast } from "./ui";
 import { isOffline } from "@/lib/net";
@@ -180,13 +180,18 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
   const { native } = useCollege();
   const preview = usePreview();
   const { busy, run } = useBusy();
-  const toast = useToast();
-  const [st, setSt] = useState<ApproverState>({ saved: false, taught: false, user: "" });
+  const [st, setSt] = useState<ApproverState>({ saved: false, taught: false, hasCreds: false, user: "" });
+  const [open, setOpen] = useState(false);
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
 
   useEffect(() => {
     let live = true;
     void approverState().then((s) => {
-      if (live) setSt(s);
+      if (live) {
+        setSt(s);
+        if (s.user) setUser(s.user);
+      }
     });
     return () => {
       live = false;
@@ -196,56 +201,92 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
   // Self-approval belongs with outpass — a DockIn 3 feature — so it stays on the
   // preview channel until outpass ships for everyone, hidden on the everyday app.
   if (!native || !preview) return null;
-  const on = st.saved;
+  const on = st.saved || st.hasCreds;
+
+  async function saveAndConnect() {
+    await run(async () => {
+      await saveApproverCreds(user.trim(), pass);
+      setPass("");
+      setOpen(false);
+      setSt(await connectApprover("Sign in and approve one pass — DockIn fills your login and remembers it."));
+      onDone?.();
+    });
+  }
 
   return (
     <Row
       icon={<Stamp size={19} />}
       done={on}
-      title={on ? "Self-approval connected" : "Self-approval"}
+      title={on ? "Self-approval on" : "Self-approval"}
       body={
         on
           ? st.taught
-            ? `Approve your own passes from here, one tap${st.user ? ` · ${st.user}` : ""}.`
-            : "Approve one pass here once so DockIn learns it — then it's automatic."
-          : "Approve your own gate pass from inside DockIn. Sign in with the approval login your college gave you (username & password, not Microsoft)."
+            ? `Approve your own passes in one tap${st.user ? ` · ${st.user}` : ""}.`
+            : "Sign in once and approve a pass — then it's automatic."
+          : "Approve your own gate pass from inside DockIn. Save your college approval login (username & password) — DockIn fills it in and keeps you signed in."
       }
       compact={compact}
       action={
         on ? (
           <button
-            onClick={() => run(async () => { await forgetApprover(); setSt({ saved: false, taught: false, user: "" }); })}
+            onClick={() => run(async () => { await forgetApprover(); setSt({ saved: false, taught: false, hasCreds: false, user: "" }); setUser(""); })}
             disabled={busy}
             className="btn-disconnect h-9 shrink-0 rounded-full px-3.5 text-[13px] font-bold disabled:opacity-60"
           >
             Disconnect
           </button>
         ) : (
-          <Action busy={busy} onClick={() => run(async () => { setSt(await connectApprover()); onDone?.(); })}>
-            Connect
-          </Action>
+          !open && (
+            <Action busy={false} onClick={() => setOpen(true)}>
+              Set up
+            </Action>
+          )
         )
       }
     >
-      {on && (
-        <button
-          type="button"
-          onClick={() =>
-            run(async () => {
-              const { items } = await DockIn.approverCaptured();
-              const text = (items || "[]").trim();
-              try {
-                await navigator.clipboard.writeText(text);
-                toast.show(text === "[]" ? "Nothing captured yet — approve one pass first." : "Copied — paste it to Claude so auto-approve can be set up.");
-              } catch {
-                toast.show("Couldn't copy — take a screenshot of this instead.");
-              }
-            })
-          }
-          className="mt-3 w-full rounded-xl border border-line bg-surface px-3 py-2 text-left text-[12px] text-muted"
-        >
-          Setup helper: approve one pass, then tap here to copy what MyCamu sent (send it to Claude).
+      {on && !open && (
+        <button type="button" onClick={() => setOpen(true)} className="mt-2.5 text-[12.5px] font-bold text-accent active:opacity-70">
+          Edit login
         </button>
+      )}
+      {open && (
+        <form
+          className="mt-3 space-y-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveAndConnect();
+          }}
+        >
+          <input
+            className={inputCls}
+            placeholder="Approval username / enrollment"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            aria-label="Approval username"
+          />
+          <input
+            className={inputCls}
+            type="password"
+            placeholder="Approval password"
+            autoComplete="current-password"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            aria-label="Approval password"
+          />
+          <button
+            type="submit"
+            disabled={busy || !user.trim() || !pass}
+            className="btn-connect flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14.5px] font-bold disabled:opacity-50"
+          >
+            {busy && <Loader2 size={15} className="animate-spin" />} Save &amp; sign in
+          </button>
+          <p className="text-[12px] text-muted">
+            Saved encrypted on this phone only. DockIn fills your college approval login (you pick your institution once) and keeps the session alive.
+          </p>
+        </form>
       )}
     </Row>
   );

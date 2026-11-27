@@ -47,14 +47,22 @@ final class Approver {
     static final String K_WRITES = "approver.writes";
     /** The approval login's own id (loggedInId), learned from one approve by hand. */
     static final String K_LOGIN = "approver.loginId";
+    /** The username the student typed, kept to pre-fill the sign-in next time. */
+    static final String K_TYPED = "approver.typedUser";
+    /** The password the student typed, kept (encrypted) to pre-fill the sign-in. */
+    static final String V_PASS = "approver.typedPass";
     /** The approver session cookie (Vault). */
     static final String V_COOKIE = "approver.cookie";
+    /** The sign-in request the approver page sent, replayed to renew the session (Vault; holds the password). */
+    static final String V_LOGIN = "approver.login";
 
     /** MyCamu's own "Approve" button sends this (captured 28 Nov 2026). */
     static final String APPROVE_API = "/api/gatepasses/change-gatepasses-status";
 
     private static final Pattern OBJECT_ID = Pattern.compile("[a-f0-9]{24}");
     private static final Pattern LOGGED_IN = Pattern.compile("\"loggedInId\"\\s*:\\s*\"([a-f0-9]{24})\"");
+    /** What the sign-in request looks like among the page's requests. */
+    private static final Pattern LOGIN_URL = Pattern.compile("(?i)login|signin|sign-in|authenticate|/token|/auth\\b|validateuser|verifyuser|checkuser");
 
     static final class Expired extends Exception {}
     static final class NeedsTeaching extends Exception {}
@@ -76,12 +84,38 @@ final class Approver {
     }
 
     static String user(Context c) {
-        return prefs(c).getString(K_USER, "");
+        String name = prefs(c).getString(K_USER, "");
+        return name.isEmpty() ? prefs(c).getString(K_TYPED, "") : name;
+    }
+
+    /** The student has typed a username and password to pre-fill the sign-in. */
+    static boolean hasCreds(Context c) {
+        return !prefs(c).getString(K_TYPED, "").isEmpty();
+    }
+
+    static String typedUser(Context c) {
+        return prefs(c).getString(K_TYPED, "");
+    }
+
+    static String typedPass(Context c) {
+        String p = Vault.get(c, V_PASS);
+        return p == null ? "" : p;
+    }
+
+    /** Saves the username and password the student typed (password encrypted). */
+    static void saveCreds(Context c, String user, String pass) {
+        prefs(c).edit().putString(K_TYPED, user == null ? "" : user.trim()).apply();
+        Vault.put(c, V_PASS, pass == null ? "" : pass);
+    }
+
+    /** DockIn can sign in again on its own (so the session never just "ends"). */
+    static boolean canRenew(Context c) {
+        return Vault.get(c, V_LOGIN) != null;
     }
 
     static void forget(Context c) {
-        Vault.remove(c, V_COOKIE);
-        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_LOGIN).remove(K_WRITES).apply();
+        Vault.remove(c, V_COOKIE, V_LOGIN, V_PASS);
+        prefs(c).edit().remove(K_USER).remove(K_IDS).remove(K_UA).remove(K_LOGIN).remove(K_WRITES).remove(K_TYPED).apply();
     }
 
     /** Saves the session the approver sign-in just set (cookie + the login's ids). */
@@ -125,8 +159,19 @@ final class Approver {
         Matcher m = LOGGED_IN.matcher(body);
         if (m.find()) prefs(c).edit().putString(K_LOGIN, m.group(1)).apply();
 
+        // The sign-in itself — a POST that logs in. Kept (encrypted) so DockIn can
+        // sign in again on its own and the session never just "ends".
+        String method = r.optString("method", "").toUpperCase();
+        String low = body.toLowerCase();
+        if ("POST".equals(method)
+                && (LOGIN_URL.matcher(url).find() || LOGIN_URL.matcher(low).find())
+                && (low.contains("pass") || low.contains("pwd"))
+                && (low.contains("user") || low.contains("email") || low.contains("login"))) {
+            Vault.put(c, V_LOGIN, r.toString());
+        }
+
         // Keep the change-y pass requests raw too, as a setup helper / for tweaks.
-        boolean changey = !"GET".equalsIgnoreCase(r.optString("method", "")) || url.toLowerCase().contains("status");
+        boolean changey = !"GET".equals(method) || url.toLowerCase().contains("status");
         if (changey && Pattern.compile("(?i)leave|gate|pass").matcher(url).find() && OBJECT_ID.matcher(url + " " + body).find()) {
             keepWrite(c, r.toString());
         }
@@ -183,11 +228,11 @@ final class Approver {
     static String approve(Context c, String passId) throws IOException, Expired, NeedsTeaching {
         if (passId == null || !OBJECT_ID.matcher(passId).matches())
             throw new IllegalArgumentException("That pass can't be approved from here.");
-        if (Vault.get(c, V_COOKIE) == null) throw new Expired();
         String loggedInId = prefs(c).getString(K_LOGIN, "");
         JSONObject stu = Camu.ids(c);
         String perId = stu == null ? "" : stu.optString("StuID", "");
         if (loggedInId.isEmpty() || perId.isEmpty()) throw new NeedsTeaching();
+        if (Vault.get(c, V_COOKIE) == null) relogin(c); // session gone — sign in again, quietly
         String body;
         try {
             body = new JSONObject()
@@ -201,9 +246,71 @@ final class Approver {
             throw new IOException("Couldn't build the approval.");
         }
         Net.Res res = Net.postJson(Camu.BASE + APPROVE_API, body, headers(c));
+        // Session ended mid-use: sign in again on our own and try once more, so the
+        // student never sees an "expired" — the session renews itself.
+        if (res.code == 401 || res.code == 403 || res.redirect()) {
+            relogin(c);
+            res = Net.postJson(Camu.BASE + APPROVE_API, body, headers(c));
+        }
         if (res.code == 401 || res.code == 403 || res.redirect()) throw new Expired();
         if (!res.ok()) throw new IOException("MyCamu answered " + res.code);
         return codeOf(res.body);
+    }
+
+    /**
+     * Signs the approver in again from the captured sign-in request, so the
+     * session renews itself without the student doing anything. Throws
+     * {@link Expired} only when there's nothing to renew from or it's refused.
+     */
+    private static void relogin(Context c) throws IOException, Expired {
+        String raw = Vault.get(c, V_LOGIN);
+        if (raw == null) throw new Expired();
+        try {
+            JSONObject req = new JSONObject(raw);
+            String url = req.optString("url", "");
+            if (!url.startsWith("http")) url = Camu.BASE + (url.startsWith("/") ? url : "/" + url);
+            String body = req.optString("body", "");
+            Map<String, String> h = headers(c);
+            h.remove("Cookie"); // a sign-in starts a fresh session
+            Net.Res res = body.trim().startsWith("{") || body.trim().startsWith("[")
+                    ? Net.postJson(url, body, h)
+                    : Net.postForm(url, formOf(body), h);
+            String cookie = cookieFrom(res);
+            if (cookie == null || cookie.isEmpty() || !res.ok()) throw new Expired();
+            Vault.put(c, V_COOKIE, cookie);
+        } catch (JSONException e) {
+            throw new Expired();
+        }
+    }
+
+    /** The one Cookie header built from a response's Set-Cookie values. */
+    private static String cookieFrom(Net.Res res) {
+        java.util.List<String> set = res.all("Set-Cookie");
+        StringBuilder b = new StringBuilder();
+        for (String s : set) {
+            if (s == null) continue;
+            int semi = s.indexOf(';');
+            String pair = (semi >= 0 ? s.substring(0, semi) : s).trim();
+            if (pair.isEmpty() || pair.indexOf('=') <= 0) continue;
+            if (b.length() > 0) b.append("; ");
+            b.append(pair);
+        }
+        return b.length() == 0 ? null : b.toString();
+    }
+
+    private static Map<String, String> formOf(String body) {
+        Map<String, String> m = new HashMap<>();
+        for (String part : body.split("&")) {
+            int eq = part.indexOf('=');
+            if (eq <= 0) continue;
+            try {
+                m.put(java.net.URLDecoder.decode(part.substring(0, eq), "UTF-8"),
+                        java.net.URLDecoder.decode(part.substring(eq + 1), "UTF-8"));
+            } catch (Exception e) {
+                // skip a part that won't decode
+            }
+        }
+        return m;
     }
 
     /** MyCamu's answer code ("STATUS_UPDTD_SUCC" on success), else "approved". */

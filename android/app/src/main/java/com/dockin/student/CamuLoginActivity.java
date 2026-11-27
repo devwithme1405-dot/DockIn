@@ -76,6 +76,9 @@ public class CamuLoginActivity extends Activity {
      * session. What its page sends is learned by {@link Approver}, not {@link Camu}.
      */
     static final String EXTRA_APPROVER = "approver";
+    /** Username/password to pre-fill into the approval sign-in (never auto-submitted). */
+    static final String EXTRA_FILL_USER = "fillUser";
+    static final String EXTRA_FILL_PASS = "fillPass";
     static final String EXTRA_PATH = "path";
     static final String EXTRA_NOTE = "note";
     /**
@@ -460,6 +463,7 @@ public class CamuLoginActivity extends Activity {
                     }
                     view.evaluateJavascript(CAPTURE, null);
                     saveApproverSession();
+                    fillCreds();
                     return;
                 }
                 if (browse) {
@@ -651,6 +655,53 @@ public class CamuLoginActivity extends Activity {
                 Approver.saveSession(app, cookie, parse(value), ua);
             }
         });
+    }
+
+    /**
+     * Pre-fills the approval sign-in with the saved username and password, so the
+     * student doesn't retype them. Fills only — never submits, never touches a
+     * field that already has a value — so it can't break the page or the login.
+     */
+    private void fillCreds() {
+        if (web == null || getIntent() == null) return;
+        String user = getIntent().getStringExtra(EXTRA_FILL_USER);
+        String pass = getIntent().getStringExtra(EXTRA_FILL_PASS);
+        if (user == null) user = "";
+        if (pass == null) pass = "";
+        if (user.isEmpty() && pass.isEmpty()) return;
+        String u = jsStr(user);
+        String p = jsStr(pass);
+        String js = "(function(u,p){try{"
+                + "var pw=document.querySelector('input[type=password]');if(!pw)return;"
+                + "var ins=[].slice.call(document.querySelectorAll('input'));var i=ins.indexOf(pw);var un=null;"
+                + "for(var k=i-1;k>=0;k--){var t=(ins[k].type||'').toLowerCase();if(t===''||t==='text'||t==='email'||t==='tel'){un=ins[k];break;}}"
+                + "function set(el,v){if(!el||!v||el.value)return;var d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;"
+                + "d.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}"
+                + "set(un,u);set(pw,p);"
+                + "}catch(e){}})(" + u + "," + p + ")";
+        web.evaluateJavascript(js, null);
+    }
+
+    /** A safe JS/JSON string literal (quotes included), for injecting a value into a script. */
+    private static String jsStr(String s) {
+        StringBuilder b = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            switch (ch) {
+                case '"': b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n"); break;
+                case '\r': b.append("\\r"); break;
+                case '\t': b.append("\\t"); break;
+                case '<': b.append("\\u003c"); break;
+                case '>': b.append("\\u003e"); break;
+                case '&': b.append("\\u0026"); break;
+                default:
+                    if (ch < 0x20) b.append(String.format("\\u%04x", (int) ch));
+                    else b.append(ch);
+            }
+        }
+        return b.append("\"").toString();
     }
 
     /** Signed in yet? Camu writes the student's ids to its saved state once it has let them in. */

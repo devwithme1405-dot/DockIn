@@ -133,6 +133,7 @@ public class DockInPlugin extends Plugin {
         JSObject o = new JSObject();
         o.put("saved", saved);
         o.put("taught", Approver.taught(p.getContext()));
+        o.put("hasCreds", Approver.hasCreds(p.getContext()));
         o.put("user", Approver.user(p.getContext()));
         call.resolve(o);
     }
@@ -410,16 +411,27 @@ public class DockInPlugin extends Plugin {
     public void openApprover(PluginCall call) {
         if (pendingApprover != null) pendingApprover.reject("Started again.");
         pendingApprover = call;
-        Intent i = new Intent(getContext(), CamuLoginActivity.class)
+        Context c = getContext();
+        Intent i = new Intent(c, CamuLoginActivity.class)
                 .putExtra(CamuLoginActivity.EXTRA_APPROVER, true)
                 .putExtra(CamuLoginActivity.EXTRA_PATH, call.getString("path", "/"))
-                .putExtra(CamuLoginActivity.EXTRA_NOTE, call.getString("note", ""));
+                .putExtra(CamuLoginActivity.EXTRA_NOTE, call.getString("note", ""))
+                // Pre-fill the sign-in with the typed username/password, if saved.
+                .putExtra(CamuLoginActivity.EXTRA_FILL_USER, Approver.typedUser(c))
+                .putExtra(CamuLoginActivity.EXTRA_FILL_PASS, Approver.typedPass(c));
         try {
             getActivity().startActivity(i);
         } catch (ActivityNotFoundException e) {
             pendingApprover = null;
             call.reject("Could not open the approval sign-in.");
         }
+    }
+
+    /** Saves the approval username/password the student typed (for pre-fill + renewal). */
+    @PluginMethod
+    public void saveApproverCreds(PluginCall call) {
+        Approver.saveCreds(getContext(), call.getString("user", ""), call.getString("pass", ""));
+        call.resolve();
     }
 
     /** Whether a self-approval login is saved, taught (DockIn can approve on its own), and who. */
@@ -429,6 +441,7 @@ public class DockInPlugin extends Plugin {
         JSObject o = new JSObject();
         o.put("saved", Approver.saved(c));
         o.put("taught", Approver.taught(c));
+        o.put("hasCreds", Approver.hasCreds(c));
         o.put("user", Approver.user(c));
         call.resolve(o);
     }

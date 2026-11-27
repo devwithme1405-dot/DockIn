@@ -17,11 +17,23 @@ export interface ApproverState {
   saved: boolean;
   /** DockIn has learned the approve and can do it on its own. */
   taught: boolean;
+  /** The student has typed a username and password. */
+  hasCreds: boolean;
   /** The approver login's name, when MyCamu gave one. */
   user: string;
 }
 
-const OFF: ApproverState = { saved: false, taught: false, user: "" };
+const OFF: ApproverState = { saved: false, taught: false, hasCreds: false, user: "" };
+
+/** Save the typed approval username/password (for pre-fill and silent renewal). */
+export async function saveApproverCreds(user: string, pass: string): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    await DockIn.saveApproverCreds({ user, pass });
+  } catch {
+    // best-effort
+  }
+}
 
 /** The MyCamu page the approver screen lands on: the leave / gate-pass list. */
 const APPROVE_PATH = "/v2/#/leave";

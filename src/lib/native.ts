@@ -175,9 +175,11 @@ interface DockInPlugin {
    * approval login at a path, so the student signs in once and approves — DockIn
    * learns both. Resolves with whether it's now saved and taught.
    */
-  openApprover(options: { path?: string; note?: string }): Promise<{ saved: boolean; taught: boolean; user: string }>;
-  /** Self-approval: is a login saved, has DockIn learned to approve on its own, and who. */
-  approverState(): Promise<{ saved: boolean; taught: boolean; user: string }>;
+  openApprover(options: { path?: string; note?: string }): Promise<{ saved: boolean; taught: boolean; hasCreds: boolean; user: string }>;
+  /** Self-approval: is a login saved, taught, are creds typed, and who. */
+  approverState(): Promise<{ saved: boolean; taught: boolean; hasCreds: boolean; user: string }>;
+  /** Self-approval: save the typed username/password (for pre-fill + silent renewal). */
+  saveApproverCreds(options: { user: string; pass: string }): Promise<void>;
   /** Self-approval: forget the saved login. */
   forgetApprover(): Promise<void>;
   /** Self-approval: the raw change-y requests the approval page sent (JSON), to pin down the real approve. */
