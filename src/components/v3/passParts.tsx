@@ -23,10 +23,10 @@ export const STATUS_LABEL: Record<PassStatus, string> = {
 
 const STATUS_TONE: Record<PassStatus, string> = {
   saved: "bg-warn-soft text-warn",
-  applied: "bg-accent-soft text-accent",
+  applied: "bg-warn-soft text-warn",
   approved: "bg-safe-soft text-safe",
   rejected: "bg-danger-soft text-danger",
-  cancelled: "bg-surface-2 text-muted",
+  cancelled: "bg-danger-soft text-danger",
 };
 
 export function PassStatusChip({ status, className }: { status: PassStatus; className?: string }) {

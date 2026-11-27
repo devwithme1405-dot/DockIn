@@ -25,6 +25,7 @@ import {
   Sunrise,
   Trash2,
   Wand2,
+  History as History_,
   X,
   XCircle,
 } from "lucide-react";
@@ -55,6 +56,8 @@ import {
   type DirectState,
   parentText,
   cachedHistory,
+  liveCamu,
+  useCamuHistory,
   cancellable,
   clashes,
   fetchHistory,
@@ -71,13 +74,13 @@ import { v3db, type PassRecord, type PassStatus } from "@/lib/v3/store";
 import { passProblem, savePass } from "@/lib/v3/tools";
 import { closeOutpass, openOutpass, useV3Screens } from "@/lib/v3/ui";
 import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
-import { Segmented } from "../Paper";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
 import { CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
 
+const DEFAULT_REASON = "Outing";
 const EXAMPLES = ["Kal 4 baje market", "Abhi day out, walking", "Kal se 3 din ghar", "Medical leave 2 to 4 dec"];
 const LEAVE_TYPES: LeaveType[] = ["Leave", "On Duty", "Medical"];
 
@@ -123,38 +126,60 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
   const [tab, setTab] = useState<"new" | "history">(start.tab);
   const [saved, setSaved] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(start.focus ?? null);
-  const count = useLiveQuery(() => v3db.passes.count(), []) ?? 0;
+  const local = useLiveQuery(() => v3db.passes.count(), []) ?? 0;
+  const camuList = useCamuHistory();
+  const count = camuList ? camuList.items.length : local;
+  const liveCount = camuList ? liveCamu(camuList.items, toDateStr()).length : 0;
 
   return (
     <div className="ask-screen paper-page fixed inset-0 z-[56] mx-auto flex w-full max-w-md flex-col" role="dialog" aria-label="Outpass">
-      <header className="glass-bar relative z-10 flex items-center gap-2 px-2 pt-[calc(var(--sat,0px)+0.5rem)] pb-2">
-        <button type="button" onClick={closeOutpass} aria-label="Back" className="grid size-10 place-items-center rounded-full text-accent">
-          <ChevronLeft size={24} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-[19px] leading-tight font-extrabold">Outpass</p>
-          <p className="text-[12px] text-muted">Day out & leave, straight to MyCamu</p>
+      <header className="op-head relative z-10 overflow-hidden px-3 pt-[calc(var(--sat,0px)+0.5rem)] pb-3 text-white">
+        <div className="relative flex items-center gap-2">
+          <button type="button" onClick={closeOutpass} aria-label="Back" className="grid size-10 place-items-center rounded-full bg-white/15 text-white active:scale-95">
+            <ChevronLeft size={24} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-[21px] leading-tight font-extrabold">Outpass</p>
+            <p className="truncate text-[12px] text-white/80">
+              {liveCount ? `${liveCount} active · ` : ""}Day out & leave, straight to MyCamu
+            </p>
+          </div>
+          <span className="op-door grid size-11 place-items-center rounded-2xl bg-white/15" aria-hidden>
+            <DoorOpen size={22} />
+          </span>
         </div>
-        <span className="op-door grid size-10 place-items-center rounded-2xl bg-accent-soft text-accent" aria-hidden>
-          <DoorOpen size={20} />
-        </span>
+        <div role="tablist" aria-label="Outpass" className="relative mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-black/20 p-1">
+          {(
+            [
+              ["new", "New pass", PenLine],
+              ["history", "History", History_],
+            ] as const
+          ).map(([k, label, Icon]) => {
+            const on = tab === k;
+            return (
+              <button
+                key={k}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => {
+                  setTab(k);
+                  setSaved(null);
+                }}
+                className={cx(
+                  "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[14px] font-extrabold transition",
+                  on ? "bg-[#fff4e6] text-[#7c3d1b] shadow-[0_2px_0_rgb(60_20_5/0.35)]" : "text-white/85",
+                )}
+              >
+                <Icon size={16} /> {label}
+                {k === "history" && count > 0 && (
+                  <span className={cx("rounded-full px-1.5 text-[11px] tabular-nums", on ? "bg-[#7c3d1b] text-white" : "bg-white/20")}>{count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </header>
-
-      <div className="px-4 pt-3 pb-1">
-        <Segmented
-          label="Outpass"
-          value={tab}
-          onChange={(v) => {
-            setTab(v);
-            setSaved(null);
-          }}
-          options={[
-            ["new", "New pass"],
-            ["history", count ? `History · ${count}` : "History"],
-          ]}
-          small
-        />
-      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {saved ? (
@@ -262,7 +287,9 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const reasons = REASONS[d.kind];
   const custom = writing || (!!d.reason && !reasons.includes(d.reason));
   const problem = passProblem({ ...d, reason: d.reason || "x" }, !!proof);
-  const reasonMissing = !d.reason.trim();
+  // No reason given → "Outing", what most passes say anyway.
+  const reasonMissing = false;
+  const reasonOf = (r: string) => r.trim() || DEFAULT_REASON;
   const open = reading ? reading.asks.length + (reading.needStart ? 1 : 0) : 0;
 
   const straight = direct === "ready" && sendable(d, proof);
@@ -293,7 +320,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
       return;
     }
     setBusy(true);
-    const clean = { ...d, reason: d.reason.trim() };
+    const clean = { ...d, reason: reasonOf(d.reason) };
     try {
       const id = await savePass(clean, proof ?? undefined, "manual");
       if (toCamu) {
@@ -310,7 +337,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   async function send() {
     setReview(false);
     setBusy(true);
-    const clean = { ...d, reason: d.reason.trim() };
+    const clean = { ...d, reason: reasonOf(d.reason) };
     try {
       const r = await sendPass(clean, proof);
       if (r.kind === "refused") {
@@ -360,34 +387,38 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
             <p className="text-[12px] text-muted">Type it like you&apos;d text a friend — I&apos;ll fill the form</p>
           </div>
         </div>
-        <div className="mt-3 flex gap-2">
-          <div className="relative flex-1">
-            <input
-              value={listening ? voice.partial || line : line}
-              onChange={(e) => setLine(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && fill()}
-              placeholder={listening ? "Listening…" : "kal 4 baje market…"}
-              aria-label="Describe the pass"
-              enterKeyHint="go"
-              className={cx(inputCls, "h-12 w-full pr-11 text-[15px]")}
-            />
+        <div className="op-write relative mt-3 rounded-2xl border-[1.5px] border-line bg-surface focus-within:border-accent">
+          <textarea
+            value={listening ? voice.partial || line : line}
+            onChange={(e) => setLine(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                fill();
+              }
+            }}
+            placeholder={listening ? "Listening…" : "e.g. kal 4 baje market jaana hai"}
+            aria-label="Describe the pass"
+            enterKeyHint="go"
+            rows={3}
+            className="block min-h-[96px] w-full resize-none bg-transparent px-4 pt-3 pb-12 text-[17px] leading-snug font-semibold outline-none placeholder:font-medium placeholder:text-muted/70"
+          />
+          <div className="absolute right-2 bottom-2 left-3 flex items-center gap-2">
+            <span className="flex-1 truncate text-[11.5px] text-muted">{listening ? "Speak now — Hindi, English or both" : "Hindi, English, Hinglish — all fine"}</span>
             {canListen() && (
               <button
                 type="button"
                 onClick={() => (listening ? voice.finish() : void voice.start(savedVoiceLang()))}
                 aria-label={listening ? "Stop listening" : "Say it"}
-                className={cx(
-                  "absolute top-1/2 right-1.5 grid size-9 -translate-y-1/2 place-items-center rounded-full transition",
-                  listening ? "op-mic-live bg-danger text-white" : "text-accent",
-                )}
+                className={cx("grid size-10 place-items-center rounded-full transition", listening ? "op-mic-live bg-danger text-white" : "bg-accent-soft text-accent")}
               >
                 <Mic size={18} />
               </button>
             )}
+            <button type="button" onClick={() => fill()} className="btn-leather inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[13.5px]" aria-label="Fill the form">
+              <Wand2 size={16} /> Fill
+            </button>
           </div>
-          <button type="button" onClick={() => fill()} className="btn-leather grid size-12 shrink-0 place-items-center rounded-xl" aria-label="Fill the form">
-            <Wand2 size={19} />
-          </button>
         </div>
         {voice.state === "error" && voice.error && <p className="mt-2 text-[12.5px] font-semibold text-danger">{voice.error}</p>}
         <div className="-mx-3.5 mt-2.5 flex gap-1.5 overflow-x-auto px-3.5 pb-0.5">
@@ -512,7 +543,14 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
                 aria-pressed={on}
                 className={cx("relative flex flex-col items-start gap-1.5 rounded-2xl p-3.5 text-left transition active:scale-[0.98]", on ? "btn-leather" : "btn-paper")}
               >
-                <Icon size={22} className={on ? "text-[#ffd59e]" : "text-accent"} />
+                <span
+                  className={cx(
+                    "grid size-10 place-items-center rounded-xl text-white shadow-[0_3px_8px_-3px_rgb(60_20_5/0.5)]",
+                    k === "dayout" ? "bg-[linear-gradient(135deg,#ffb347,#e8772e)]" : "bg-[linear-gradient(135deg,#3fb6a8,#227a8a)]",
+                  )}
+                >
+                  <Icon size={20} />
+                </span>
                 <span className="text-[15.5px] font-extrabold">{title}</span>
                 <span className={cx("text-[12px] leading-tight", on ? "text-[#f6dcbc]" : "text-muted")}>{sub}</span>
                 {on && <CheckCircle2 size={18} className="anim-check absolute top-3 right-3 text-[#ffd59e]" />}
@@ -589,7 +627,9 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
 
         {/* reason */}
         <div>
-          <p className="mb-1.5 text-[13px] font-medium text-muted">Reason</p>
+          <p className="mb-1.5 flex items-baseline justify-between text-[13px] font-medium text-muted">
+            Reason {!d.reason.trim() && <span className="text-[11.5px]">none picked → “{DEFAULT_REASON}”</span>}
+          </p>
           <div className={cx("flex flex-wrap gap-1.5 rounded-2xl", tried && reasonMissing && "ring-2 ring-danger/60 ring-offset-2 ring-offset-[var(--bg)]")}>
             {reasons.map((r) => {
               const on = !custom && d.reason === r;
@@ -718,7 +758,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
               </div>
             )}
             <div className="mx-4 my-3 border-t-2 border-dashed border-line" />
-            <p className={cx("px-4 text-[15px] font-bold", d.kind === "dayout" ? "pb-4" : "pb-1")}>“{d.reason.trim()}”</p>
+            <p className={cx("px-4 text-[15px] font-bold", d.kind === "dayout" ? "pb-4" : "pb-1")}>“{reasonOf(d.reason)}”</p>
             {d.kind === "leave" && (
               <p className="inline-flex items-center gap-1 pb-4 text-[12.5px] font-bold text-safe">
                 <ImagePlus size={14} /> Mail screenshot goes with it
@@ -758,7 +798,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           )}
           <button
             type="button"
-            onClick={() => void sendToCamu({ ...d, reason: d.reason.trim() })}
+            onClick={() => void sendToCamu({ ...d, reason: reasonOf(d.reason) })}
             className="btn-paper lip-sm mt-2 inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-[12.5px]"
           >
             <ExternalLink size={14} /> Open MyCamu
@@ -932,10 +972,22 @@ function Ticket({ p, onClick }: { p: PassRecord; onClick?: () => void }) {
     <Body
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className="pass-ticket block w-full overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
+      className="pass-ticket relative block w-full overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
     >
+      <span
+        aria-hidden
+        className={cx(
+          "absolute inset-y-0 left-0 w-1.5",
+          p.status === "approved" ? "bg-safe" : p.status === "cancelled" || p.status === "rejected" ? "bg-danger" : p.status === "applied" ? "bg-warn" : "bg-line",
+        )}
+      />
       <div className="flex items-center gap-3 px-4 pt-3.5 pb-3">
-        <span className={cx("grid size-11 shrink-0 place-items-center rounded-xl", p.kind === "dayout" ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent")}>
+        <span
+          className={cx(
+            "grid size-11 shrink-0 place-items-center rounded-xl text-white",
+            p.kind === "dayout" ? "bg-[linear-gradient(135deg,#ffb347,#e8772e)]" : "bg-[linear-gradient(135deg,#3fb6a8,#227a8a)]",
+          )}
+        >
           {p.kind === "dayout" ? <Sun size={21} /> : <House size={21} />}
         </span>
         <div className="min-w-0 flex-1">
@@ -1068,8 +1120,8 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
     <div className="space-y-5 px-4 pt-3 pb-10">
       <div className="grid grid-cols-3 gap-2">
         <Count label="This month" value={counted.length} />
-        <Count label="Day outs" value={counted.filter((p) => p.kind === "dayout").length} />
-        <Count label="Leaves" value={counted.filter((p) => p.kind === "leave").length} />
+        <Count label="Day outs" value={counted.filter((p) => p.kind === "dayout").length} tone="amber" />
+        <Count label="Leaves" value={counted.filter((p) => p.kind === "leave").length} tone="teal" />
       </div>
       <div className="flex items-center gap-1.5">
         {(
@@ -1129,7 +1181,10 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
 
       {camuLive.length + localLive.length > 0 && (
         <section>
-          <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Upcoming & active</h3>
+          <h3 className="mb-2 flex items-center gap-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">
+            <span className="live-dot size-2 rounded-full bg-safe" /> Upcoming & active
+            <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular-nums">{camuLive.length + localLive.length}</span>
+          </h3>
           <div className="space-y-3">
             {camuLive.map((c, i) => (
               <div key={c.id} className="ask-in" style={{ animationDelay: `${i * 50}ms` }}>
@@ -1183,25 +1238,29 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
 }
 
 /** History's status groups, in the order the chips show. */
-type StatusGroup = "submitted" | "approved" | "used" | "cancelled" | "rejected" | "notsent";
-const GROUPS: StatusGroup[] = ["submitted", "approved", "used", "cancelled", "rejected", "notsent"];
+type StatusGroup = "submitted" | "approved" | "running" | "completed" | "cancelled" | "rejected" | "notsent";
+const GROUPS: StatusGroup[] = ["submitted", "approved", "running", "completed", "cancelled", "rejected", "notsent"];
 const GROUP_LABEL: Record<StatusGroup, string> = {
   submitted: "Submitted",
   approved: "Approved",
-  used: "Used",
+  running: "Running",
+  completed: "Completed",
   cancelled: "Cancelled",
   rejected: "Rejected",
   notsent: "Not sent",
 };
 const camuGroup = (c: CamuPass): StatusGroup =>
-  c.state === "applied" ? "submitted" : c.state === "out" || c.state === "back" ? "used" : c.state;
+  c.state === "applied" ? "submitted" : c.state === "out" ? "running" : c.state === "back" ? "completed" : c.state;
 const localGroup = (p: PassRecord): StatusGroup =>
   p.status === "saved" ? "notsent" : p.status === "applied" ? "submitted" : p.status;
 
-function Count({ label, value }: { label: string; value: number }) {
+function Count({ label, value, tone = "accent" }: { label: string; value: number; tone?: "accent" | "amber" | "teal" }) {
+  const t = { accent: "#9a4d1f", amber: "#e8772e", teal: "#227a8a" }[tone];
   return (
-    <div className="rounded-2xl border border-line bg-surface px-3 py-2.5">
-      <p className="font-display text-[22px] leading-none font-extrabold tnum">{value}</p>
+    <div className="tile-tint rounded-2xl px-3 py-2.5" style={{ "--tint": t } as React.CSSProperties}>
+      <p className="font-display text-[24px] leading-none font-extrabold tnum" style={{ color: t }}>
+        {value}
+      </p>
       <p className="mt-1 text-[11.5px] font-bold text-muted">{label}</p>
     </div>
   );

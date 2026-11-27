@@ -325,17 +325,16 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).getByRole("button", { name: "Submitted" }).waitFor({ timeout: 3000 });
   });
 
-  await step("a day out without a reason asks for one; 'Write my own' works", async () => {
+  await step("a day out without a reason will say Outing; 'Write my own' works", async () => {
     await pass(page).getByRole("button", { name: "New pass" }).last().click();
     await line(page, "kal 4 baje day out");
     await pass(page).getByText(/Going out at 4:00 — AM or PM\?.*tap to confirm/).waitFor({ timeout: 2000 });
     if (!(await pass(page).getByRole("button", { name: /4:00 AM/ }).isDisabled())) throw new Error("4 AM tappable");
     if ((await pass(page).getByLabel("From time").inputValue()) !== "16:00") throw new Error("4 baje is not 4 PM");
-    await pass(page).getByRole("button", { name: "Make the pass" }).click();
-    await pass(page).getByText("Pick or write a reason.").waitFor({ timeout: 2000 });
+    await pass(page).getByText("none picked → “Outing”").waitFor({ timeout: 2000 });
     await pass(page).getByRole("button", { name: "Write my own" }).click();
     await pass(page).getByPlaceholder(/Meeting a friend/).fill("Meeting my cousin");
-    if (await pass(page).getByText("Pick or write a reason.").count()) throw new Error("error stayed");
+    if (await pass(page).getByText("none picked → “Outing”").count()) throw new Error("default hint stayed");
   });
 
   await step("a leave needs the mail screenshot, then hands it to MyCamu", async () => {
@@ -439,6 +438,14 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     if ((await page.evaluate(() => window.__phone.get().notes.length)) !== 0) throw new Error("opened MyCamu");
   });
 
+  await step("no reason given: the pass goes as “Outing”", async () => {
+    await line(page, "kal subah 9 se 11");
+    await pass(page).getByRole("button", { name: "Submit to MyCamu" }).click();
+    const review = page.getByRole("dialog", { name: "Send this to MyCamu?" });
+    await review.getByText("“Outing”").waitFor({ timeout: 3000 });
+    await review.getByRole("button", { name: "Change" }).click();
+  });
+
   await step("a leave with its screenshot goes straight in too, and is checked", async () => {
     await pass(page).getByRole("button", { name: "Make the pass" }).or(pass(page).getByRole("button", { name: "Submit to MyCamu" })).first().waitFor();
     const nm = new Date();
@@ -464,10 +471,10 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
   });
 
   await step("History shows MyCamu's own passes: approval, out and back times", async () => {
-    await pass(page).getByText(/^History/).first().click();
+    await pass(page).getByRole("tab", { name: /History/ }).click();
     await pass(page).getByText(/From MyCamu · updated/).waitFor({ timeout: 4000 });
     await pass(page).getByText("Approved").first().waitFor({ timeout: 3000 });
-    await pass(page).getByText("Back in").first().waitFor({ timeout: 3000 });
+    await pass(page).getByText("Completed", { exact: true }).first().waitFor({ timeout: 3000 });
     await pass(page).getByText(/Out 6:32 pm/i).first().waitFor({ timeout: 3000 });
     await pass(page).getByRole("group", { name: "Status" }).getByRole("button", { name: /Cancelled/ }).click();
     if ((await pass(page).locator(".pass-ticket").count()) !== 1) throw new Error("cancelled filter");
@@ -476,7 +483,7 @@ const phoneState = (page) => page.evaluate(() => window.__phone.get());
     await pass(page).getByRole("group", { name: "Status" }).getByRole("button", { name: "Any status" }).click();
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${SHOTS}/op-camu-history.png` });
-    await pass(page).getByText("Back in").first().click();
+    await pass(page).locator(".pass-ticket", { hasText: "Out 6:32 pm" }).first().click();
     await page.getByText(/Parent ok · MAHESH/).waitFor({ timeout: 3000 });
     await page.screenshot({ path: `${SHOTS}/op-camu-sheet.png` });
   });

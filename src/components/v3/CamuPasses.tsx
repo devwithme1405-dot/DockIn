@@ -15,13 +15,13 @@ const clock = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString("en-IN",
 const when = (iso?: string) =>
   iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" }) : "";
 
-export const CAMU_STATE: Record<CamuPass["state"], { label: string; tone: string }> = {
-  applied: { label: "Waiting for approval", tone: "bg-warn-soft text-warn" },
-  approved: { label: "Approved", tone: "bg-safe-soft text-safe" },
-  out: { label: "Out now", tone: "bg-accent-soft text-accent" },
-  back: { label: "Back in", tone: "bg-surface-2 text-muted" },
-  rejected: { label: "Rejected", tone: "bg-danger-soft text-danger" },
-  cancelled: { label: "Cancelled", tone: "bg-surface-2 text-muted" },
+export const CAMU_STATE: Record<CamuPass["state"], { label: string; tone: string; stripe: string }> = {
+  applied: { label: "Waiting for approval", tone: "bg-warn-soft text-warn", stripe: "bg-warn" },
+  approved: { label: "Approved", tone: "bg-safe-soft text-safe", stripe: "bg-safe" },
+  out: { label: "Running", tone: "bg-run-soft text-run", stripe: "bg-run" },
+  back: { label: "Completed", tone: "bg-safe-soft text-safe", stripe: "bg-safe" },
+  rejected: { label: "Rejected", tone: "bg-danger-soft text-danger", stripe: "bg-danger" },
+  cancelled: { label: "Cancelled", tone: "bg-danger-soft text-danger", stripe: "bg-danger" },
 };
 
 export function CamuChip({ state }: { state: CamuPass["state"] }) {
@@ -77,10 +77,16 @@ export function CamuTicket({ c, onClick }: { c: CamuPass; onClick?: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="pass-ticket block w-full overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
+      className="pass-ticket relative block w-full overflow-hidden rounded-2xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
     >
+      <span aria-hidden className={cx("absolute inset-y-0 left-0 w-1.5", CAMU_STATE[c.state].stripe)} />
       <div className="flex items-center gap-3 px-4 pt-3.5 pb-3">
-        <span className={cx("grid size-11 shrink-0 place-items-center rounded-xl", c.kind === "dayout" ? "bg-warn-soft text-warn" : "bg-accent-soft text-accent")}>
+        <span
+          className={cx(
+            "grid size-11 shrink-0 place-items-center rounded-xl text-white",
+            c.kind === "dayout" ? "bg-[linear-gradient(135deg,#ffb347,#e8772e)]" : "bg-[linear-gradient(135deg,#3fb6a8,#227a8a)]",
+          )}
+        >
           <Icon size={21} />
         </span>
         <div className="min-w-0 flex-1">
