@@ -5,6 +5,7 @@ import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, Stamp, TriangleAler
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
 import type { CamuState, LmsState } from "@/lib/native";
 import { approverState, connectApprover, forgetApprover, type ApproverState } from "@/lib/approver";
+import { usePreview } from "@/lib/v3/flags";
 import { cx, inputCls, useToast } from "./ui";
 import { isOffline } from "@/lib/net";
 
@@ -141,6 +142,7 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
  */
 export function ConnectApprover({ compact = false, onDone }: { compact?: boolean; onDone?: () => void }) {
   const { native } = useCollege();
+  const preview = usePreview();
   const { busy, run } = useBusy();
   const [st, setSt] = useState<ApproverState>({ saved: false, taught: false, user: "" });
 
@@ -154,7 +156,9 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
     };
   }, []);
 
-  if (!native) return null;
+  // Self-approval belongs with outpass — a DockIn 3 feature — so it stays on the
+  // preview channel until outpass ships for everyone, hidden on the everyday app.
+  if (!native || !preview) return null;
   const on = st.saved;
 
   return (
