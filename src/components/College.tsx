@@ -6,6 +6,7 @@ import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/
 import { DockIn, isNativeApp } from "@/lib/native";
 import type { CamuState, LmsState } from "@/lib/native";
 import { approverState, connectApprover, forgetApprover, saveApproverCreds, type ApproverState } from "@/lib/approver";
+import { claimWithCamu, readCamuIdentity } from "@/lib/identity";
 import { usePreview } from "@/lib/v3/flags";
 import { cx, inputCls, useToast } from "./ui";
 import { isOffline } from "@/lib/net";
@@ -99,9 +100,24 @@ export function CamuStatus({ camu, className }: { camu: CamuState; className?: s
 export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; onDone?: () => void }) {
   const { state, native } = useCollege();
   const { busy, run } = useBusy();
+  const toast = useToast();
   const camu = state.camu;
   const [who, setWho] = useState<{ name: string; enrollment: string }>({ name: "", enrollment: "" });
   const on = !!camu?.connected && !camu.expired;
+
+  // Signs in to MyCamu again, then re-confirms the account with whoever is now
+  // signed in — so a wrong account (name, enrollment, the email that is the
+  // username) is fully corrected, not just the attendance.
+  async function reverify() {
+    await connectCamu();
+    const id = await readCamuIdentity(false);
+    if ("enrollment" in id) {
+      setWho({ name: id.name, enrollment: id.enrollment });
+      const r = await claimWithCamu(id);
+      toast.show(r.ok ? `Verified as ${id.enrollment}` : r.message);
+    }
+    onDone?.();
+  }
 
   useEffect(() => {
     if (!(isNativeApp() && on)) return;
@@ -156,7 +172,7 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
             )}
           </p>
           <button
-            onClick={() => run(async () => { await connectCamu(); onDone?.(); })}
+            onClick={() => run(reverify)}
             disabled={busy}
             className="shrink-0 rounded-full px-2.5 py-1 text-[12.5px] font-bold text-accent active:bg-accent-soft disabled:opacity-60"
           >
