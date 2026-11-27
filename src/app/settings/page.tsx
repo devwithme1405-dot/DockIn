@@ -54,7 +54,7 @@ import {
 } from "@/components/ui";
 import { BackHeader } from "@/components/PageHeader";
 import { PhoneSetup, phoneChecklist, usePhoneStatus } from "@/components/PhoneSetup";
-import { ConnectCamu, ConnectLms } from "@/components/College";
+import { ConnectApprover, ConnectCamu, ConnectLms } from "@/components/College";
 import { disconnect, useCollege } from "@/lib/college";
 import { isNativeApp } from "@/lib/native";
 import { ProfileSkeleton } from "@/components/Skeleton";
@@ -948,6 +948,7 @@ function CollegeCard() {
   return (
     <section className="space-y-2.5 pb-2" aria-label="College accounts">
       <ConnectCamu compact />
+      <ConnectApprover compact />
       <ConnectLms compact />
     </section>
   );

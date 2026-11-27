@@ -70,6 +70,12 @@ public class CamuLoginActivity extends Activity {
      * open are noted (see {@link #CAPTURE}) so DockIn can learn Camu's forms.
      */
     static final String EXTRA_BROWSE = "browse";
+    /**
+     * The self-approval login: a different MyCamu account (username + password,
+     * not Microsoft), signed in fresh so it never touches the student's own
+     * session. What its page sends is learned by {@link Approver}, not {@link Camu}.
+     */
+    static final String EXTRA_APPROVER = "approver";
     static final String EXTRA_PATH = "path";
     static final String EXTRA_NOTE = "note";
     /**
@@ -165,9 +171,16 @@ public class CamuLoginActivity extends Activity {
     /** Receives what {@link #CAPTURE} notes; keeps the last 25. */
     static final class Capture {
         private final android.content.Context app;
+        /** The self-approval screen: learn the sign-in and the approve, nothing else. */
+        private final boolean approver;
 
         Capture(android.content.Context app) {
+            this(app, false);
+        }
+
+        Capture(android.content.Context app, boolean approver) {
             this.app = app;
+            this.approver = approver;
         }
 
         @JavascriptInterface
@@ -180,6 +193,12 @@ public class CamuLoginActivity extends Activity {
             }
             // Analytics beacons are long and constant; they only push the real requests out.
             if (ANALYTICS.matcher(url).find()) return;
+            if (approver) {
+                // The approver is a different login; its requests never teach the
+                // student's flow and never go in the student's capture store.
+                Approver.learn(app, json);
+                return;
+            }
             Camu.learnLoginId(app, json);
             SharedPreferences p = app.getSharedPreferences(PREFS_CAPTURE, MODE_PRIVATE);
             JSONArray list;
@@ -219,6 +238,9 @@ public class CamuLoginActivity extends Activity {
     private View cover;
     private boolean silent = false;
     private boolean browse = false;
+    private boolean approver = false;
+    /** Where the approver screen lands once its fresh session is wiped clean. */
+    private String approverPath = "/";
     private boolean revealed = false;
     private boolean done = false;
     /** Camu's page waiting for a file from the picker. */
@@ -254,6 +276,7 @@ public class CamuLoginActivity extends Activity {
         super.onCreate(savedInstanceState);
         silent = getIntent() != null && getIntent().getBooleanExtra(EXTRA_SILENT, false);
         browse = getIntent() != null && getIntent().getBooleanExtra(EXTRA_BROWSE, false);
+        approver = getIntent() != null && getIntent().getBooleanExtra(EXTRA_APPROVER, false);
 
         root = new FrameLayout(this);
         root.setBackgroundColor(Color.WHITE);
@@ -326,6 +349,32 @@ public class CamuLoginActivity extends Activity {
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
 
+        if (approver) {
+            title.setText("Self-approval");
+            String n = getIntent().getStringExtra(EXTRA_NOTE);
+            note.setText(n == null || n.isEmpty()
+                    ? "Sign in with your approval username & password, then approve your pass."
+                    : n);
+            close.setText("Done");
+            web.addJavascriptInterface(new Capture(getApplicationContext(), true), "DockInCapture");
+            String path = getIntent().getStringExtra(EXTRA_PATH);
+            approverPath = path == null || path.isEmpty() ? "/" : path;
+            // Fresh every time: the approver is a different account from whoever is
+            // signed in on this phone, so wipe Camu's cookies and saved state first,
+            // then land on the approval page. The student's own session lives in the
+            // Vault, not here, so it is untouched.
+            wiping = true;
+            WebStorage.getInstance().deleteOrigin(Camu.BASE);
+            cookies.removeAllCookies(new ValueCallback<Boolean>() {
+                @Override
+                public void onReceiveValue(Boolean value) {
+                    cookies.flush();
+                    web.loadDataWithBaseURL(Camu.BASE + "/", "<html><body></body></html>",
+                            "text/html", "utf-8", null);
+                }
+            });
+            return;
+        }
         if (browse) {
             title.setText("Camu");
             String n = getIntent().getStringExtra(EXTRA_NOTE);
@@ -404,6 +453,15 @@ public class CamuLoginActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (view != web) return;
+                if (approver) {
+                    if (wiping) {
+                        wipeCamuStorage();
+                        return;
+                    }
+                    view.evaluateJavascript(CAPTURE, null);
+                    saveApproverSession();
+                    return;
+                }
                 if (browse) {
                     view.evaluateJavascript(CAPTURE, null);
                     return;
@@ -569,9 +627,28 @@ public class CamuLoginActivity extends Activity {
                     public void onReceiveValue(Boolean v) {
                         cookies.flush();
                         wiping = false;
-                        web.loadUrl(Camu.BASE + "/");
+                        web.loadUrl(Camu.BASE + (approver ? approverPath : "/"));
                     }
                 });
+            }
+        });
+    }
+
+    /**
+     * Keeps the approver session the moment the page has one: its cookie, and the
+     * login's ids if MyCamu has saved them. Called on every page the approver
+     * screen finishes, so the latest cookie is always the one stored.
+     */
+    private void saveApproverSession() {
+        if (web == null) return;
+        final String cookie = CookieManager.getInstance().getCookie(Camu.BASE);
+        if (cookie == null || cookie.isEmpty()) return;
+        final android.content.Context app = getApplicationContext();
+        final String ua = web.getSettings().getUserAgentString();
+        web.evaluateJavascript(READ_IDS, new ValueCallback<String>() {
+            @Override
+            public void onReceiveValue(String value) {
+                Approver.saveSession(app, cookie, parse(value), ua);
             }
         });
     }
@@ -655,7 +732,8 @@ public class CamuLoginActivity extends Activity {
         handler.removeCallbacks(poll);
         handler.removeCallbacks(reveal);
         give(null);
-        if (!done && !browse) DockInPlugin.camuFinished(false, null);
+        if (approver) DockInPlugin.approverFinished(Approver.saved(getApplicationContext()));
+        else if (!done && !browse) DockInPlugin.camuFinished(false, null);
         for (WebView w : new ArrayList<>(popups)) closePopup(w);
         if (web != null) {
             web.destroy();

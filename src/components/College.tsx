@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { BookOpen, Check, GraduationCap, Loader2, RefreshCw, Stamp, TriangleAlert } from "lucide-react";
 import { connectCamu, connectLms, disconnect, syncCollege, useCollege } from "@/lib/college";
 import type { CamuState, LmsState } from "@/lib/native";
+import { approverState, connectApprover, forgetApprover, type ApproverState } from "@/lib/approver";
 import { cx, inputCls, useToast } from "./ui";
 import { isOffline } from "@/lib/net";
 
@@ -123,6 +124,64 @@ export function ConnectCamu({ compact = false, onDone }: { compact?: boolean; on
         ) : (
           <Action busy={busy} onClick={() => run(async () => { await connectCamu(); onDone?.(); })}>
             {camu?.expired ? "Sign in" : "Connect"}
+          </Action>
+        )
+      }
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Self-approval
+
+/**
+ * "Self-approval": the college's second MyCamu login for approving your own
+ * gate pass. Connecting opens that sign-in inside DockIn once; after that, a
+ * pass is approved from here with one tap — no second app.
+ */
+export function ConnectApprover({ compact = false, onDone }: { compact?: boolean; onDone?: () => void }) {
+  const { native } = useCollege();
+  const { busy, run } = useBusy();
+  const [st, setSt] = useState<ApproverState>({ saved: false, taught: false, user: "" });
+
+  useEffect(() => {
+    let live = true;
+    void approverState().then((s) => {
+      if (live) setSt(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (!native) return null;
+  const on = st.saved;
+
+  return (
+    <Row
+      icon={<Stamp size={19} />}
+      done={on}
+      title={on ? "Self-approval connected" : "Self-approval"}
+      body={
+        on
+          ? st.taught
+            ? `Approve your own passes from here, one tap${st.user ? ` · ${st.user}` : ""}.`
+            : "Approve one pass here once so DockIn learns it — then it's automatic."
+          : "Approve your own gate pass from inside DockIn. Sign in with the approval login your college gave you (username & password, not Microsoft)."
+      }
+      compact={compact}
+      action={
+        on ? (
+          <button
+            onClick={() => run(async () => { await forgetApprover(); setSt({ saved: false, taught: false, user: "" }); })}
+            disabled={busy}
+            className="btn-disconnect h-9 shrink-0 rounded-full px-3.5 text-[13px] font-bold disabled:opacity-60"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <Action busy={busy} onClick={() => run(async () => { setSt(await connectApprover()); onDone?.(); })}>
+            Connect
           </Action>
         )
       }

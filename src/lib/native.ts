@@ -170,6 +170,18 @@ interface DockInPlugin {
   htmlToPdf(options: { html: string }): Promise<{ data: string }>;
   /** Open Camu, signed in, at a path, with a note in the top bar. */
   openCamu(options: { path?: string; note?: string; proofData?: string; proofName?: string }): Promise<void>;
+  /**
+   * Self-approval (preview APK): opens a fresh MyCamu sign-in for the college's
+   * approval login at a path, so the student signs in once and approves — DockIn
+   * learns both. Resolves with whether it's now saved and taught.
+   */
+  openApprover(options: { path?: string; note?: string }): Promise<{ saved: boolean; taught: boolean; user: string }>;
+  /** Self-approval: is a login saved, has DockIn learned to approve on its own, and who. */
+  approverState(): Promise<{ saved: boolean; taught: boolean; user: string }>;
+  /** Self-approval: forget the saved login. */
+  forgetApprover(): Promise<void>;
+  /** Self-approval: approve one pass on its own. Rejects "teach"/"expired"/"network". */
+  approveSelf(options: { id: string }): Promise<{ approved: boolean; status?: string }>;
   /** The phone's share sheet (WhatsApp, SMS…). Preview APK 3.0 and later. */
   shareText(options: { text: string; title?: string }): Promise<void>;
   clearCamuCaptured(): Promise<void>;

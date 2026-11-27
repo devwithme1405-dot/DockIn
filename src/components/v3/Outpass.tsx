@@ -76,7 +76,7 @@ import { closeOutpass, openOutpass, useV3Screens } from "@/lib/v3/ui";
 import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
-import { CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
+import { ApproveNow, CamuPassSheet, CamuTicket, CancelPass, inCamu, VerifyCard } from "./CamuPasses";
 import { DockBot } from "./DockBot";
 import { passDay, PassStatusChip, STATUS_LABEL } from "./passParts";
 
@@ -885,21 +885,15 @@ function Saved({ id, onHistory, onAnother }: { id: string; onHistory: () => void
           </Step>
         )}
         <Step n={2} title="Get it approved" delay={520}>
-          <p className="text-[12.5px] text-muted">Send your parents a ready message, or open MyCamu if you approve it there.</p>
+          <p className="text-[12.5px] text-muted">Approve it yourself with your college approval login, or send your parents a ready message.</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
+            <ApproveNow camuId={p.camuId} />
             <button
               type="button"
               onClick={() => void shareText(parentText(p), "Send to parents")}
-              className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]"
+              className="btn-paper lip-sm inline-flex h-11 items-center justify-center gap-1.5 rounded-xl text-[13.5px]"
             >
               <Share2 size={15} /> Tell parents
-            </button>
-            <button
-              type="button"
-              onClick={() => void sendToCamu(p)}
-              className="btn-paper lip-sm inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]"
-            >
-              <GraduationCap size={15} /> Approve in MyCamu
             </button>
           </div>
         </Step>

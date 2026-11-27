@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, LogIn, LogOut, RefreshCw, ShieldAlert, Sun, UserCheck, XCircle } from "lucide-react";
+import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, Loader2, LogIn, LogOut, RefreshCw, ShieldAlert, Stamp, Sun, UserCheck, XCircle } from "lucide-react";
 import { DockIn } from "@/lib/native";
+import { approvePass, connectApprover } from "@/lib/approver";
 import { fmtTime, fromDateStr } from "@/lib/dates";
 import type { PassDraft } from "@/lib/outpass";
 import { cancelInCamu, cancellable, fetchHistory, findInHistory, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
@@ -114,6 +115,52 @@ export function CamuTicket({ c, onClick }: { c: CamuPass; onClick?: () => void }
   );
 }
 
+/** A pass is waiting for the approval DockIn's self-approval login can give. */
+export function awaitingApproval(c: CamuPass): boolean {
+  return c.state === "applied" && c.parent === "pending";
+}
+
+/**
+ * Approve this pass from inside DockIn with the college's self-approval login.
+ * Does it on its own once DockIn has learned how; before that it opens the
+ * approval sign-in so the student does it (and teaches it) once. Pass no id to
+ * just connect / teach the login.
+ */
+export function ApproveNow({ camuId, label = "Approve now", className }: { camuId?: string; label?: string; className?: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const note = "Sign in with your approval login and approve your pass — DockIn will remember it.";
+
+  async function go() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (!camuId) {
+        const st = await connectApprover(note);
+        if (st.saved) toast.show("Approval login saved — approve a pass once and then it's automatic.");
+        return;
+      }
+      const r = await approvePass(camuId, note);
+      if (r.ok) toast.show("Approved ✓");
+      else if (r.opened) toast.show(r.state.saved ? "Approve it here once — then DockIn does it for you." : "Sign in with your approval login to approve from here.");
+      else toast.show(r.reason === "web" ? "Open DockIn on your phone to approve." : "Couldn't reach MyCamu — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void go()}
+      disabled={busy}
+      className={cx("btn-leather inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] disabled:opacity-60", className)}
+    >
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <Stamp size={15} />} {label}
+    </button>
+  );
+}
+
 export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () => void }) {
   return (
     <Sheet open={!!c} onClose={onClose} title={c?.type ?? "Pass"}>
@@ -124,6 +171,7 @@ export function CamuPassSheet({ c, onClose }: { c: CamuPass | null; onClose: () 
             <Steps c={c} big />
           </div>
           {c.files > 0 && <p className="text-[12.5px] text-muted">{c.files === 1 ? "1 file attached in MyCamu" : `${c.files} files attached in MyCamu`}</p>}
+          {awaitingApproval(c) && <ApproveNow camuId={c.id} />}
           {cancellable(c) && <CancelPass c={c} onDone={onClose} />}
           {(c.kind === "dayout" || c.kind === "leave") && (
             <button

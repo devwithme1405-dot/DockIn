@@ -58,6 +58,9 @@ public class DockInPlugin extends Plugin {
     /** The "Connect Camu" call, answered once the sign-in screen closes. */
     private PluginCall pendingCamu;
 
+    /** The self-approval call (connect or approve-in-page), answered when its screen closes. */
+    private PluginCall pendingApprover;
+
     @Override
     public void load() {
         live = new WeakReference<>(this);
@@ -119,6 +122,19 @@ public class DockInPlugin extends Plugin {
                 p.resolveState(call, College.sync(c, true));
             }
         }, "dockin-camu-first").start();
+    }
+
+    /** The self-approval screen closed: whether a login is now saved and taught. */
+    static void approverFinished(final boolean saved) {
+        final DockInPlugin p = live.get();
+        if (p == null || p.pendingApprover == null) return;
+        final PluginCall call = p.pendingApprover;
+        p.pendingApprover = null;
+        JSObject o = new JSObject();
+        o.put("saved", saved);
+        o.put("taught", Approver.taught(p.getContext()));
+        o.put("user", Approver.user(p.getContext()));
+        call.resolve(o);
     }
 
     // -------------------------------------------------------------------------
@@ -382,6 +398,77 @@ public class DockInPlugin extends Plugin {
         } catch (ActivityNotFoundException e) {
             call.reject("Could not open Camu.");
         }
+    }
+
+    /**
+     * Opens the self-approval login inside DockIn: a fresh MyCamu sign-in for the
+     * college's approval account, landing on the page given (the student's passes
+     * for approving). The student signs in once and approves; DockIn learns both
+     * so it can do it on its own next time. Answered when the screen closes.
+     */
+    @PluginMethod
+    public void openApprover(PluginCall call) {
+        if (pendingApprover != null) pendingApprover.reject("Started again.");
+        pendingApprover = call;
+        Intent i = new Intent(getContext(), CamuLoginActivity.class)
+                .putExtra(CamuLoginActivity.EXTRA_APPROVER, true)
+                .putExtra(CamuLoginActivity.EXTRA_PATH, call.getString("path", "/"))
+                .putExtra(CamuLoginActivity.EXTRA_NOTE, call.getString("note", ""));
+        try {
+            getActivity().startActivity(i);
+        } catch (ActivityNotFoundException e) {
+            pendingApprover = null;
+            call.reject("Could not open the approval sign-in.");
+        }
+    }
+
+    /** Whether a self-approval login is saved, taught (DockIn can approve on its own), and who. */
+    @PluginMethod
+    public void approverState(PluginCall call) {
+        Context c = getContext();
+        JSObject o = new JSObject();
+        o.put("saved", Approver.saved(c));
+        o.put("taught", Approver.taught(c));
+        o.put("user", Approver.user(c));
+        call.resolve(o);
+    }
+
+    /** Forgets the self-approval login (its session, sign-in and learned approve). */
+    @PluginMethod
+    public void forgetApprover(PluginCall call) {
+        Approver.forget(getContext());
+        call.resolve();
+    }
+
+    /**
+     * Approves one pass on its own, with the saved approval login — no screen, no
+     * second app. Rejects "teach" when DockIn hasn't learned the approve yet (open
+     * the approval screen once), "expired"/"network" when it couldn't be done.
+     */
+    @PluginMethod
+    public void approveSelf(final PluginCall call) {
+        final Context c = getContext();
+        final String id = call.getString("id", "");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String status = Approver.approve(c, id);
+                    JSObject o = new JSObject();
+                    o.put("approved", true);
+                    o.put("status", status);
+                    call.resolve(o);
+                } catch (Approver.NeedsTeaching e) {
+                    call.reject("Approve one pass in DockIn first.", "teach");
+                } catch (Approver.Expired e) {
+                    call.reject("Your approval sign-in has ended.", "expired");
+                } catch (IllegalArgumentException e) {
+                    call.reject(e.getMessage(), "invalid");
+                } catch (Exception e) {
+                    call.reject("Couldn't reach MyCamu.", "network");
+                }
+            }
+        }, "dockin-approve").start();
     }
 
     /**
