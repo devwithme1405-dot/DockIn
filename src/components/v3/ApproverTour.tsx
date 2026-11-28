@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Check, Stamp, X } from "lucide-react";
+import { ArrowRight, Check, ShieldCheck, X } from "lucide-react";
 
 const SEEN = "dockin-approver-tour";
 
@@ -106,7 +106,7 @@ export function ApproverTour({ enabled }: { enabled: boolean }) {
       >
         <div className="flex items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
-            <Stamp size={18} />
+            <ShieldCheck size={18} />
           </span>
           <div className="flex-1">
             <p className="font-display text-[16px] leading-tight font-extrabold">{STEPS[i].title}</p>

@@ -22,7 +22,7 @@ import {
   Send,
   Share2,
   Sparkles,
-  Stamp,
+  ShieldCheck,
   Sun,
   Sunrise,
   Trash2,
@@ -175,20 +175,25 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
               {liveCount ? `${liveCount} active · ` : ""}Day out & leave, straight to MyCamu
             </p>
           </div>
-          {flags.self_approval && <button
-            type="button"
-            data-coach="approver"
-            onClick={() => setShowApprover(true)}
-            aria-label={approverOn ? "Parents approval login on" : "Set up parents approval login"}
-            className={cx(
-              "relative grid size-11 place-items-center rounded-2xl text-white shadow-[0_3px_0_rgb(0_0_0/0.22)] transition active:translate-y-[2px]",
-              approverOn ? "bg-[#1f9d57]" : "bg-[#f0872b]",
-            )}
-          >
-            <Stamp size={20} strokeWidth={2.4} />
-            {approverOn && <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-[#2bd778] shadow-[0_0_0_2px_rgba(60,20,5,0.5)]" />}
-          </button>}
-          <span className="op-door grid size-11 place-items-center rounded-2xl bg-white/15" aria-hidden>
+          {flags.self_approval && (
+            <div className="flex flex-col items-center gap-1 self-start">
+              <button
+                type="button"
+                data-coach="approver"
+                onClick={() => setShowApprover(true)}
+                aria-label={approverOn ? "Parents approval login on" : "Set up parents approval login"}
+                className={cx(
+                  "relative grid size-11 place-items-center rounded-2xl text-white shadow-[0_3px_0_rgb(0_0_0/0.22)] transition active:translate-y-[2px]",
+                  approverOn ? "bg-[#1f9d57]" : "bg-[#f0872b]",
+                )}
+              >
+                <ShieldCheck size={21} strokeWidth={2.3} />
+                {approverOn && <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-[#2bd778] shadow-[0_0_0_2px_rgba(60,20,5,0.5)]" />}
+              </button>
+              <span className="text-[9px] leading-none font-bold tracking-tight text-white/85">Parents login</span>
+            </div>
+          )}
+          <span className="op-door grid size-11 shrink-0 place-items-center self-start rounded-2xl bg-white/15" aria-hidden>
             <DoorOpen size={22} />
           </span>
         </div>
