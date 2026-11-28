@@ -7,6 +7,7 @@ import { fmtTime, fromDateStr, toDateStr } from "@/lib/dates";
 import { isNativeApp } from "@/lib/native";
 import { usePreview } from "@/lib/v3/flags";
 import { ensureCamuLoginId } from "@/lib/college";
+import { useFlags } from "@/lib/telemetry";
 import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
@@ -21,7 +22,8 @@ const day = (s: string) => fromDateStr(s).toLocaleDateString("en-IN", { weekday:
  * with a light running round its edge, so it's found at a glance at the gate.
  */
 export function OutpassEntry({ className }: { className?: string }) {
-  const on = usePreview();
+  const flags = useFlags();
+  const on = usePreview() && flags.outpass;
   const today = toDateStr();
   const camu = useCamuHistory();
   // DockIn's own copies, for phones that haven't read MyCamu yet.

@@ -188,6 +188,10 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+  // DockIn Admin is always the live page straight from the server: never a
+  // cached copy, and never the student app's shell as a stand-in (which is
+  // what used to open "something else" on a slow network).
+  if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) return;
 
   // Pages: answer from the cache at once and refresh in the background.
   //

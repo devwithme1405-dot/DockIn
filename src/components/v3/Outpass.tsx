@@ -32,6 +32,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { ConnectApprover } from "@/components/College";
+import { ApproverTour } from "./ApproverTour";
 import { useBackClose } from "@/lib/backClose";
 import { addDays, fmtTime, toDateStr } from "@/lib/dates";
 import { DockIn, isNativeApp, onPhone } from "@/lib/native";
@@ -78,6 +79,7 @@ import { v3db, type PassRecord, type PassStatus } from "@/lib/v3/store";
 import { passProblem, savePass } from "@/lib/v3/tools";
 import { closeOutpass, openOutpass, useV3Screens } from "@/lib/v3/ui";
 import { canListen, savedVoiceLang, useVoice } from "@/lib/v3/voice";
+import { track, useFlags } from "@/lib/telemetry";
 import { Sheet, cx, inputCls, useToast } from "../ui";
 import { useBlobUrl } from "./AskCards";
 import { useApproverState } from "@/lib/approver";
@@ -138,6 +140,21 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
   const [showApprover, setShowApprover] = useState(false);
   const approver = useApproverState();
   const approverOn = approver.saved || approver.hasCreds;
+  const flags = useFlags();
+
+  // Switched off from DockIn Admin (a kill-switch while something is being fixed).
+  if (!flags.outpass) {
+    return (
+      <div className="ask-screen paper-page fixed inset-0 z-[56] mx-auto flex w-full max-w-md flex-col items-center justify-center px-8 text-center" role="dialog" aria-label="Outpass">
+        <DoorOpen size={40} className="text-muted" />
+        <p className="font-display mt-3 text-[20px] font-extrabold">Outpass is paused for a bit</p>
+        <p className="mt-1 text-[13.5px] text-muted">We&apos;re fixing something. Make your pass in MyCamu for now — it&apos;ll be back here soon.</p>
+        <button type="button" onClick={closeOutpass} className="btn-leather mt-5 h-11 rounded-2xl px-6 text-[14px] font-bold">
+          Go back
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="ask-screen paper-page fixed inset-0 z-[56] mx-auto flex w-full max-w-md flex-col" role="dialog" aria-label="Outpass">
@@ -146,6 +163,7 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
           <ConnectApprover onDone={() => setShowApprover(false)} />
         </div>
       </Sheet>
+      <ApproverTour enabled={flags.self_approval && !showApprover} />
       <header className="op-head relative z-10 overflow-hidden px-3 pt-[calc(var(--sat,0px)+0.5rem)] pb-3 text-white">
         <div className="relative flex items-center gap-2">
           <button type="button" onClick={closeOutpass} aria-label="Back" className="grid size-10 place-items-center rounded-full bg-white/15 text-white active:scale-95">
@@ -157,8 +175,9 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
               {liveCount ? `${liveCount} active · ` : ""}Day out & leave, straight to MyCamu
             </p>
           </div>
-          <button
+          {flags.self_approval && <button
             type="button"
+            data-coach="approver"
             onClick={() => setShowApprover(true)}
             aria-label={approverOn ? "Parents approval login on" : "Set up parents approval login"}
             className={cx(
@@ -168,7 +187,7 @@ function OutpassScreen({ start }: { start: NonNullable<ReturnType<typeof useV3Sc
           >
             <Stamp size={20} strokeWidth={2.4} />
             {approverOn && <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-[#2bd778] shadow-[0_0_0_2px_rgba(60,20,5,0.5)]" />}
-          </button>
+          </button>}
           <span className="op-door grid size-11 place-items-center rounded-2xl bg-white/15" aria-hidden>
             <DoorOpen size={22} />
           </span>
@@ -254,6 +273,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
   const [blockers, setBlockers] = useState<CamuPass[] | null>(null);
   /** This phone can send a day out to MyCamu itself. */
   const [direct, setDirect] = useState<DirectState | null>(null);
+  const flags = useFlags();
   const pick = useRef<HTMLInputElement>(null);
   const reasonBox = useRef<HTMLInputElement>(null);
   const fromTimeBox = useRef<HTMLInputElement>(null);
@@ -348,6 +368,8 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
     const clean = { ...d, reason: reasonOf(d.reason) };
     try {
       const id = await savePass(clean, proof ?? undefined, "manual");
+      // Why it couldn't go straight in (not set up, old app…) is what the dashboard needs to see.
+      track("outpass.made", { kind: clean.kind, via: "local", why: direct ?? "unknown" });
       if (toCamu) {
         const how = await sendToCamu(clean, proof ?? undefined).catch(() => "copied" as const);
         if (how === "copied") toast.show("Details copied — paste them in MyCamu");
@@ -365,6 +387,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
     const clean = { ...d, reason: reasonOf(d.reason) };
     try {
       const r = await sendPass(clean, proof);
+      track("outpass.sent", r.kind === "made" ? { ok: true, kind: clean.kind } : { ok: false, kind: clean.kind, code: r.kind === "refused" ? "refused" : r.why });
       if (r.kind === "refused") {
         setRefusal(r.message);
         checkClashes(clean);
@@ -381,6 +404,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           updatedAt: Date.now(),
         });
         if (r.already) toast.show("It was already in MyCamu — not sent again");
+        track("outpass.made", { kind: clean.kind, via: "direct" });
         onSaved(id);
         return;
       }
@@ -389,11 +413,13 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
         const id = await savePass(clean, undefined, "manual");
         await v3db.passes.update(id, { sentByDockIn: true, updatedAt: Date.now() });
         toast.show("Couldn't confirm it in MyCamu yet — check before sending again");
+        track("outpass.made", { kind: clean.kind, via: "unsure" });
         onSaved(id);
         return;
       }
       toast.show(r.why === "expired" ? "MyCamu sign-in ended — opening MyCamu" : "Couldn't reach MyCamu — opening it instead");
       const id = await savePass(clean, undefined, "manual");
+      track("outpass.made", { kind: clean.kind, via: "local", why: r.why });
       await sendToCamu(clean).catch(() => "copied");
       onSaved(id);
     } finally {
@@ -437,10 +463,14 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           />
           <div className="absolute right-2 bottom-2 left-3 flex items-center gap-2">
             <span className="flex-1 truncate text-[11.5px] text-muted">{listening ? "Speak now — Hindi, English or both" : "Hindi, English, Hinglish — all fine"}</span>
-            {canListen() && (
+            {canListen() && flags.voice && (
               <button
                 type="button"
-                onClick={() => (listening ? voice.finish() : void voice.start(savedVoiceLang()))}
+                onClick={() => {
+                  if (listening) return voice.finish();
+                  track("outpass.voice");
+                  void voice.start(savedVoiceLang());
+                }}
                 aria-label={listening ? "Stop listening" : "Say it"}
                 className={cx("grid size-10 place-items-center rounded-full transition", listening ? "op-mic-live bg-danger text-white" : "bg-accent-soft text-accent")}
               >
@@ -907,10 +937,10 @@ function WardenMail({ d }: { d: PassDraft }) {
       <p className="mt-0.5 text-[12px] text-muted">Send this, then screenshot the sent mail and attach it below.</p>
       <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-xl bg-card p-2.5 font-sans text-[12px] leading-snug">{body}</pre>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <a href={wardenMailto(input)} className="btn-leather inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
+        <a href={wardenMailto(input)} onClick={() => track("outpass.mail", { how: "open" })} className="btn-leather inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
           <Mail size={15} /> Open mail
         </a>
-        <button type="button" onClick={() => void copy(body, "Mail copied")} className="btn-paper inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
+        <button type="button" onClick={() => { track("outpass.mail", { how: "copy" }); void copy(body, "Mail copied"); }} className="btn-paper inline-flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px]">
           <Copy size={15} /> Copy mail
         </button>
       </div>
@@ -1475,17 +1505,30 @@ function PassSheet({ p: initial, onClose }: { p: PassRecord | null; onClose: () 
 
 // ------------------------------------------------------------------ teach DockIn
 
+/** Hidden developer tool: on only when `dockin-dev` is set in this browser. */
+function devCaptureOn(): boolean {
+  try {
+    return localStorage.getItem("dockin-dev") === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Once: make a pass in MyCamu through DockIn so DockIn can note how MyCamu sends
- * it (never a password), then share those notes with the DockIn team. That is
- * what lets a later version submit straight from this screen.
+ * Developer-only capture tool (hidden from students). Make a pass in MyCamu
+ * through DockIn so DockIn can note how MyCamu sends it (never a password),
+ * then share those notes with the DockIn team — used to re-learn the MyCamu
+ * API if the college ever changes it. Students never see this; outpass and
+ * approval are built in and work on their own.
  */
 function TeachCamu() {
   const toast = useToast();
   const [notes, setNotes] = useState<CamuNotes | null>(null);
   const [open, setOpen] = useState(false);
+  const [dev] = useState(devCaptureOn);
 
   useEffect(() => {
+    if (!dev) return;
     let gone = false;
     const load = () =>
       void camuNotes().then((n) => {
@@ -1497,9 +1540,9 @@ function TeachCamu() {
       gone = true;
       off();
     };
-  }, []);
+  }, [dev]);
 
-  if (!isNativeApp()) return null;
+  if (!isNativeApp() || !dev) return null;
   const picked = notes?.picked ?? [];
   const sent = notes ? [...notes.writes, ...notes.picked].filter(isWrite) : [];
   const anything = !!notes && (picked.length > 0 || notes.recent.length > 0 || notes.writes.length > 0);

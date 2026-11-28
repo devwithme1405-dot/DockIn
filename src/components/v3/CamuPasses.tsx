@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { createRoot } from "react-dom/client";
 import { Ban, BadgeCheck, CheckCircle2, Circle, Copy, DoorOpen, House, Loader2, LogIn, LogOut, RefreshCw, ShieldAlert, Stamp, Sun, UserCheck, XCircle } from "lucide-react";
 import { DockIn } from "@/lib/native";
 import { approvePass, connectApprover, useApproverState } from "@/lib/approver";
@@ -10,6 +11,7 @@ import type { PassDraft } from "@/lib/outpass";
 import { cancelInCamu, cancellable, fetchHistory, findInHistory, markCancelledLocally, verifyPass, type CamuPass, type Check } from "@/lib/v3/pass";
 import { v3db, type PassRecord } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
+import { track, useFlags } from "@/lib/telemetry";
 import { Sheet, cx, useToast } from "../ui";
 
 const day = (s: string) => (s ? fromDateStr(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
@@ -167,16 +169,38 @@ function ApprovedBurst({ onDone }: { onDone: () => void }) {
 }
 
 /**
- * Approve this pass from inside DockIn with the college's self-approval login.
- * Does it on its own once DockIn has learned how; before that it opens the
- * approval sign-in so the student does it (and teaches it) once. Pass no id to
- * just connect / teach the login.
+ * The "Approved!" burst in its own little root, so it plays out in full even
+ * though the Approve button that started it disappears the moment the pass
+ * turns approved (the step swaps to "Approved ✓" underneath).
+ */
+let bursting = false;
+function celebrateApproved() {
+  if (typeof document === "undefined" || bursting) return;
+  bursting = true;
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const done = () => {
+    bursting = false;
+    setTimeout(() => {
+      root.unmount();
+      host.remove();
+    }, 0);
+  };
+  root.render(<ApprovedBurst onDone={done} />);
+}
+
+/**
+ * Approve this pass from inside DockIn with the parent's approval login. The
+ * student signs in with that login once (a different MyCamu account, so its
+ * password can't be known before that); from the very first pass DockIn then
+ * approves on its own. Pass no id to just connect the login.
  */
 export function ApproveNow({ camuId, label = "Approve now", className }: { camuId?: string; label?: string; className?: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [celebrate, setCelebrate] = useState(false);
-  const note = "Sign in with your parent's approval login and approve your pass — DockIn will remember it.";
+  const flags = useFlags();
+  const note = "Sign in once with your parent's approval login — DockIn approves your passes for you after this.";
 
   async function go() {
     if (busy) return;
@@ -184,22 +208,21 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
     try {
       if (!camuId) {
         const st = await connectApprover(note);
-        if (st.saved) toast.show("Parent's approval login saved — approve a pass once and then it's automatic.");
+        if (st.saved) toast.show("Parent's approval login saved — your passes get approved automatically now.");
         return;
       }
       const r = await approvePass(camuId, note);
+      track("outpass.approve", r.ok ? { ok: true } : { ok: false, why: r.opened ? r.why : r.reason === "web" ? "web" : "network" });
       if (r.ok) {
         void fetchHistory().catch(() => []);
         // Reflect it on DockIn's own copy at once, so the "approve" button turns into "approved".
         void v3db.passes.filter((p) => p.camuId === camuId).modify({ status: "approved", updatedAt: Date.now() });
-        setCelebrate(true);
+        celebrateApproved();
       } else if (r.opened) {
         toast.show(
           r.why === "expired"
             ? "Approval sign-in expired — just sign in again."
-            : r.why === "teach"
-              ? "Approve it here once — then DockIn does it for you."
-              : "Sign in with your parent's approval login to approve from here.",
+            : "Sign in with your parent's approval login once — then it's automatic.",
         );
       } else if (r.reason === "web") toast.show("Open DockIn on your phone to approve.");
       else toast.show("Couldn't reach MyCamu — try again.");
@@ -208,18 +231,18 @@ export function ApproveNow({ camuId, label = "Approve now", className }: { camuI
     }
   }
 
+  if (!flags.self_approval) {
+    return <p className="rounded-xl bg-warn-soft px-3 py-2.5 text-center text-[13px] font-semibold text-warn">Waiting for approval in MyCamu</p>;
+  }
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => void go()}
-        disabled={busy}
-        className={cx("btn-leather inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] disabled:opacity-60", className)}
-      >
-        {busy ? <Loader2 size={15} className="animate-spin" /> : <Stamp size={15} />} {label}
-      </button>
-      {celebrate && <ApprovedBurst onDone={() => setCelebrate(false)} />}
-    </>
+    <button
+      type="button"
+      onClick={() => void go()}
+      disabled={busy}
+      className={cx("btn-leather inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] disabled:opacity-60", className)}
+    >
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <Stamp size={15} />} {label}
+    </button>
   );
 }
 
@@ -356,6 +379,7 @@ export function CancelPass({ c, onDone, compact }: { c: CamuPass; onDone?: () =>
     setBusy(true);
     setErr(null);
     const r = await cancelInCamu(c.id);
+    track("outpass.cancel", { ok: r.ok });
     if (r.ok) {
       // Show it cancelled at once; MyCamu's list catches up in its own time.
       markCancelledLocally(c.id);

@@ -1,22 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { History, Megaphone, PartyPopper, ShieldCheck, TriangleAlert, UserPlus, X } from "lucide-react";
-import { ago, announcement, auditLog, setAnnouncement, setMember, team } from "@/lib/adminApi";
+import { DoorOpen, FileUp, History, Megaphone, Mic, PartyPopper, Power, ShieldCheck, Stamp, TriangleAlert, UserPlus, X } from "lucide-react";
+import { ago, announcement, auditLog, flags, setAnnouncement, setFlags, setMember, team, type FlagName, type Flags } from "@/lib/adminApi";
 import { cx, useToast } from "../ui";
-import { Badge, Card, Empty, Loading, RefreshButton, useLoad } from "./parts";
+import { Badge, Card, Empty, Loading, RefreshButton, Toggle, useConfirm, useLoad } from "./parts";
 
-const TONES = [
-  ["info", "News", Megaphone],
-  ["warn", "Heads-up", TriangleAlert],
-  ["good", "Good news", PartyPopper],
-] as const;
-
-/** The in-app announcement, the admin team, and who did what. */
-export function SettingsSection({ owner }: { owner: boolean }) {
+/** Kill-switches, the announcement banner, the admin team, and the activity log. */
+export function Control({ owner }: { owner: boolean }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-4">
+        <FlagsCard owner={owner} />
         <AnnouncementCard owner={owner} />
         <TeamCard owner={owner} />
       </div>
@@ -24,6 +19,73 @@ export function SettingsSection({ owner }: { owner: boolean }) {
     </div>
   );
 }
+
+const FLAG_META: { key: FlagName; label: string; sub: string; icon: typeof DoorOpen }[] = [
+  { key: "outpass", label: "Outpass in DockIn", sub: "Make & send passes from the app. Off → students use MyCamu directly.", icon: DoorOpen },
+  { key: "self_approval", label: "Parents approval login", sub: "Approve your own pass from DockIn. Off → the button hides.", icon: Stamp },
+  { key: "lms_submit", label: "LMS hand-in", sub: "Submit assignments from DockIn. Off → save & upload on the LMS.", icon: FileUp },
+  { key: "voice", label: "Voice outpass", sub: "Make a pass by speaking. Off → the mic hides.", icon: Mic },
+];
+
+function FlagsCard({ owner }: { owner: boolean }) {
+  const toast = useToast();
+  const { confirm, node } = useConfirm();
+  const cur = useLoad(flags);
+  const [busy, setBusy] = useState<FlagName | null>(null);
+
+  async function toggle(f: FlagName, to: boolean) {
+    if (!cur.data) return;
+    if (!to && !(await confirm(`Turn off ${FLAG_META.find((m) => m.key === f)!.label}?`, "Every student loses this feature until you turn it back on. Use it while something is broken.", "Turn off"))) return;
+    setBusy(f);
+    const next: Flags = { ...cur.data, [f]: to };
+    cur.setData(next);
+    try {
+      await setFlags(next);
+      toast.show(`${FLAG_META.find((m) => m.key === f)!.label} ${to ? "on" : "off"} for everyone`);
+    } catch (e) {
+      cur.setData({ ...cur.data });
+      await cur.reload();
+      toast.show((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const anyOff = cur.data && FLAG_META.some((m) => !cur.data![m.key]);
+  return (
+    <Card title="Feature switches" sub="Turn a feature off for everyone the moment it misbehaves — no app update needed" action={anyOff ? <Badge tone="warn">Something is off</Badge> : <Badge tone="good">All on</Badge>}>
+      {node}
+      {!cur.data ? (
+        <Loading />
+      ) : (
+        <ul className="space-y-2">
+          {FLAG_META.map((m) => {
+            const on = cur.data![m.key];
+            return (
+              <li key={m.key} className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                <span className={cx("grid size-9 shrink-0 place-items-center rounded-xl", on ? "bg-accent-soft text-accent" : "bg-surface-2 text-muted")}>
+                  <m.icon size={17} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-bold">{m.label}</span>
+                  <span className="block text-[11.5px] leading-tight text-muted">{m.sub}</span>
+                </span>
+                <Toggle on={on} disabled={!owner || busy === m.key} onChange={(v) => void toggle(m.key, v)} label={m.label} />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!owner && <p className="mt-2 flex items-center gap-1.5 text-[12px] text-muted"><Power size={12} /> Only the owner can flip these.</p>}
+    </Card>
+  );
+}
+
+const TONES = [
+  ["info", "News", Megaphone],
+  ["warn", "Heads-up", TriangleAlert],
+  ["good", "Good news", PartyPopper],
+] as const;
 
 function AnnouncementCard({ owner }: { owner: boolean }) {
   const toast = useToast();
@@ -148,12 +210,16 @@ const ACTIONS: Record<string, string> = {
   ban: "Suspended a student",
   unban: "Lifted a suspension",
   "announcement.set": "Changed the announcement",
+  "flags.set": "Changed feature switches",
   "report.dismiss": "Dismissed a report",
   "report.delete_message": "Removed a reported message",
   "report.actioned": "Acted on a report",
   "team.moderator": "Added a moderator",
   "team.owner": "Made someone owner",
   "team.none": "Removed an admin",
+  "user.signout": "Signed a student out",
+  "identity.reset": "Reset a MyCamu link",
+  "export.users": "Exported the student list",
 };
 
 function AuditCard() {

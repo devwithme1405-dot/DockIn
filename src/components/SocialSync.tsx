@@ -1,5 +1,6 @@
 "use client";
 
+import { takeBroadcastOpen } from "@/lib/telemetry";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { listenChat, pullChat } from "@/lib/chat";
@@ -30,7 +31,8 @@ export function SocialSync() {
       const local = await getProfile();
       if (local) await publishProfile(local, mine.shareAttendance);
     })().catch(() => {});
-    const openPath = (path: string) => {
+    const openPath = (raw: string) => {
+      const path = takeBroadcastOpen(raw);
       // Same signal a DockIn notification gives (e.g. "update ready" opens the update popup).
       window.dispatchEvent(new CustomEvent("dockin-open", { detail: path }));
       const url = new URL(path, window.location.href);

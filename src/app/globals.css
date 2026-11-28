@@ -1717,6 +1717,8 @@ html.lite .bot-fab::after, html.lite .ask-halo, html.lite .voice-ring { animatio
 @keyframes adm-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .adm-drawer { animation: adm-drawer .3s cubic-bezier(.2,.9,.3,1) both; }
 @keyframes adm-drawer { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.adm-sheet { animation: adm-sheet .28s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes adm-sheet { from { transform: translateY(100%); } to { transform: none; } }
 html.lite .adm-top, html.lite .adm-bottom { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--card); }
 @media (prefers-reduced-motion: reduce) { .adm-enter, .adm-drawer { animation: none; } }
 

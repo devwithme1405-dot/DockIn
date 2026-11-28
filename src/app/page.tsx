@@ -5,6 +5,7 @@ import { OutpassEntry } from "@/components/v3/OutpassEntry";
 import { WhatsNew } from "@/components/WhatsNew";
 import { usePreview } from "@/lib/v3/flags";
 import { openOutpass } from "@/lib/v3/ui";
+import { useFlags } from "@/lib/telemetry";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -58,6 +59,7 @@ export default function TodayPage() {
   const { today, hm } = useNow();
   const [bell, setBell] = useState(false);
   const preview = usePreview();
+  const flags = useFlags();
   const target = profile?.target ?? 75;
 
   const { data, camu, native } = useAttendanceData(target);
@@ -166,7 +168,7 @@ export default function TodayPage() {
             <p className="font-display text-[24px] font-extrabold tracking-[-0.035em]">DockIn</p>
           </div>
           <div className="flex items-center gap-2.5">
-            {preview && (
+            {preview && flags.outpass && (
               <PaperIconButton label="Outpass" onClick={() => openOutpass("new")}>
                 <DoorOpen size={19} strokeWidth={2.3} />
               </PaperIconButton>

@@ -154,7 +154,7 @@ export const DIRECT_WHY: Record<Exclude<DirectState, "ready">, string> = {
   web: "In the DockIn app, a day out goes straight into MyCamu.",
   "old-app": "Update to the newest DockIn test app to send day outs straight to MyCamu.",
   "signed-out": "Connect Camu in Profile to send day outs straight to MyCamu.",
-  "not-taught": "Make one pass in MyCamu through DockIn once (History → Teach DockIn), then DockIn sends day outs itself.",
+  "not-taught": "Connecting to MyCamu — open MyCamu once from Profile if a day out doesn't send straight away.",
 };
 
 /** Parent / warden approval as DockIn shows it. */

@@ -128,6 +128,12 @@ final class Approver {
             e.putString(K_IDS, ids.toString());
             String name = ids.optString("name", "");
             if (!name.isEmpty()) e.putString(K_USER, name);
+            // The approval login's own id, read straight from its signed-in state
+            // (persist:root → loggedInId). This is the whole reason a student used
+            // to have to approve one pass by hand: with it known from the sign-in,
+            // approval works on its own from the very first pass — no "teach" step.
+            String uid = ids.optString("loggedInId", "");
+            if (OBJECT_ID.matcher(uid).matches()) e.putString(K_LOGIN, uid);
         }
         if (ua != null) e.putString(K_UA, ua);
         e.apply();

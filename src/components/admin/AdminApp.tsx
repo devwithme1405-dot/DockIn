@@ -1,28 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Activity, Bell, Flag, LayoutDashboard, Loader2, LogOut, Moon, Settings, ShieldX, Sun, Users } from "lucide-react";
+import { Activity, Bell, Boxes, Flag, LayoutDashboard, Loader2, LogOut, type LucideIcon, MoreHorizontal, Moon, Radio, Settings, Shield, ShieldX, Sun, TrendingUp, Users } from "lucide-react";
 import { signInWithUsername, signOutCloud, useAuth } from "@/lib/auth";
-import { adminRole, overview } from "@/lib/adminApi";
+import { adminRole, overview2 } from "@/lib/adminApi";
 import { applyTheme } from "@/lib/repo";
 import { Logo } from "../Logo";
 import { ToastProvider, cx } from "../ui";
+import { CommandCenter } from "./CommandCenter";
+import { Control } from "./Control";
+import { Features } from "./Features";
+import { Growth } from "./Growth";
 import { HealthSection } from "./Health";
-import { NotifySection } from "./Notify";
-import { OverviewSection } from "./Overview";
+import { Live } from "./Live";
+import { Notify } from "./Notify";
 import { ReportsSection } from "./Reports";
-import { SettingsSection } from "./SettingsAdmin";
-import { UsersSection } from "./Users";
+import { Students } from "./Users";
+import { Trust } from "./Trust";
 
-type Section = "overview" | "users" | "notify" | "reports" | "health" | "settings";
+type Section = "command" | "live" | "students" | "trust" | "notify" | "growth" | "features" | "reports" | "health" | "control";
 
-const NAV: { id: Section; label: string; icon: typeof Users; title: string; sub: string }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard, title: "Overview", sub: "How DockIn is doing right now" },
-  { id: "users", label: "Students", icon: Users, title: "Students", sub: "Everyone on DockIn, and who missed what" },
-  { id: "notify", label: "Notify", icon: Bell, title: "Notifications", sub: "Tell students something, on their phones" },
+const NAV: { id: Section; label: string; icon: LucideIcon; title: string; sub: string; primary?: boolean }[] = [
+  { id: "command", label: "Command", icon: LayoutDashboard, title: "Command center", sub: "How DockIn is doing, right now", primary: true },
+  { id: "live", label: "Live", icon: Radio, title: "Live", sub: "Who's online and everything happening" },
+  { id: "students", label: "Students", icon: Users, title: "Students", sub: "Everyone on DockIn — search, inspect, act", primary: true },
+  { id: "trust", label: "Trust", icon: Shield, title: "Trust & safety", sub: "Fake or suspicious accounts, scored", primary: true },
+  { id: "notify", label: "Notify", icon: Bell, title: "Notifications", sub: "Send a push — and see who got it", primary: true },
+  { id: "growth", label: "Growth", icon: TrendingUp, title: "Growth", sub: "Funnel, retention and churn" },
+  { id: "features", label: "Features", icon: Boxes, title: "Feature usage", sub: "What's used, what works, what fails" },
   { id: "reports", label: "Reports", icon: Flag, title: "Reports", sub: "Messages students reported" },
-  { id: "health", label: "Health", icon: Activity, title: "App health", sub: "Errors, downloads and services" },
-  { id: "settings", label: "Settings", icon: Settings, title: "Settings", sub: "Announcement, team and activity log" },
+  { id: "health", label: "Health", icon: Activity, title: "App health", sub: "Errors, versions, push and services" },
+  { id: "control", label: "Control", icon: Settings, title: "Control room", sub: "Feature switches, announcement, team, log" },
 ];
 
 const THEME_KEY = "dockin-admin-theme";
@@ -59,9 +67,9 @@ function useAdminTheme(): ["light" | "dark", () => void] {
 }
 
 const sectionFromHash = (): Section => {
-  if (typeof window === "undefined") return "overview";
+  if (typeof window === "undefined") return "command";
   const h = window.location.hash.replace("#", "").split("?")[0] as Section;
-  return NAV.some((n) => n.id === h) ? h : "overview";
+  return NAV.some((n) => n.id === h) ? h : "command";
 };
 
 /**
@@ -71,7 +79,6 @@ const sectionFromHash = (): Section => {
  */
 export function AdminApp() {
   useAdminTheme();
-  // The student app's text size (a page zoom) doesn't belong on a dashboard.
   useEffect(() => {
     document.documentElement.style.zoom = "";
   }, []);
@@ -179,6 +186,7 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
   const [openUser, setOpenUser] = useState<string | undefined>();
   const [notifyTarget, setNotifyTarget] = useState<{ id: string; name: string } | null>(null);
   const [openReports, setOpenReports] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [theme, toggleTheme] = useAdminTheme();
   const owner = role === "owner";
 
@@ -186,12 +194,21 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
     setSection(s as Section);
     setFilter(f);
     setOpenUser(undefined);
+    setMoreOpen(false);
     window.history.replaceState(null, "", `#${s}`);
     window.scrollTo({ top: 0 });
   }, []);
 
+  const openStudent = useCallback((id: string) => {
+    setSection("students");
+    setFilter(undefined);
+    setOpenUser(id);
+    setMoreOpen(false);
+    window.history.replaceState(null, "", "#students");
+  }, []);
+
   const refreshBadge = useCallback(() => {
-    overview()
+    overview2()
       .then((o) => setOpenReports(o.reports_open))
       .catch(() => {});
   }, []);
@@ -210,10 +227,14 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
   }, []);
 
   const nav = NAV.find((n) => n.id === section)!;
+  const primary = NAV.filter((n) => n.primary);
+  const extra = NAV.filter((n) => !n.primary);
+  const inMore = extra.some((n) => n.id === section);
+
   return (
     <div className="adm-bg min-h-dvh lg:flex">
       {/* sidebar (desktop) */}
-      <aside className="adm-side sticky top-0 hidden h-dvh w-64 shrink-0 flex-col px-4 py-5 lg:flex">
+      <aside className="adm-side sticky top-0 hidden h-dvh w-60 shrink-0 flex-col px-4 py-5 lg:flex">
         <div className="flex items-center gap-2.5 px-2">
           <Logo size={36} />
           <div>
@@ -221,7 +242,7 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
             <p className="text-[11.5px] font-semibold tracking-[0.08em] text-[var(--ink-muted)] uppercase">Admin</p>
           </div>
         </div>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-7 space-y-0.5 overflow-y-auto">
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -252,7 +273,6 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
       </aside>
 
       <div className="min-w-0 flex-1">
-        {/* top bar */}
         <header className="adm-top sticky top-0 z-30 border-b border-line px-4 pt-[calc(var(--sat,0px)+0.6rem)] pb-2.5 lg:px-8 lg:pt-5 lg:pb-4">
           <div className="mx-auto flex max-w-6xl items-center gap-3">
             <span className="lg:hidden">
@@ -273,44 +293,70 @@ function Shell({ role, name }: { role: "owner" | "moderator"; name: string }) {
 
         <main className="mx-auto max-w-6xl px-4 pt-4 pb-[calc(6rem+var(--sab,0px))] lg:px-8 lg:pb-12">
           <div key={section} className="adm-enter">
-            {section === "overview" && <OverviewSection go={go} />}
-            {section === "users" && (
-              <UsersSection
-                key={`${filter ?? ""}-${openUser ?? ""}`}
-                initialFilter={filter}
-                openUser={openUser}
-                onNotify={(u) => {
-                  setNotifyTarget(u);
-                  go("notify");
-                }}
-              />
+            {section === "command" && <CommandCenter go={go} />}
+            {section === "live" && <Live onOpenUser={openStudent} />}
+            {section === "students" && (
+              <Students key={`${filter ?? ""}-${openUser ?? ""}`} initialFilter={filter} openUser={openUser} onNotify={(u) => { setNotifyTarget(u); go("notify"); }} />
             )}
-            {section === "notify" && <NotifySection target={notifyTarget} clearTarget={() => setNotifyTarget(null)} owner={owner} />}
-            {section === "reports" && (
-              <ReportsSection
-                onOpenUser={(id) => {
-                  go("users");
-                  setOpenUser(id);
-                }}
-                onChanged={refreshBadge}
-              />
-            )}
+            {section === "trust" && <Trust onOpenUser={openStudent} />}
+            {section === "notify" && <Notify target={notifyTarget} clearTarget={() => setNotifyTarget(null)} owner={owner} />}
+            {section === "growth" && <Growth />}
+            {section === "features" && <Features />}
+            {section === "reports" && <ReportsSection onOpenUser={openStudent} onChanged={refreshBadge} />}
             {section === "health" && <HealthSection />}
-            {section === "settings" && <SettingsSection owner={owner} />}
+            {section === "control" && <Control owner={owner} />}
           </div>
         </main>
 
-        {/* bottom bar (phone) */}
-        <nav className="adm-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line px-1 pt-1.5 pb-[max(0.5rem,var(--sab,0px))] lg:hidden" aria-label="Admin">
-          {NAV.map((n) => (
-            <button key={n.id} type="button" onClick={() => go(n.id)} className={cx("relative flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10.5px] font-semibold", section === n.id ? "text-accent" : "text-muted")}>
-              <n.icon size={20} strokeWidth={section === n.id ? 2.4 : 1.9} />
-              {n.label}
-              {n.id === "reports" && openReports > 0 && <span className="absolute top-0.5 right-[22%] min-w-4 rounded-full bg-danger px-1 text-[10px] leading-4 font-bold text-white">{openReports}</span>}
-            </button>
+        {/* bottom bar (phone): 4 primary + More */}
+        <nav className="adm-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line px-1 pt-1.5 pb-[max(0.5rem,var(--sab,0px))] lg:hidden" aria-label="Admin">
+          {primary.map((n) => (
+            <BottomTab key={n.id} n={n} active={section === n.id} badge={n.id === "reports" ? openReports : 0} onClick={() => go(n.id)} />
           ))}
+          <button type="button" onClick={() => setMoreOpen(true)} className={cx("relative flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10.5px] font-semibold", inMore ? "text-accent" : "text-muted")}>
+            <MoreHorizontal size={20} strokeWidth={inMore ? 2.4 : 1.9} />
+            More
+            {openReports > 0 && !primary.some((p) => p.id === "reports") && <span className="absolute top-0.5 right-[24%] min-w-4 rounded-full bg-danger px-1 text-[10px] leading-4 font-bold text-white">{openReports}</span>}
+          </button>
         </nav>
+
+        {/* "More" sheet (phone) */}
+        {moreOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-label="More sections">
+            <div className="anim-fade absolute inset-0 bg-black/40" onClick={() => setMoreOpen(false)} />
+            <div className="adm-sheet absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-card p-4 pb-[calc(1rem+var(--sab,0px))]">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+              <div className="grid grid-cols-3 gap-2">
+                {extra.map((n) => (
+                  <button key={n.id} type="button" onClick={() => go(n.id)} className={cx("relative flex flex-col items-center gap-1.5 rounded-2xl border px-2 py-3.5 text-[12px] font-semibold", section === n.id ? "border-accent bg-accent-soft text-accent" : "border-line text-muted")}>
+                    <n.icon size={20} />
+                    {n.label}
+                    {n.id === "reports" && openReports > 0 && <span className="absolute top-1.5 right-1.5 min-w-4 rounded-full bg-danger px-1 text-[10px] font-bold text-white">{openReports}</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button type="button" onClick={toggleTheme} className="btn-paper inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold">
+                  {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />} {theme === "dark" ? "Light" : "Dark"}
+                </button>
+                <button type="button" onClick={() => void signOutCloud()} className="btn-paper inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold">
+                  <LogOut size={15} /> Sign out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function BottomTab({ n, active, badge, onClick }: { n: { label: string; icon: LucideIcon }; active: boolean; badge: number; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={cx("relative flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10.5px] font-semibold", active ? "text-accent" : "text-muted")}>
+      <n.icon size={20} strokeWidth={active ? 2.4 : 1.9} />
+      {n.label}
+      {badge > 0 && <span className="absolute top-0.5 right-[24%] min-w-4 rounded-full bg-danger px-1 text-[10px] leading-4 font-bold text-white">{badge}</span>}
+    </button>
   );
 }

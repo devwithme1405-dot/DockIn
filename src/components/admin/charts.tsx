@@ -215,6 +215,67 @@ export function Donut({ parts, size = 132, label }: { parts: { label: string; va
 }
 
 /** Setup funnel: each step as a share of everyone. */
+/** A weekly retention grid: each row a signup week, each cell the % still active N weeks later. */
+export function CohortGrid({ rows, labelOf }: { rows: { week: string; size: number; active: (number | null)[] }[]; labelOf: (week: string) => string }) {
+  const cols = Math.max(1, ...rows.map((r) => r.active.length));
+  const shade = (pct: number) => {
+    const a = 0.1 + (pct / 100) * 0.9;
+    return `color-mix(in srgb, var(--accent) ${Math.round(a * 100)}%, transparent)`;
+  };
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <table className="w-full border-separate border-spacing-1 text-center text-[11.5px]">
+        <thead>
+          <tr className="text-muted">
+            <th className="px-1 py-1 text-left font-semibold">Joined</th>
+            <th className="px-1 py-1 font-semibold">Size</th>
+            {Array.from({ length: cols }, (_, i) => (
+              <th key={i} className="px-1 py-1 font-semibold">
+                W{i}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.week}>
+              <td className="px-1 py-1 text-left font-semibold whitespace-nowrap">{labelOf(r.week)}</td>
+              <td className="px-1 py-1 tabular-nums text-muted">{r.size}</td>
+              {Array.from({ length: cols }, (_, i) => {
+                const v = r.active[i];
+                if (v === null || v === undefined) return <td key={i} className="px-1 py-1" />;
+                const pct = r.size > 0 ? Math.round((v / r.size) * 100) : 0;
+                return (
+                  <td
+                    key={i}
+                    title={`${v} of ${r.size} active in week ${i}`}
+                    className="rounded-md px-1 py-1.5 font-bold tabular-nums"
+                    style={{ background: shade(pct), color: pct > 55 ? "var(--on-ink)" : "var(--text)" }}
+                  >
+                    {pct}%
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** A tiny 14-day bar strip for a single feature. */
+export function MiniBars({ values, color = "var(--accent)" }: { values: number[]; color?: string }) {
+  const max = Math.max(1, ...values);
+  return (
+    <div className="flex h-8 items-end gap-0.5">
+      {values.map((v, i) => (
+        <div key={i} className="flex-1 rounded-sm" style={{ height: `${Math.max(6, (v / max) * 100)}%`, background: v ? color : "var(--surface-2)", opacity: v ? 1 : 0.6 }} title={`${v}`} />
+      ))}
+    </div>
+  );
+}
+
 export function Funnel({ steps }: { steps: { label: string; value: number }[] }) {
   const top = Math.max(1, steps[0]?.value ?? 1);
   return (

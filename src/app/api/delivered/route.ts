@@ -34,6 +34,13 @@ export async function POST(req: Request): Promise<Response> {
   if (!Number.isFinite(when) || Date.now() - when > 2 * 86400_000) return Response.json({ ok: true, stale: true });
 
   const sb = createClient(URL, SERVICE, { auth: { persistSession: false } });
+  // A DockIn Admin notification ("bc:<id>"): it reached this student's phone.
+  const bc = /^bc:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(thread);
+  if (bc) {
+    const { error } = await sb.rpc("broadcast_delivered_for", { p_broadcast: bc[1], p_user: uid, p_at: new Date(when).toISOString() });
+    if (error) return Response.json({ ok: false, reason: "server" }, { status: 500 });
+    return Response.json({ ok: true });
+  }
   const { error } = await sb.rpc("mark_delivered_for", { p_user: uid, p_thread: thread, p_at: new Date(when).toISOString() });
   if (error) return Response.json({ ok: false, reason: "server" }, { status: 500 });
   return Response.json({ ok: true });

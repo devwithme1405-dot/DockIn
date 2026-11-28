@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { BellRing, Clock3, Send, Sparkles, UserRound, Users, X } from "lucide-react";
-import { ago, broadcasts, notify, type Audience } from "@/lib/adminApi";
+import { useEffect, useMemo, useState } from "react";
+import { BellRing, Check, Clock3, Eye, Send, Sparkles, UserRound, Users, Wifi, X, Zap } from "lucide-react";
+import { ago, audienceLabel, broadcasts2, notify, pctOf, segments, type Audience, type Broadcast2 } from "@/lib/adminApi";
 import { cx, useToast } from "../ui";
-import { Badge, Card, Empty, Loading, RefreshButton, useLoad } from "./parts";
+import { Badge, Card, Empty, Loading, RefreshButton, useConfirm, useLoad } from "./parts";
 
 const SCREENS = [
   ["/", "Today"],
@@ -19,69 +19,55 @@ const SCREENS = [
 
 const TEMPLATES = [
   { t: "Your attendance, sorted ✅", b: "Open DockIn to see how many classes you can still skip this week." },
-  { t: "Connect Camu in 10 seconds", b: "Your attendance and timetable fill in by themselves once Camu is connected." },
+  { t: "Connect MyCamu in 10 seconds", b: "Your attendance and timetable fill in by themselves once MyCamu is connected." },
   { t: "Exams are close 📚", b: "Check your timetable and pending tasks in DockIn — all in one place." },
   { t: "DockIn update ready 🎉", b: "A faster, better DockIn is here. Tap to update — your data stays." },
 ];
 
 type Kind = Audience["kind"];
 
-const AUDIENCES: { kind: Kind; label: string; sub: string }[] = [
-  { kind: "all", label: "Everyone", sub: "every phone with notifications" },
-  { kind: "active", label: "Active students", sub: "opened in the last N days" },
-  { kind: "inactive", label: "Gone quiet", sub: "haven't opened for N days" },
-  { kind: "no_camu", label: "No Camu yet", sub: "haven't connected Camu" },
-  { kind: "version_below", label: "Old app", sub: "on a version older than…" },
-  { kind: "android", label: "Android app", sub: "everyone on the app" },
-  { kind: "preview", label: "DockIn 3 testers", sub: "preview build only" },
-  { kind: "me", label: "Only me", sub: "a test to your own phone" },
-];
-
-export function NotifySection({ target, clearTarget, owner }: { target: { id: string; name: string } | null; clearTarget: () => void; owner: boolean }) {
+export function Notify({ target, clearTarget, owner }: { target: { id: string; name: string } | null; clearTarget: () => void; owner: boolean }) {
   const toast = useToast();
+  const { confirm, node } = useConfirm();
+  const seg = useLoad(segments);
+  const history = useLoad(() => broadcasts2(40));
+
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [path, setPath] = useState("/");
   const [kind, setKind] = useState<Kind>(target ? "user" : "me");
   const [days, setDays] = useState(7);
   const [version, setVersion] = useState("");
-  const [reach, setReach] = useState<{ people: number; phones: number } | null>(null);
+  const [branch, setBranch] = useState("");
+  const [year, setYear] = useState(1);
+  const [reach, setReach] = useState<{ people: number; phones: number; instant?: number } | null>(null);
   const [reachErr, setReachErr] = useState<string | null>(null);
-  /** What happened on the last send — shown, not just toasted. */
   const [result, setResult] = useState<{ ok: boolean; text: string; detail?: string } | null>(null);
-  const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const history = useLoad(broadcasts);
+
   const [lastTarget, setLastTarget] = useState(target?.id);
   if (target?.id !== lastTarget) {
     setLastTarget(target?.id);
     if (target) setKind("user");
   }
 
-  const audience: Audience =
-    kind === "user" && target
-      ? { kind: "user", userId: target.id }
-      : kind === "active" || kind === "inactive"
-        ? { kind, days }
-        : kind === "version_below"
-          ? { kind, version: version || "0" }
-          : ({ kind } as Audience);
+  const audience: Audience = useMemo(() => {
+    if (kind === "user" && target) return { kind: "user", userId: target.id };
+    if (kind === "active" || kind === "inactive") return { kind, days };
+    if (kind === "version_below") return { kind, version: version || "0" };
+    if (kind === "branch") return { kind, value: branch || seg.data?.branches[0]?.v || "" };
+    if (kind === "year") return { kind, value: year };
+    return { kind } as Audience;
+  }, [kind, target, days, version, branch, year, seg.data]);
   const key = JSON.stringify(audience);
 
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
+      setReach(null);
       notify({ title: "x", body: "x", path: "/", audience: JSON.parse(key) as Audience, dryRun: true })
-        .then((r) => {
-          if (!alive) return;
-          setReach({ people: r.people, phones: r.phones });
-          setReachErr(null);
-        })
-        .catch((e: Error) => {
-          if (!alive) return;
-          setReach(null);
-          setReachErr(e.message);
-        });
+        .then((r) => alive && (setReach({ people: r.people, phones: r.phones, instant: r.instant }), setReachErr(null)))
+        .catch((e: Error) => alive && (setReach(null), setReachErr(e.message)));
     }, 350);
     return () => {
       alive = false;
@@ -98,11 +84,10 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
       const sent = r.sent ?? 0;
       setResult({
         ok: sent > 0,
-        text: r.phones === 0 ? "Nobody to send to — none of these students has a phone with DockIn notifications on." : `Delivered to ${sent} of ${r.phones} phones`,
+        text: r.phones === 0 ? "Nobody to send to — none of these students has a phone with DockIn notifications on." : `Accepted by ${sent} of ${r.phones} phones${r.instant ? ` · ${r.instant} get it instantly` : ""}`,
         detail: errs.length ? `Google said: ${errs.map(([k, n]) => `${k} ×${n}`).join(", ")}${errs.some(([k]) => k === "UNREGISTERED") ? " (old phones, now removed)" : ""}` : undefined,
       });
-      toast.show(sent ? `Sent to ${sent} of ${r.phones} phones` : "Not delivered — see below");
-      setConfirm(false);
+      toast.show(sent ? `Sent to ${sent} phones` : "Not delivered — see below");
       if (sent) {
         setTitle("");
         setBody("");
@@ -117,9 +102,25 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
   }
 
   const ready = title.trim().length > 0 && body.trim().length > 0 && (kind !== "all" || owner);
+  const isTest = kind === "me" || kind === "user";
+
+  const AUDIENCES: { kind: Kind; label: string; sub: string; off?: boolean }[] = [
+    { kind: "all", label: "Everyone", sub: "every phone with notifications", off: !owner },
+    { kind: "active", label: "Active students", sub: "opened in the last N days" },
+    { kind: "inactive", label: "Gone quiet", sub: "haven't opened for N days" },
+    { kind: "no_camu", label: "No MyCamu yet", sub: "haven't connected MyCamu" },
+    { kind: "unverified", label: "Not verified", sub: "never confirmed with MyCamu" },
+    { kind: "year", label: "By year", sub: "a year of study" },
+    { kind: "branch", label: "By branch", sub: "one branch / programme" },
+    { kind: "outdated", label: "Old app", sub: "behind the latest version" },
+    { kind: "version_below", label: "Below a version", sub: "older than a version you pick" },
+    { kind: "preview", label: "Preview testers", sub: "preview build only" },
+    { kind: "me", label: "Only me", sub: "a test to your own phone" },
+  ];
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+      {node}
       <div className="space-y-4">
         <Card title="Write it" sub="Short and clear works best — 1 line title, 1–2 line message">
           <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
@@ -164,35 +165,16 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
 
         <Card
           title="Who gets it"
-          sub={
-            reachErr
-              ? `Can't count: ${reachErr}`
-              : reach
-                ? `Reaches ${reach.people} ${reach.people === 1 ? "student" : "students"} on ${reach.phones} ${reach.phones === 1 ? "phone" : "phones"}${reach.phones === 0 ? " — nobody here has notifications on" : ""}`
-                : "Counting…"
-          }
+          sub={reachErr ? `Can't count: ${reachErr}` : reach ? `${reach.people} ${reach.people === 1 ? "student" : "students"} · ${reach.phones} ${reach.phones === 1 ? "phone" : "phones"}${reach.instant ? ` · ${reach.instant} instant` : ""}` : "Counting…"}
         >
           {target && (
-            <button
-              type="button"
-              onClick={() => setKind("user")}
-              className={cx("mb-2 flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left", kind === "user" ? "border-accent bg-accent-soft" : "border-line")}
-            >
+            <button type="button" onClick={() => setKind("user")} className={cx("mb-2 flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left", kind === "user" ? "border-accent bg-accent-soft" : "border-line")}>
               <UserRound size={18} className="text-accent" />
               <span className="flex-1">
                 <span className="block text-[14px] font-bold">{target.name}</span>
                 <span className="block text-[12px] text-muted">just this student</span>
               </span>
-              <span
-                role="button"
-                aria-label="Remove"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  clearTarget();
-                  setKind("me");
-                }}
-                className="grid size-7 place-items-center rounded-full text-muted"
-              >
+              <span role="button" aria-label="Remove" onClick={(e) => { e.stopPropagation(); clearTarget(); setKind("me"); }} className="grid size-7 place-items-center rounded-full text-muted">
                 <X size={15} />
               </span>
             </button>
@@ -202,16 +184,11 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
               <button
                 key={a.kind}
                 type="button"
-                disabled={a.kind === "all" && !owner}
+                disabled={a.off}
                 onClick={() => setKind(a.kind)}
-                className={cx(
-                  "flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-left transition disabled:opacity-45",
-                  kind === a.kind ? "border-accent bg-accent-soft" : "border-line hover:bg-surface",
-                )}
+                className={cx("flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-left transition disabled:opacity-45", kind === a.kind ? "border-accent bg-accent-soft" : "border-line hover:bg-surface")}
               >
-                <span className={cx("mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2", kind === a.kind ? "border-accent" : "border-line")}>
-                  {kind === a.kind && <span className="size-1.5 rounded-full bg-accent" />}
-                </span>
+                <span className={cx("mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2", kind === a.kind ? "border-accent" : "border-line")}>{kind === a.kind && <span className="size-1.5 rounded-full bg-accent" />}</span>
                 <span>
                   <span className="block text-[13.5px] font-bold">{a.label}</span>
                   <span className="block text-[12px] text-muted">{a.sub}</span>
@@ -229,8 +206,28 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
               ))}
             </div>
           )}
-          {kind === "version_below" && (
-            <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Version, e.g. 2.0.120" className="field mt-3 h-10 w-full px-3 text-[14px]" />
+          {kind === "version_below" && <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="Version, e.g. 3.0.120" className="field mt-3 h-10 w-full px-3 text-[14px]" />}
+          {kind === "branch" && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {seg.data?.branches.length ? (
+                seg.data.branches.map((b) => (
+                  <button key={b.v} type="button" onClick={() => setBranch(b.v)} className={cx("h-8 rounded-full border px-3 text-[12.5px] font-semibold", (branch || seg.data?.branches[0]?.v) === b.v ? "border-transparent bg-[var(--ink)] text-[var(--on-ink)]" : "border-line text-muted")}>
+                    {b.v} <span className="opacity-60">· {b.n}</span>
+                  </button>
+                ))
+              ) : (
+                <span className="text-[12.5px] text-muted">No branches on profiles yet.</span>
+              )}
+            </div>
+          )}
+          {kind === "year" && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {(seg.data?.years.length ? seg.data.years : [{ v: 1, n: 0 }, { v: 2, n: 0 }, { v: 3, n: 0 }, { v: 4, n: 0 }]).map((y) => (
+                <button key={y.v} type="button" onClick={() => setYear(y.v)} className={cx("h-8 rounded-full border px-3 text-[12.5px] font-semibold", year === y.v ? "border-transparent bg-[var(--ink)] text-[var(--on-ink)]" : "border-line text-muted")}>
+                  Year {y.v} {y.n ? <span className="opacity-60">· {y.n}</span> : ""}
+                </button>
+              ))}
+            </div>
           )}
         </Card>
       </div>
@@ -250,38 +247,25 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
           <button
             type="button"
             disabled={!ready || busy}
-            onClick={() => (kind === "me" || kind === "user" ? void send() : setConfirm(true))}
+            onClick={async () => {
+              if (isTest) return void send();
+              if (await confirm("Send it?", `This goes to about ${reach?.people ?? "?"} students (${audienceLabel(audience)}) and can't be taken back.`, "Send now", false)) void send();
+            }}
             className="btn-leather mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15px] disabled:opacity-50"
           >
             <Send size={17} /> {kind === "me" ? "Send me a test" : "Send"}
           </button>
           {result && (
-            <div
-              role="status"
-              className={cx("anim-fade mt-3 rounded-xl border p-3 text-[13.5px]", result.ok ? "border-safe/40 bg-safe-soft" : "border-danger/40 bg-danger-soft")}
-            >
+            <div role="status" className={cx("anim-fade mt-3 rounded-xl border p-3 text-[13.5px]", result.ok ? "border-safe/40 bg-safe-soft" : "border-danger/40 bg-danger-soft")}>
               <p className={cx("font-bold", result.ok ? "text-safe" : "text-danger")}>{result.text}</p>
               {result.detail && <p className="mt-0.5 text-[12.5px] text-muted">{result.detail}</p>}
+              {result.ok && <p className="mt-0.5 text-[12.5px] text-muted">Arrived / opened fills in below as phones confirm.</p>}
               {!result.ok && <p className="mt-0.5 text-[12.5px] text-muted">Health → Setup checks shows what the server is missing.</p>}
-            </div>
-          )}
-          {confirm && (
-            <div className="anim-fade mt-3 rounded-xl border border-accent/40 bg-accent-soft p-3 text-[13.5px]">
-              <p className="font-bold">Send to {reach?.people ?? "?"} students now?</p>
-              <p className="text-[12.5px] text-muted">This can&apos;t be taken back.</p>
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => setConfirm(false)} className="btn-paper h-9 flex-1 rounded-lg text-[13px] font-bold">
-                  Cancel
-                </button>
-                <button type="button" disabled={busy} onClick={() => void send()} className="btn-leather h-9 flex-1 rounded-lg text-[13px]">
-                  Yes, send
-                </button>
-              </div>
             </div>
           )}
         </Card>
 
-        <Card title="Sent" action={<RefreshButton loading={history.loading} onClick={() => void history.reload()} />}>
+        <Card title="Sent" sub="Arrived = phone confirmed · Opened = tapped" action={<RefreshButton loading={history.loading} onClick={() => void history.reload()} />}>
           {!history.data ? (
             <Loading />
           ) : history.data.length === 0 ? (
@@ -289,25 +273,49 @@ export function NotifySection({ target, clearTarget, owner }: { target: { id: st
           ) : (
             <ul className="space-y-2.5">
               {history.data.map((b) => (
-                <li key={b.id} className="rounded-xl border border-line p-3">
-                  <p className="text-[13.5px] font-bold">{b.title}</p>
-                  <p className="line-clamp-2 text-[12.5px] text-muted">{b.body}</p>
-                  <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
-                    <Clock3 size={11} /> {ago(b.sent_at)}
-                    <Badge tone="accent">
-                      <Users size={10} /> {b.people}
-                    </Badge>
-                    <Badge tone={b.delivered >= b.phones ? "good" : "warn"}>
-                      {b.delivered}/{b.phones} phones
-                    </Badge>
-                    <Badge>{b.audience?.kind ?? "all"}</Badge>
-                  </p>
-                </li>
+                <SentRow key={b.id} b={b} />
               ))}
             </ul>
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function SentRow({ b }: { b: Broadcast2 }) {
+  const reached = b.reached ?? 0;
+  const opened = b.opened ?? 0;
+  return (
+    <li className="rounded-xl border border-line p-3">
+      <p className="text-[13.5px] font-bold">{b.title}</p>
+      <p className="line-clamp-2 text-[12.5px] text-muted">{b.body}</p>
+      <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-muted">
+        <Clock3 size={11} /> {ago(b.sent_at)} · {b.sent_by}
+        <Badge tone="plain">{audienceLabel(b.audience)}</Badge>
+      </p>
+      <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">
+        <Pill icon={<Users size={11} />} n={b.people} label="target" />
+        <Pill icon={<Check size={11} />} n={reached} label="arrived" tone={reached > 0 ? "good" : undefined} />
+        <Pill icon={<Eye size={11} />} n={opened} label="opened" tone={opened > 0 ? "accent" : undefined} />
+        <Pill icon={<Zap size={11} />} n={pctOf(opened, Math.max(1, reached))} label="CTR %" />
+      </div>
+      {b.failed ? (
+        <p className="mt-1.5 flex items-center gap-1 text-[11px] text-danger">
+          <Wifi size={11} /> {b.failed} phone{b.failed === 1 ? "" : "s"} couldn&apos;t be reached
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+function Pill({ icon, n, label, tone }: { icon: React.ReactNode; n: number; label: string; tone?: "good" | "accent" }) {
+  return (
+    <div className={cx("rounded-lg px-1.5 py-1.5", tone === "good" ? "bg-safe-soft" : tone === "accent" ? "bg-accent-soft" : "bg-surface")}>
+      <p className={cx("flex items-center justify-center gap-0.5 text-[14px] font-extrabold tabular-nums", tone === "good" ? "text-safe" : tone === "accent" ? "text-accent" : "")}>
+        {icon} {n}
+      </p>
+      <p className="text-[10px] text-muted">{label}</p>
     </div>
   );
 }

@@ -37,6 +37,7 @@ import { TabHost } from "./TabHost";
 import { OfflineLayer } from "./Offline";
 import { startNet } from "@/lib/net";
 import { installBackHandler } from "@/lib/backClose";
+import { startTelemetry, takeBroadcastOpen } from "@/lib/telemetry";
 
 /**
  * How many things want attention right now: your own tasks that are overdue or
@@ -264,6 +265,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     (window as unknown as { __dockinReady?: boolean }).__dockinReady = true;
   }, []);
+  // Anonymous product events (which features work, which fail) for DockIn Admin.
+  useEffect(() => startTelemetry(), []);
 
   /**
    * DockIn's own notifications say which screen to open ("Spent ₹250 at
@@ -273,7 +276,9 @@ export function AppShell({ children }: { children: ReactNode }) {
    */
   useEffect(
     () =>
-      onPhone("open", ({ path }) => {
+      onPhone("open", ({ path: raw }) => {
+        // A tapped announcement counts as opened (and the ?n= tag is dropped).
+        const path = takeBroadcastOpen(raw);
         const to = new URL(path, window.location.href);
         // The Mess pass widget: Cafeteria with the pass up.
         if (to.pathname === "/cafeteria" && to.searchParams.get("pass")) {

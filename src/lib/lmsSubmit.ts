@@ -1,3 +1,4 @@
+import { flagsNow, track } from "./telemetry";
 import { DockIn, isNativeApp } from "./native";
 import { mimeOf, toBase64 } from "./files";
 
@@ -35,6 +36,40 @@ export async function submitToLms(
   hint: { url?: string | null; title?: string | null } = {},
 ): Promise<{ checked: boolean }> {
   if (!isNativeApp()) throw new Error("Submitting works in the DockIn app.");
+  if (!flagsNow().lms_submit) {
+    track("lms.submit", { ok: false, reason: "paused" });
+    throw new Error("Submitting from DockIn is paused for a bit. Save the file and upload it on the LMS.");
+  }
+  try {
+    const r = await submitInner(instance, blob, name, hint);
+    track("lms.submit", { ok: true, checked: r.checked });
+    return r;
+  } catch (e) {
+    track("lms.submit", { ok: false, reason: lmsReason(e) });
+    throw e;
+  }
+}
+
+/** A short, fixed word for why a hand-in failed (no LMS text, which can name the course). */
+function lmsReason(e: unknown): string {
+  if (e instanceof WebOnlyLms) return "web_only";
+  if (e instanceof DraftOnly) return "draft_only";
+  const m = e instanceof Error ? e.message : String(e);
+  if (/latest DockIn|Update DockIn/i.test(m)) return "old_app";
+  if (/closed|last date|cut-?off|due date/i.test(m)) return "closed";
+  if (/locked/i.test(m)) return "locked";
+  if (/sign ?in|log ?in|token|session/i.test(m)) return "signed_out";
+  if (/network|timeout|reach|offline|connect/i.test(m)) return "network";
+  if (/size|too (big|large)|maxbytes/i.test(m)) return "too_big";
+  return "other";
+}
+
+async function submitInner(
+  instance: number,
+  blob: Blob,
+  name: string,
+  hint: { url?: string | null; title?: string | null },
+): Promise<{ checked: boolean }> {
   let res: { status?: string } | void;
   const cmid = cmidOf(hint.url);
   try {

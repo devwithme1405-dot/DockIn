@@ -10,6 +10,7 @@
  * marked by hand, so a number on screen is always the number the college has.
  */
 
+import { track } from "./telemetry";
 import { isPracticeTask } from "./practiceLms";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { db } from "./db";
@@ -529,7 +530,13 @@ export async function ensureCamuLoginId(): Promise<void> {
 }
 
 export async function connectCamu(): Promise<void> {
-  set(await DockIn.connectCamu());
+  try {
+    set(await DockIn.connectCamu());
+    track("camu.connect", { ok: true });
+  } catch (e) {
+    track("camu.connect", { ok: false });
+    throw e;
+  }
 }
 
 export async function connectLms(username: string, password: string): Promise<void> {
