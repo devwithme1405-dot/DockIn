@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { DockIn, isNativeApp } from "../native";
+import { camuWeb, CamuWebError } from "../camu/web";
 import { fmtTime, fromDateStr, toDateStr } from "../dates";
 import { needsProof, passSummary, type PassDraft } from "../outpass";
 import { whatsappUrl } from "../money";
@@ -133,7 +134,15 @@ export function codeWords(code: string, message?: string): string {
 export type DirectState = "ready" | "web" | "old-app" | "signed-out" | "not-taught";
 
 export async function directState(): Promise<DirectState> {
-  if (!isNativeApp()) return "web";
+  if (!isNativeApp()) {
+    // On the web / iPhone the server bridge makes the pass itself — ready the
+    // moment MyCamu is linked, so the same screen flow runs as on Android.
+    try {
+      return (await camuWeb.status()).linked ? "ready" : "web";
+    } catch {
+      return "web";
+    }
+  }
   try {
     const r = await DockIn.camuCanMakePass();
     if (r.ok) return "ready";
@@ -151,7 +160,7 @@ export async function canSendDirect(): Promise<boolean> {
 
 /** One line on what's missing, for the student. */
 export const DIRECT_WHY: Record<Exclude<DirectState, "ready">, string> = {
-  web: "In the DockIn app, a day out goes straight into MyCamu.",
+  web: "Connect MyCamu on the Today screen to make a day out here.",
   "old-app": "Update to the newest DockIn test app to send day outs straight to MyCamu.",
   "signed-out": "Connect Camu in Profile to send day outs straight to MyCamu.",
   "not-taught": "Connecting to MyCamu — open MyCamu once from Profile if a day out doesn't send straight away.",
@@ -174,12 +183,41 @@ export function sendable(p: PassDraft, proof?: Blob | null): boolean {
 }
 
 /**
+ * The web / iPhone path: DockIn's server makes the day out, then we read
+ * MyCamu's own list to confirm it (so the saved pass follows MyCamu from then
+ * on). Leaves need the mail screenshot uploaded, which the web can't do yet.
+ */
+async function sendPassWeb(p: PassDraft): Promise<SendResult> {
+  if (p.kind !== "dayout") {
+    return { kind: "refused", message: "A leave needs its mail screenshot uploaded — make leave passes in the DockIn app or on MyCamu for now. Day outs work here." };
+  }
+  try {
+    await camuWeb.dayOut(p.fromDate, p.fromTime, p.toTime, p.reason);
+  } catch (e) {
+    const err = e as CamuWebError;
+    if (err?.needsLink) return { kind: "refused", message: "Connect MyCamu first on the Today screen, then try again." };
+    return { kind: "refused", message: err?.message || "MyCamu didn't take it." };
+  }
+  // Confirm against MyCamu's own list and adopt that record.
+  try {
+    const raw = (await camuWeb.passes()) as Record<string, unknown>[];
+    const list = camuHistory(Array.isArray(raw) ? raw : []);
+    const m = findInHistory({ kind: p.kind, fromDate: p.fromDate, fromTime: p.fromTime, toTime: p.toTime }, list);
+    if (m) return { kind: "made", camuId: m.id, status: m.state === "approved" ? "approved" : "applied", record: m, already: false };
+  } catch {
+    /* it's in MyCamu either way */
+  }
+  return { kind: "made", status: "applied", record: null, already: false };
+}
+
+/**
  * A pass straight into MyCamu, the way MyCamu's own form sends it (for a
  * leave: the mail screenshot uploaded, then the leave), then checked against
  * MyCamu's list. Anything DockIn can't do itself falls back to opening MyCamu.
  */
 export async function sendPass(p: PassDraft, proof?: Blob | null): Promise<SendResult> {
   if (!sendable(p, proof)) return { kind: "open", why: "not-sendable" };
+  if (!isNativeApp()) return sendPassWeb(p);
   if (!(await canSendDirect())) return { kind: "open", why: "not-ready" };
   try {
     let r;
@@ -227,9 +265,19 @@ export async function sendPass(p: PassDraft, proof?: Blob | null): Promise<SendR
 export async function refreshFromCamu(
   passes: (Partial<Pick<PassDraft, "kind" | "fromDate" | "fromTime" | "toTime" | "reason">> & { id: string; camuId?: string; status: PassStatus })[],
 ): Promise<number> {
-  if (!passes.length || !isNativeApp()) return 0;
-  const r = await DockIn.camuPasses();
-  const raw = JSON.parse(r.items || "[]") as Record<string, unknown>[];
+  if (!passes.length) return 0;
+  let raw: Record<string, unknown>[];
+  if (isNativeApp()) {
+    const r = await DockIn.camuPasses();
+    raw = JSON.parse(r.items || "[]") as Record<string, unknown>[];
+  } else {
+    try {
+      const w = await camuWeb.passes();
+      raw = Array.isArray(w) ? (w as Record<string, unknown>[]) : [];
+    } catch {
+      return 0;
+    }
+  }
   const byId = new Map(raw.filter((x) => typeof x._id === "string").map((x) => [x._id as string, x]));
   const parsed = camuHistory(raw);
   let changed = 0;
@@ -368,8 +416,15 @@ function withPending(items: CamuPass[]): CamuPass[] {
 
 /** Reads MyCamu's list now (and keeps it for offline). Throws when MyCamu can't be reached. */
 export async function fetchHistory(): Promise<CamuPass[]> {
-  const r = await DockIn.camuPasses();
-  const items = withPending(camuHistory(JSON.parse(r.items || "[]")));
+  let rawArr: Record<string, unknown>[];
+  if (isNativeApp()) {
+    const r = await DockIn.camuPasses();
+    rawArr = JSON.parse(r.items || "[]") as Record<string, unknown>[];
+  } else {
+    const w = await camuWeb.passes();
+    rawArr = Array.isArray(w) ? (w as Record<string, unknown>[]) : [];
+  }
+  const items = withPending(camuHistory(rawArr));
   try {
     localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), items }));
   } catch {
@@ -464,7 +519,17 @@ export function cancellable(c: CamuPass, now: Date = new Date()): boolean {
  * shows it cancelled. "open" means this phone can't (older app): cancel in MyCamu.
  */
 export async function cancelInCamu(id: string): Promise<{ ok: true } | { ok: false; message: string; open?: boolean }> {
-  if (!isNativeApp()) return { ok: false, message: "Cancel it in MyCamu.", open: true };
+  if (!isNativeApp()) {
+    try {
+      await camuWeb.cancel(id);
+      return { ok: true };
+    } catch (e) {
+      const err = e as CamuWebError;
+      if (err?.kind === "network") return { ok: false, message: "Couldn't reach MyCamu. Try again in a moment." };
+      if (err?.needsLink) return { ok: false, message: "Connect MyCamu first on the Today screen.", open: true };
+      return { ok: false, message: err?.message || "Couldn't cancel — try again." };
+    }
+  }
   try {
     const r = await DockIn.camuCancel({ id });
     if (r.cancelled || r.code === "CNCL") return { ok: true };

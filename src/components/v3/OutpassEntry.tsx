@@ -12,6 +12,7 @@ import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
 import { openWebCamu } from "@/components/camu/WebCamu";
+import { useCamuLink } from "@/lib/camu/web";
 import { cx } from "../ui";
 import { CamuChip } from "./CamuPasses";
 
@@ -44,33 +45,13 @@ export function OutpassEntry({ className }: { className?: string }) {
 
   // Keep the list fresh while Today is open (quietly; the card updates by itself).
   useEffect(() => {
-    if (!on || !isNativeApp()) return;
+    if (!on) return;
+    // Warm MyCamu's list for the Today card — native via the plugin, web via the server bridge.
     void fetchHistory().catch(() => {});
-    void ensureCamuLoginId();
+    if (isNativeApp()) void ensureCamuLoginId();
   }, [on]);
 
-  if (web) {
-    return (
-      <section className={cx("px-5", className)} aria-label="MyCamu">
-        <button
-          type="button"
-          onClick={openWebCamu}
-          className="op-entry block w-full overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
-        >
-          <span className="flex items-center gap-3 px-4 py-3.5">
-            <span className="op-door grid size-12 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent">
-              <DoorOpen size={23} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="font-display block text-[17px] leading-tight font-extrabold">Outpass</span>
-              <span className="block text-[12.5px] text-muted">Day out & leave — make, approve & cancel</span>
-            </span>
-            <ChevronRight size={20} className="shrink-0 text-muted" />
-          </span>
-        </button>
-      </section>
-    );
-  }
+  if (web) return <WebOutpassEntry className={className} />;
 
   if (!on) return null;
   const live: CamuPass | null = camu ? (liveCamu(camu.items, today).sort((a, b) => (a.fromDate + a.fromTime).localeCompare(b.fromDate + b.fromTime))[0] ?? null) : null;
@@ -139,6 +120,40 @@ export function OutpassEntry({ className }: { className?: string }) {
             </span>
           </span>
         )}
+      </button>
+    </section>
+  );
+}
+
+/**
+ * The web / iPhone entry. Once MyCamu is linked it opens the real Outpass screen
+ * — the exact same one the Android app shows (make a day out, see passes,
+ * approve, cancel) — now backed by DockIn's server. Before linking, it opens the
+ * connect sheet. Kept a separate component so native Today never hits the link
+ * status endpoint.
+ */
+function WebOutpassEntry({ className }: { className?: string }) {
+  const { status } = useCamuLink();
+  const linked = !!status?.linked;
+  return (
+    <section className={cx("px-5", className)} aria-label="Outpass">
+      <button
+        type="button"
+        onClick={() => (linked ? openOutpass("new") : openWebCamu())}
+        className="op-entry block w-full overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-3 px-4 py-3.5">
+          <span className="op-door grid size-12 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent">
+            <DoorOpen size={23} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="font-display block text-[17px] leading-tight font-extrabold">Outpass</span>
+            <span className="block text-[12.5px] text-muted">
+              {linked ? "Day out & leave — make, approve & cancel" : "Connect MyCamu to make & approve passes"}
+            </span>
+          </span>
+          <ChevronRight size={20} className="shrink-0 text-muted" />
+        </span>
       </button>
     </section>
   );

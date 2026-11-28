@@ -1161,8 +1161,10 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   const [status, setStatus] = useState<StatusGroup | "all">("all");
   /** MyCamu's own list: shown from the last read at once, then refreshed. */
   const [camu, setCamu] = useState<{ at: number; items: CamuPass[] } | null>(() => cachedHistory());
-  const native = isNativeApp();
-  const [loading, setLoading] = useState(native);
+  // MyCamu's list loads on both the app (native plugin) and the web/iPhone
+  // (server bridge) — pass.ts routes each. A browser that isn't linked yet just
+  // falls back to the offline/cached view.
+  const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const toast = useToast();
 
@@ -1170,7 +1172,6 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
   useEffect(() => onHistoryChange(() => setCamu(cachedHistory())), []);
 
   async function load(loud: boolean) {
-    if (!native) return;
     setLoading(true);
     try {
       const items = await fetchHistory();
@@ -1189,7 +1190,6 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
 
   // Read MyCamu as History opens (the cached list shows meanwhile).
   useEffect(() => {
-    if (!isNativeApp()) return;
     let gone = false;
     fetchHistory()
       .then(async (items) => {
@@ -1275,7 +1275,7 @@ function History({ focus, onFocusDone, onNew }: { focus: string | null; onFocusD
             {label}
           </button>
         ))}
-        {native && (
+        {(
           <button
             type="button"
             onClick={() => void load(true)}

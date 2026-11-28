@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { DockIn, isNativeApp, onPhone } from "./native";
+import { camuWeb, CamuWebError } from "./camu/web";
 
 export interface ApproverState {
   /** A self-approval login is saved (its session may still have ended). */
@@ -39,7 +40,16 @@ export async function saveApproverCreds(user: string, pass: string): Promise<voi
 const APPROVE_PATH = "/v2/#/leave";
 
 export async function approverState(): Promise<ApproverState> {
-  if (!isNativeApp()) return OFF;
+  if (!isNativeApp()) {
+    // On the web the linked MyCamu login is itself the approver: connected means
+    // DockIn can approve straight away, no second login.
+    try {
+      const s = await camuWeb.status();
+      return s.linked ? { saved: true, taught: true, hasCreds: true, user: s.name ?? "" } : OFF;
+    } catch {
+      return OFF;
+    }
+  }
   try {
     return await DockIn.approverState();
   } catch {
@@ -72,7 +82,7 @@ export function useApproverState(): ApproverState {
 export const OLD_APP = "Update DockIn to the latest app — this version doesn't have self-approval yet.";
 
 export async function connectApprover(note?: string): Promise<ApproverState> {
-  if (!isNativeApp()) throw new Error("Open DockIn on your phone to connect self-approval.");
+  if (!isNativeApp()) return approverState();
   try {
     return await DockIn.openApprover({ path: APPROVE_PATH, note });
   } catch (e) {
@@ -107,7 +117,17 @@ export type ApproveOutcome =
  * set-up tap never surprises you by opening MyCamu.
  */
 export async function approvePass(id: string, note?: string): Promise<ApproveOutcome> {
-  if (!isNativeApp()) return { ok: false, opened: false, reason: "web" };
+  if (!isNativeApp()) {
+    // Web / iPhone: approve through the server bridge with the linked login.
+    try {
+      const r = await camuWeb.approve(id);
+      return { ok: true, status: r.code };
+    } catch (e) {
+      const err = e as CamuWebError;
+      if (err?.needsLink) return { ok: false, opened: false, reason: "Connect MyCamu first on the Today screen." };
+      return { ok: false, opened: false, reason: err?.message || "Couldn't approve — try again." };
+    }
+  }
   const st = await approverState();
   if (st.saved && st.taught) {
     try {
