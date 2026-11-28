@@ -11,7 +11,7 @@ import { useFlags } from "@/lib/telemetry";
 import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
-import { openWebCamu, WebCamu } from "@/components/camu/WebCamu";
+import { openWebCamu } from "@/components/camu/WebCamu";
 import { cx } from "../ui";
 import { CamuChip } from "./CamuPasses";
 
@@ -62,13 +62,12 @@ export function OutpassEntry({ className }: { className?: string }) {
               <DoorOpen size={23} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="font-display block text-[17px] leading-tight font-extrabold">MyCamu</span>
-              <span className="block text-[12.5px] text-muted">Outpass, approve & attendance — right here</span>
+              <span className="font-display block text-[17px] leading-tight font-extrabold">Outpass</span>
+              <span className="block text-[12.5px] text-muted">Day out & leave — make, approve & cancel</span>
             </span>
             <ChevronRight size={20} className="shrink-0 text-muted" />
           </span>
         </button>
-        <WebCamu />
       </section>
     );
   }

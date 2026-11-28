@@ -115,11 +115,23 @@ export function normTextScale(scale: number | undefined): number {
   return TEXT_SCALES.includes(scale as (typeof TEXT_SCALES)[number]) ? (scale as number) : DEFAULT_TEXT_SCALE;
 }
 
+/**
+ * iOS Safari / iPadOS — where CSS `zoom` reflows and jumps the whole page (the
+ * app "tudta" on iPhone). iPadOS 13+ reports itself as a Mac, so a touch Mac
+ * counts too. Everything else (Android app, desktop) keeps zoom.
+ */
+export function isIOSWeb(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+
 /** Scales the whole interface, the way the phone's own text-size setting does. */
 export function applyTextScale(scale: number | undefined): void {
   if (typeof document === "undefined") return;
   const s = normTextScale(scale);
-  document.documentElement.style.zoom = s === 1 ? "" : String(s);
+  // On iOS, `zoom` breaks the layout — leave the page at its natural size there.
+  document.documentElement.style.zoom = s === 1 || isIOSWeb() ? "" : String(s);
   try {
     localStorage.setItem("dockin-text-scale", String(s));
   } catch {

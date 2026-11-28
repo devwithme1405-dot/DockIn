@@ -19,6 +19,7 @@ import { summarize } from "./attendance";
 import { DockIn, isNativeApp, onPhone, type CamuClass, type CamuPeriod, type CamuState, type CamuSubject, type CollegeState, type LmsItem } from "./native";
 import { useAttendanceStats } from "./hooks";
 import { getSupabase } from "./supabase";
+import { fetchWebCamu, isWebLinked } from "./camu/webSync";
 import { afterFirstSync } from "./sync";
 import type { AttendanceSummary, Session, Subject, Task } from "./types";
 
@@ -440,8 +441,112 @@ export function syncCollege(full = false): Promise<void> {
   return syncing;
 }
 
+// ---------------------------------------------------------------------------
+// The web / iPhone twin: no native plugin, so MyCamu is read through DockIn's
+// server (see camu/webSync). The mapped CamuState goes into the very same store,
+// so Today, Attendance, Timetable and Cafeteria fill from MyCamu on the web
+// exactly as they do in the app.
+
+const WEB_CACHE = "dockin-web-camu";
+let webStarted = false;
+let webSyncing: Promise<void> | null = null;
+
+function cachedWebCamu(): CamuState | null {
+  try {
+    const raw = localStorage.getItem(WEB_CACHE);
+    if (!raw) return null;
+    const c = JSON.parse(raw) as CamuState;
+    return c && c.connected ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch MyCamu now (web only). `full` also re-reads every class (the per-subject
+ * history), the way a full native sync does — done on first connect and manual
+ * refresh, not on every quiet background check.
+ */
+export function syncWebCamu(full = false): Promise<void> {
+  if (isNativeApp() || typeof window === "undefined") return Promise.resolve();
+  if (webSyncing) return webSyncing;
+  lastSyncAttempt = Date.now();
+  webSyncing = fetchWebCamu({ history: full })
+    .then((camu) => {
+      set({ ...current, camu, syncedAt: camu.syncedAt ?? Date.now() });
+      try {
+        if (camu.connected && !camu.expired) localStorage.setItem(WEB_CACHE, JSON.stringify(camu));
+        else if (!camu.connected) localStorage.removeItem(WEB_CACHE);
+      } catch {
+        /* private mode */
+      }
+      syncFails = camu.error ? syncFails + 1 : 0;
+    })
+    .catch(() => {
+      syncFails += 1;
+    })
+    .finally(() => {
+      webSyncing = null;
+    });
+  return webSyncing;
+}
+
+/**
+ * Start the web MyCamu loop: show the last good copy at once, then refresh when
+ * it's stale and whenever the tab comes back. The first refresh after a reload
+ * that has no cached classes is a full one, so the per-subject history lands too.
+ */
+export function startWebCamu() {
+  if (webStarted || typeof window === "undefined" || isNativeApp()) return;
+  webStarted = true;
+
+  const cached = cachedWebCamu();
+  if (cached) set({ ...current, camu: cached, syncedAt: cached.syncedAt });
+  loaded = true;
+  listeners.forEach((l) => l());
+
+  const kick = async () => {
+    try {
+      if (!(await isWebLinked())) {
+        if (current.camu) set({ ...current, camu: { connected: false } });
+        try {
+          localStorage.removeItem(WEB_CACHE);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
+      const stale = Date.now() - (current.camu?.syncedAt ?? 0) > STALE_MS;
+      const cooled = Date.now() - lastSyncAttempt >= syncBackoffMs();
+      if (stale && cooled) void syncWebCamu(!current.camu?.history);
+    } catch {
+      /* best-effort */
+    }
+  };
+  void kick();
+  const onVis = () => document.visibilityState === "visible" && void kick();
+  document.addEventListener("visibilitychange", onVis);
+}
+
+/** Web: forget the MyCamu link locally (after the server unlink) and empty the screens. */
+export function clearWebCamu() {
+  if (isNativeApp()) return;
+  try {
+    localStorage.removeItem(WEB_CACHE);
+    localStorage.removeItem(ARCHIVE);
+  } catch {
+    /* nothing kept */
+  }
+  set({ ...current, camu: { connected: false } });
+}
+
 function start() {
-  if (started || typeof window === "undefined" || !isNativeApp()) return;
+  if (started || typeof window === "undefined") return;
+  if (!isNativeApp()) {
+    started = true;
+    startWebCamu();
+    return;
+  }
   started = true;
   const refresh = async () => {
     try {

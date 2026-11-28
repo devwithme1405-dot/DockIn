@@ -57,6 +57,7 @@ export const camuWeb = {
   passes: () => get<unknown>("/api/camu/passes"),
   attendance: () => get<CamuWebAttendance>("/api/camu/attendance"),
   timetable: (from: string, to: string) => get<unknown>(`/api/camu/timetable?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  history: (subjectId: string) => post<unknown>("/api/camu/history", { subjectId }),
   mess: () => get<{ menu: unknown; qr: unknown }>("/api/camu/mess"),
   dayOut: (day: string, from: string, to: string, reason: string) => post<unknown>("/api/camu/outpass", { kind: "dayout", day, from, to, reason }),
   leave: (i: { fromDay: string; from: string; toDay: string; to: string; reason: string; fileName: string; attId: string; atchId: string }) => post<unknown>("/api/camu/outpass", { kind: "leave", ...i }),

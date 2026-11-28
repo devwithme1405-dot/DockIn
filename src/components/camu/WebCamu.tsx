@@ -10,10 +10,12 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Bell, CalendarDays, Check, ChevronLeft, DoorOpen, House, Loader2, LogOut, RefreshCw, ShieldCheck, Sun, Stamp, X } from "lucide-react";
+import { Bell, ChevronLeft, DoorOpen, House, Loader2, LogOut, RefreshCw, ShieldCheck, Sun, Stamp, X } from "lucide-react";
 import { useBackClose } from "@/lib/backClose";
 import { fmtTime, toDateStr } from "@/lib/dates";
-import { camuWeb, CamuWebError, useCamuLink, type CamuWebAttendance, type LinkStatus } from "@/lib/camu/web";
+import { camuWeb, CamuWebError, useCamuLink, type LinkStatus } from "@/lib/camu/web";
+import { clearWebCamu, syncWebCamu } from "@/lib/college";
+import { goTab } from "@/lib/tabs";
 import { enableWebPush, webPushState } from "@/lib/webpush";
 import { camuPassOf, type CamuPass } from "@/lib/v3/pass";
 import { cx, useToast } from "../ui";
@@ -42,18 +44,29 @@ export function useWebCamuOpen(): boolean {
   );
 }
 
-type Tab = "outpass" | "attendance";
-
-/** The full-screen MyCamu sheet. Mount once (it renders only when opened). */
+/**
+ * The full-screen MyCamu sheet — connect, then make / approve / cancel outpasses.
+ * Attendance, timetable and the mess pass live on their own screens now: once
+ * connected they fill from MyCamu just like the Android app, so this sheet is
+ * only the gate pass. Mount once (it renders only when opened).
+ */
 export function WebCamu() {
   const isOpen = useWebCamuOpen();
   useBackClose(isOpen, closeWebCamu);
   const { status, loading, refresh } = useCamuLink();
-  const [tab, setTab] = useState<Tab>("outpass");
 
   useEffect(() => {
     if (isOpen) refresh();
   }, [isOpen, refresh]);
+
+  // Connected: fill every screen from MyCamu, close the sheet, land on Today —
+  // the way the app does after you sign in.
+  function onConnected() {
+    refresh();
+    void syncWebCamu(true);
+    closeWebCamu();
+    goTab("/");
+  }
 
   if (!isOpen || typeof document === "undefined") return null;
 
@@ -65,34 +78,13 @@ export function WebCamu() {
             <ChevronLeft size={24} />
           </button>
           <div className="min-w-0 flex-1">
-            <p className="font-display text-[21px] leading-tight font-extrabold">MyCamu</p>
-            <p className="truncate text-[12px] text-white/80">{status?.linked ? (status.name ? `Signed in as ${status.name}` : "Connected") : "Outpass, attendance & more"}</p>
+            <p className="font-display text-[21px] leading-tight font-extrabold">Outpass</p>
+            <p className="truncate text-[12px] text-white/80">{status?.linked ? (status.name ? `Signed in as ${status.name}` : "Connected") : "Day out & leave — make, approve, cancel"}</p>
           </div>
           <span className="op-door grid size-11 shrink-0 place-items-center rounded-2xl bg-white/15" aria-hidden>
             <DoorOpen size={22} />
           </span>
         </div>
-        {status?.linked && (
-          <div role="tablist" className="relative mt-3 grid grid-cols-2 gap-1 rounded-2xl bg-black/20 p-1">
-            {(
-              [
-                ["outpass", "Outpass", DoorOpen],
-                ["attendance", "Attendance", CalendarDays],
-              ] as const
-            ).map(([k, label, Icon]) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={tab === k}
-                onClick={() => setTab(k)}
-                className={cx("flex items-center justify-center gap-1.5 rounded-xl py-2 text-[13.5px] font-bold transition", tab === k ? "bg-white text-[#5a2a10]" : "text-white/85")}
-              >
-                <Icon size={16} /> {label}
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(2rem+var(--sab,0px))]">
@@ -101,11 +93,11 @@ export function WebCamu() {
             <Loader2 className="animate-spin" />
           </div>
         ) : !status?.linked ? (
-          <Connect onDone={refresh} />
+          <Connect onDone={onConnected} />
         ) : (
           <>
             <NotifyBanner />
-            {tab === "outpass" ? <Outpass /> : <Attendance />}
+            <Outpass />
           </>
         )}
       </div>
@@ -361,76 +353,6 @@ function PassRow({ p, onChanged, past }: { p: CamuPass; onChanged: () => Promise
   );
 }
 
-// ------------------------------------------------------------------ attendance
-
-function Attendance() {
-  const [data, setData] = useState<CamuWebAttendance | null>(null);
-  const [state, setState] = useState<"load" | "ok" | "err">("load");
-  useEffect(() => {
-    camuWeb
-      .attendance()
-      .then((d) => {
-        setData(d);
-        setState("ok");
-      })
-      .catch(() => setState("err"));
-  }, []);
-
-  if (state === "load")
-    return (
-      <div className="flex justify-center py-20 text-muted">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
-  if (state === "err" || !data) return <p className="px-5 py-10 text-center text-[13.5px] text-muted">Couldn&apos;t load attendance. Pull to refresh or try again.</p>;
-
-  const overall = Math.round(Number(data.OvrAllPrcntg ?? 0));
-  const subjects = data.subjectList ?? [];
-  const tone = overall >= 75 ? "text-safe" : overall >= 65 ? "text-warn" : "text-danger";
-  return (
-    <div className="space-y-4 px-5 py-5">
-      <div className="rounded-3xl border-[1.5px] border-card-edge bg-card p-5 text-center shadow-[0_3px_0_var(--pbtn-lip)]">
-        <p className="text-[12px] font-bold tracking-[0.08em] text-muted uppercase">Overall attendance</p>
-        <p className={cx("font-display mt-1 text-[48px] leading-none font-extrabold tabular-nums", tone)}>{overall}%</p>
-        {data.OvrAllPCnt != null && data.OvrAllCnt != null && (
-          <p className="mt-1 text-[13px] text-muted">
-            {data.OvrAllPCnt} / {data.OvrAllCnt} classes
-          </p>
-        )}
-        {data.CurMnthPrcntg != null && <p className="mt-0.5 text-[12px] text-muted">This month: {Math.round(Number(data.CurMnthPrcntg))}%</p>}
-      </div>
-
-      {subjects.length > 0 && (
-        <section>
-          <h3 className="mb-2 px-1 text-[12px] font-bold tracking-[0.08em] text-muted uppercase">By subject</h3>
-          <div className="space-y-2">
-            {subjects.map((s, i) => {
-              const pct = Math.round(Number(s.Prcntg ?? 0));
-              const st = pct >= 75 ? "bg-safe" : pct >= 65 ? "bg-warn" : "bg-danger";
-              return (
-                <div key={i} className="rounded-2xl border border-line bg-card p-3">
-                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[13.5px] font-semibold">{s.SubNa || s.SubCode || "Subject"}</span>
-                    <span className="shrink-0 text-[13.5px] font-bold tabular-nums">
-                      {pct}%{s.PCnt != null && s.TCnt != null ? <span className="ml-1.5 text-[11.5px] font-normal text-muted">{s.PCnt}/{s.TCnt}</span> : null}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-                    <div className={cx("h-full rounded-full transition-[width] duration-700", st)} style={{ width: `${Math.min(100, pct)}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-      <p className="flex items-center justify-center gap-1.5 pt-1 text-[11.5px] text-muted">
-        <Check size={13} /> Live from MyCamu
-      </p>
-    </div>
-  );
-}
-
 /** A one-tap nudge to turn on notifications (web / installed iPhone PWA). */
 function NotifyBanner() {
   const toast = useToast();
@@ -483,6 +405,7 @@ function Disconnect() {
         setBusy(true);
         try {
           await camuWeb.unlink();
+          clearWebCamu();
           toast.show("MyCamu disconnected");
           refresh();
         } catch {

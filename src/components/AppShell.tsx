@@ -19,6 +19,8 @@ import { AppUpdate } from "./AppUpdate";
 import { ShareInbox } from "./ShareInbox";
 import { WidgetsSync } from "./WidgetsSync";
 import { V3Host } from "./v3/V3Host";
+import { WebCamu } from "./camu/WebCamu";
+import { startWebCamu } from "@/lib/college";
 import { usePreview } from "@/lib/v3/flags";
 import { useIdentityStatus } from "@/lib/identity";
 import { IdentityGate, NicknameAsk } from "./v3/Identity";
@@ -283,6 +285,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       /* fine */
     }
     void syncWebPush();
+    // Web / iPhone: read MyCamu through DockIn's server so Today, Attendance,
+    // Timetable and Cafeteria fill themselves, the same as the Android app.
+    startWebCamu();
   }, []);
 
   /**
@@ -461,6 +466,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isNativeApp() && ready && !onboarding && <WidgetsSync />}
         {ready && !onboarding && <V3Host />}
         {ready && !onboarding && !ban && !isNativeApp() && <InstallPrompt />}
+        {ready && !onboarding && !isNativeApp() && <WebCamu />}
         {ready && !onboarding && !ban && <IdentityLayer userId={userId} email={session?.user.email} name={profile?.name} />}
         {ban && (
           <BannedScreen
