@@ -658,10 +658,10 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
           <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold">
             <CalendarClock size={15} className="text-accent" /> When
           </p>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <label className="contents">
               <span className="sr-only">From date</span>
-              <input type="date" min={today} value={d.fromDate} onChange={(e) => e.target.value && patch({ fromDate: e.target.value })} className={cx(inputCls, "h-11 text-[15px]")} />
+              <input type="date" min={today} value={d.fromDate} onChange={(e) => e.target.value && patch({ fromDate: e.target.value })} className={cx(inputCls, "h-11 min-w-0 text-[15px]")} />
             </label>
             <label className="contents">
               <span className="sr-only">From time</span>
@@ -670,12 +670,12 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
                 type="time"
                 value={d.fromTime}
                 onChange={(e) => e.target.value && patch({ fromTime: e.target.value })}
-                className={cx(inputCls, "h-11 w-32 text-[15px]")}
+                className={cx(inputCls, "h-11 w-32 min-w-0 px-2 text-[14px] tabular-nums")}
               />
             </label>
           </div>
           <p className="my-1.5 text-center text-[12px] font-bold tracking-[0.1em] text-muted uppercase">to</p>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <label className="contents">
               <span className="sr-only">To date</span>
               <input
@@ -684,7 +684,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
                 disabled={d.kind === "dayout"}
                 value={d.toDate}
                 onChange={(e) => e.target.value && patch({ toDate: e.target.value })}
-                className={cx(inputCls, "h-11 text-[15px] disabled:opacity-60")}
+                className={cx(inputCls, "h-11 min-w-0 text-[15px] disabled:opacity-60")}
               />
             </label>
             <label className="contents">
@@ -694,7 +694,7 @@ function NewPass({ initial, kind, onSaved }: { initial?: PassDraft; kind?: PassK
                 max={d.kind === "dayout" ? DAYOUT_END : undefined}
                 value={d.toTime}
                 onChange={(e) => e.target.value && patch({ toTime: e.target.value })}
-                className={cx(inputCls, "h-11 w-32 text-[15px]")}
+                className={cx(inputCls, "h-11 w-32 min-w-0 px-2 text-[14px] tabular-nums")}
               />
             </label>
           </div>
