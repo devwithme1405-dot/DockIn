@@ -11,6 +11,7 @@ import { useFlags } from "@/lib/telemetry";
 import { fetchHistory, liveCamu, useCamuHistory, type CamuPass } from "@/lib/v3/pass";
 import { v3db } from "@/lib/v3/store";
 import { openOutpass } from "@/lib/v3/ui";
+import { openWebCamu, WebCamu } from "@/components/camu/WebCamu";
 import { cx } from "../ui";
 import { CamuChip } from "./CamuPasses";
 
@@ -23,7 +24,11 @@ const day = (s: string) => fromDateStr(s).toLocaleDateString("en-IN", { weekday:
  */
 export function OutpassEntry({ className }: { className?: string }) {
   const flags = useFlags();
+  const native = isNativeApp();
   const on = usePreview() && flags.outpass;
+  // On the web / iPhone there's no native plugin — MyCamu goes through DockIn's
+  // server instead, so the same outpass + attendance work in a browser.
+  const web = !native && flags.outpass;
   const today = toDateStr();
   const camu = useCamuHistory();
   // DockIn's own copies, for phones that haven't read MyCamu yet.
@@ -43,6 +48,30 @@ export function OutpassEntry({ className }: { className?: string }) {
     void fetchHistory().catch(() => {});
     void ensureCamuLoginId();
   }, [on]);
+
+  if (web) {
+    return (
+      <section className={cx("px-5", className)} aria-label="MyCamu">
+        <button
+          type="button"
+          onClick={openWebCamu}
+          className="op-entry block w-full overflow-hidden rounded-3xl border-[1.5px] border-card-edge bg-card text-left shadow-[0_3px_0_var(--pbtn-lip)] transition active:scale-[0.99]"
+        >
+          <span className="flex items-center gap-3 px-4 py-3.5">
+            <span className="op-door grid size-12 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent">
+              <DoorOpen size={23} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="font-display block text-[17px] leading-tight font-extrabold">MyCamu</span>
+              <span className="block text-[12.5px] text-muted">Outpass, approve & attendance — right here</span>
+            </span>
+            <ChevronRight size={20} className="shrink-0 text-muted" />
+          </span>
+        </button>
+        <WebCamu />
+      </section>
+    );
+  }
 
   if (!on) return null;
   const live: CamuPass | null = camu ? (liveCamu(camu.items, today).sort((a, b) => (a.fromDate + a.fromTime).localeCompare(b.fromDate + b.fromTime))[0] ?? null) : null;

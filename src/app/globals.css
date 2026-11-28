@@ -1823,3 +1823,6 @@ html.lite .adm-top, html.lite .adm-bottom { backdrop-filter: none; -webkit-backd
   .wn-card, .wn-row { animation: none; }
   .wn-shine, .wn-drift { display: none; }
 }
+
+.anim-sheet-up { animation: sheet-up .36s cubic-bezier(.2,.9,.3,1.05) both; }
+@keyframes sheet-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }

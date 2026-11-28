@@ -1,12 +1,33 @@
 import { adminCaller, audienceIds, audit, cleanAudience, sendNotice, tokensFor } from "@/lib/adminServer";
+import { sendWebPush, webPushConfigured } from "@/lib/webpushServer";
 
 /**
- * DockIn Admin → send a notification. `dryRun` only counts who it would reach
- * (people and phones, and how many of those phones confirm delivery), for the
- * "This goes to N people" line before sending.
+ * DockIn Admin → send a notification. Goes to Android phones (FCM) AND to web /
+ * iPhone PWAs (Web Push) — the two run side by side, each independent. `dryRun`
+ * only counts who it would reach, for the "This goes to N people" line.
  */
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/** How many web (iPhone/browser) subscriptions the audience covers. */
+async function webReach(sb: Parameters<typeof sendWebPush>[0], ids: string[] | null): Promise<number> {
+  if (!webPushConfigured()) return 0;
+  try {
+    if (ids === null) {
+      const { count } = await sb.from("web_push_subs").select("endpoint", { count: "exact", head: true });
+      return count ?? 0;
+    }
+    if (!ids.length) return 0;
+    let n = 0;
+    for (let i = 0; i < ids.length; i += 200) {
+      const { count } = await sb.from("web_push_subs").select("endpoint", { count: "exact", head: true }).in("user_id", ids.slice(i, i + 200));
+      n += count ?? 0;
+    }
+    return n;
+  } catch {
+    return 0;
+  }
+}
 
 export async function POST(req: Request): Promise<Response> {
   const c = await adminCaller(req);
@@ -23,23 +44,24 @@ export async function POST(req: Request): Promise<Response> {
 
   let ids: string[] | null;
   let phones: Awaited<ReturnType<typeof tokensFor>>;
+  let web = 0;
   try {
     ids = await audienceIds(c, audience);
-    phones = await tokensFor(c, ids);
+    [phones, web] = await Promise.all([tokensFor(c, ids), webReach(c.sb, ids)]);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 500 });
   }
   const people = new Set(phones.map((t) => t.user_id)).size;
   const targeted = ids === null ? people : ids.length;
   const instant = phones.filter((p) => p.caps?.includes("data1")).length;
-  if (b.dryRun) return Response.json({ people, phones: phones.length, targeted, instant });
+  if (b.dryRun) return Response.json({ people, phones: phones.length, targeted, instant, web });
 
   const title = (b.title ?? "").trim().slice(0, 80);
   const body = (b.body ?? "").trim().slice(0, 240);
   const raw = (b.path ?? "/").trim();
   const path = raw.startsWith("/") && !raw.startsWith("//") ? raw.slice(0, 110) : "/";
   if (!title || !body) return Response.json({ error: "Write a title and a message" }, { status: 400 });
-  if (!phones.length) return Response.json({ ok: true, people: 0, phones: 0, targeted, sent: 0, failed: 0, instant: 0, errors: {} });
+  if (!phones.length && !web) return Response.json({ ok: true, people: 0, phones: 0, targeted, sent: 0, failed: 0, instant: 0, web: 0, errors: {} });
 
   const { data: row, error } = await c.sb
     .from("broadcasts")
@@ -47,12 +69,16 @@ export async function POST(req: Request): Promise<Response> {
     .select("id")
     .single();
   if (error || !row) return Response.json({ error: error?.message ?? "could not save" }, { status: 500 });
-  try {
-    const r = await sendNotice(c, phones, { title, body, path, id: row.id as string });
-    await c.sb.from("broadcasts").update({ delivered: r.sent, instant: r.instant, failed: r.failed }).eq("id", row.id);
-    await audit(c, "notify", null, { title, audience, people, phones: phones.length, sent: r.sent });
-    return Response.json({ ok: true, id: row.id, people, phones: phones.length, targeted, ...r });
-  } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 503 });
-  }
+  const id = row.id as string;
+
+  // Android (FCM) and web / iPhone (Web Push) in parallel; a failure in one never
+  // stops the other.
+  const [fcm, wp] = await Promise.all([
+    phones.length ? sendNotice(c, phones, { title, body, path, id }) : Promise.resolve({ sent: 0, failed: 0, instant: 0, errors: {} as Record<string, number> }),
+    sendWebPush(c.sb, ids, { title, body, path, id, tag: `dockin-news-${id}` }).catch(() => ({ sent: 0, failed: 0, subs: 0 })),
+  ]);
+
+  await c.sb.from("broadcasts").update({ delivered: fcm.sent, instant: fcm.instant, failed: fcm.failed }).eq("id", id);
+  await audit(c, "notify", null, { title, audience, people, phones: phones.length, sent: fcm.sent, web: wp.sent });
+  return Response.json({ ok: true, id, people, phones: phones.length, targeted, web: wp.sent, ...fcm });
 }

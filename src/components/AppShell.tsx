@@ -35,9 +35,11 @@ import { goTab, tabOf } from "@/lib/tabs";
 import { showMessPass } from "@/lib/messPass";
 import { TabHost } from "./TabHost";
 import { OfflineLayer } from "./Offline";
+import { InstallPrompt } from "./InstallPrompt";
 import { startNet } from "@/lib/net";
 import { installBackHandler } from "@/lib/backClose";
 import { startTelemetry, takeBroadcastOpen } from "@/lib/telemetry";
+import { syncWebPush } from "@/lib/webpush";
 
 /**
  * How many things want attention right now: your own tasks that are overdue or
@@ -267,6 +269,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
   // Anonymous product events (which features work, which fail) for DockIn Admin.
   useEffect(() => startTelemetry(), []);
+  // Web / iPhone: a tapped Web Push lands on a normal URL with ?n=<id> — count
+  // the open and tidy the address bar. Also re-sync an existing push subscription.
+  useEffect(() => {
+    if (isNativeApp()) return;
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get("n")) {
+        const clean = takeBroadcastOpen(u.pathname + u.search);
+        window.history.replaceState(null, "", clean + u.hash);
+      }
+    } catch {
+      /* fine */
+    }
+    void syncWebPush();
+  }, []);
 
   /**
    * DockIn's own notifications say which screen to open ("Spent ₹250 at
@@ -443,6 +460,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {isNativeApp() && ready && !onboarding && FRIENDS && <ShareInbox />}
         {isNativeApp() && ready && !onboarding && <WidgetsSync />}
         {ready && !onboarding && <V3Host />}
+        {ready && !onboarding && !ban && !isNativeApp() && <InstallPrompt />}
         {ready && !onboarding && !ban && <IdentityLayer userId={userId} email={session?.user.email} name={profile?.name} />}
         {ban && (
           <BannedScreen
