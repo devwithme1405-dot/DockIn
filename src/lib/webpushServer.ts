@@ -72,7 +72,10 @@ export async function sendWebPush(sb: SupabaseClient, userIds: string[] | null, 
     await Promise.all(
       subs.slice(i, i + pool).map(async (s) => {
         try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, data, { TTL: 60 * 60 * 24 });
+          // urgency "high" matters on iOS: "normal" pushes get held/batched and
+          // arrive late or not at all — exactly the "notifications aren't coming
+          // through" complaint. High delivers them promptly.
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, data, { TTL: 60 * 60 * 24, urgency: "high" });
           sent++;
         } catch (e) {
           failed++;

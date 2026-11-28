@@ -613,7 +613,9 @@ final class Updater {
             case PackageInstaller.STATUS_FAILURE_STORAGE:
                 return "Not enough space on the phone. Free up a little and try again.";
             case PackageInstaller.STATUS_FAILURE_BLOCKED:
-                return "The phone blocked the update. Allow DockIn to install apps, then try again.";
+                return (Build.MANUFACTURER != null && Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT).contains("samsung"))
+                        ? "Samsung Auto Blocker stopped the update. Tap Open settings to turn off Auto Blocker (Security and privacy), or get the app from dock-in.vercel.app/download."
+                        : "The phone blocked the update. Tap Open settings to let DockIn install apps, then try again.";
             case PackageInstaller.STATUS_FAILURE_CONFLICT:
             case PackageInstaller.STATUS_FAILURE_INCOMPATIBLE:
                 return "This copy of DockIn can't be updated in place. Get the app again from dock-in.vercel.app/DockIn.apk.";

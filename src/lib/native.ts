@@ -218,6 +218,8 @@ interface DockInPlugin {
   openBatterySettings(): Promise<void>;
   /** The phone maker's own run-in-background screens, so reminders keep firing. */
   openOemSettings(options: { which: "autostart" | "battery" }): Promise<void>;
+  /** The screen that lets DockIn install an update (Samsung Auto Blocker / "Install unknown apps"). */
+  openInstallSettings(): Promise<void>;
   appReady(): Promise<void>;
   /** What another app shared into DockIn (once; empty when nothing waits). */
   takeShare(): Promise<SharedIn>;

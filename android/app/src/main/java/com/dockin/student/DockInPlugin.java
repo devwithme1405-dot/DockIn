@@ -257,6 +257,38 @@ public class DockInPlugin extends Plugin {
         return new Intent().setComponent(new ComponentName(pkg, cls));
     }
 
+    /**
+     * The screen that lets DockIn install an update: on Samsung, Auto Blocker /
+     * Security & privacy (Auto Blocker silently blocks sideloaded installs);
+     * everywhere, the per-app "Install unknown apps" toggle. Falls back to App info.
+     */
+    @PluginMethod
+    public void openInstallSettings(PluginCall call) {
+        Context c = getContext();
+        String maker = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<Intent> tries = new java.util.ArrayList<>();
+        if (maker.contains("samsung")) {
+            tries.add(new Intent("com.samsung.android.sm.ACTION_AUTO_BLOCKER"));
+            tries.add(new Intent(Settings.ACTION_SECURITY_SETTINGS));
+        }
+        if (Build.VERSION.SDK_INT >= 26) {
+            tries.add(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + c.getPackageName())));
+        }
+        for (Intent i : tries) {
+            try {
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getActivity().startActivity(i);
+                call.resolve();
+                return;
+            } catch (ActivityNotFoundException | SecurityException e) {
+                // not on this build — try the next
+            }
+        }
+        launch(call, null, new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", c.getPackageName(), null)));
+    }
+
     @PluginMethod
     public void openNotificationSettings(PluginCall call) {
         Intent i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)

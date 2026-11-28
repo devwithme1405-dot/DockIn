@@ -2,6 +2,7 @@
 
 import { AnnouncementBar } from "@/components/AccountNotices";
 import { OutpassEntry } from "@/components/v3/OutpassEntry";
+import { WebNotify } from "@/components/WebNotify";
 import { WhatsNew } from "@/components/WhatsNew";
 import { usePreview } from "@/lib/v3/flags";
 import { openOutpass } from "@/lib/v3/ui";
@@ -330,6 +331,9 @@ export default function TodayPage() {
           </div>
         </div>
       </section>
+
+      {/* Web / iPhone: turn on notifications (hidden on the app) */}
+      <WebNotify className="mt-8" />
 
       {/* DockIn 3 preview: the way into Outpass */}
       <OutpassEntry className="mt-8" />

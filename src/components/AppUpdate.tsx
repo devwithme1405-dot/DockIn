@@ -293,7 +293,26 @@ export function AppUpdate() {
             </p>
           </div>
         ) : phase === "failed" ? (
-          <p className="mt-4 rounded-2xl bg-warn-soft px-4 py-3 text-[13.5px] leading-snug font-semibold text-warn">{note}</p>
+          <div className="mt-4 space-y-2.5">
+            <p className="rounded-2xl bg-warn-soft px-4 py-3 text-[13.5px] leading-snug font-semibold text-warn">{note}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void DockIn.openInstallSettings().catch(() => {})}
+                className="btn-paper inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold"
+              >
+                <ShieldCheck size={15} /> Open settings
+              </button>
+              <a
+                href="https://dock-in.vercel.app/download"
+                target="_blank"
+                rel="noopener"
+                className="btn-paper inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold"
+              >
+                <Download size={15} /> Download
+              </a>
+            </div>
+          </div>
         ) : status ? (
           <div className="mt-5">
             <div className="flex items-center justify-between text-[13.5px] font-bold">

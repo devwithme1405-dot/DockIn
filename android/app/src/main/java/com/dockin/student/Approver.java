@@ -65,6 +65,8 @@ final class Approver {
     private static final Pattern USER_ID = Pattern.compile("\"(?:loggedInId|userId|UserId|usrId|UsrId|user_id|_id)\"\\s*:\\s*\"([a-f0-9]{24})\"");
     /** What the sign-in request looks like among the page's requests. */
     private static final Pattern LOGIN_URL = Pattern.compile("(?i)login|signin|sign-in|authenticate|/token|/auth\\b|validateuser|verifyuser|checkuser");
+    /** logindetails._id in a login response — the authoritative loggedInId. */
+    private static final Pattern LOGINDETAILS_ID = Pattern.compile("\"logindetails\"\\s*:\\s*\\{\\s*\"_id\"\\s*:\\s*\"([a-f0-9]{24})\"");
 
     static final class Expired extends Exception {}
     static final class NeedsTeaching extends Exception {}
@@ -148,6 +150,22 @@ final class Approver {
         }
     }
 
+    /** The approval login's own id from a login response: output.data.logindetails._id. */
+    private static String loginIdFromResponse(String answer) {
+        if (answer == null || answer.isEmpty()) return "";
+        try {
+            JSONObject out = new JSONObject(answer).optJSONObject("output");
+            JSONObject data = out == null ? null : out.optJSONObject("data");
+            JSONObject ld = data == null ? null : data.optJSONObject("logindetails");
+            String id = ld == null ? "" : ld.optString("_id", "");
+            if (OBJECT_ID.matcher(id).matches()) return id;
+        } catch (JSONException ignore) {
+            // truncated or odd JSON — fall through to the targeted regex
+        }
+        Matcher mm = LOGINDETAILS_ID.matcher(answer);
+        return mm.find() ? mm.group(1) : "";
+    }
+
     /**
      * Learns from one request MyCamu's approval page sent. The one approve the
      * student does by hand carries {@code loggedInId} — the approval login's own
@@ -180,9 +198,16 @@ final class Approver {
         if (isLogin) {
             // The sign-in request — kept (encrypted) so DockIn renews the session itself.
             Vault.put(c, V_LOGIN, r.toString());
-            // The logged-in user's id from the response, so approval needs no "teach".
-            if (prefs(c).getString(K_LOGIN, "").isEmpty()) {
-                Matcher um = USER_ID.matcher(r.optString("answer", ""));
+            // The approval login's own id is logindetails._id in the login response —
+            // exactly what an Approve sends as loggedInId. Read it precisely (not the
+            // first _id in the blob, which belongs to another record), so approval
+            // works from the very first pass, with no "teach".
+            String answer = r.optString("answer", "");
+            String trueId = loginIdFromResponse(answer);
+            if (!trueId.isEmpty()) {
+                prefs(c).edit().putString(K_LOGIN, trueId).apply();
+            } else if (prefs(c).getString(K_LOGIN, "").isEmpty()) {
+                Matcher um = USER_ID.matcher(answer);
                 if (um.find()) prefs(c).edit().putString(K_LOGIN, um.group(1)).apply();
             }
         }
