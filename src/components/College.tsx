@@ -216,9 +216,29 @@ export function ConnectApprover({ compact = false, onDone }: { compact?: boolean
     };
   }, []);
 
+  // On the web / iPhone there's no separate approval login: the connected MyCamu
+  // login approves passes itself (one tap on the pass), so instead of the native
+  // setup form we just say it's ready — the old native-only branch rendered
+  // nothing here, which is why the "Parents approval login" sheet looked empty.
+  if (!native) {
+    return (
+      <Row
+        icon={<Stamp size={19} />}
+        done={st.saved}
+        title={st.saved ? "Approvals ready" : "Connect MyCamu to approve"}
+        body={
+          st.saved
+            ? `Your connected MyCamu login approves your passes — just tap Approve on a pass. No separate login needed here${st.user ? ` · ${st.user}` : ""}.`
+            : "Connect MyCamu on the Today screen — then you can approve your own passes right here, no extra login."
+        }
+        compact={compact}
+      />
+    );
+  }
+
   // Self-approval belongs with outpass — a DockIn 3 feature — so it stays on the
   // preview channel until outpass ships for everyone, hidden on the everyday app.
-  if (!native || !preview || !flags.self_approval) return null;
+  if (!preview || !flags.self_approval) return null;
   const on = st.saved || st.hasCreds;
 
   async function saveAndConnect() {

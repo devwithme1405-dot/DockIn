@@ -130,8 +130,16 @@ export function isIOSWeb(): boolean {
 export function applyTextScale(scale: number | undefined): void {
   if (typeof document === "undefined") return;
   const s = normTextScale(scale);
-  // On iOS, `zoom` breaks the layout — leave the page at its natural size there.
-  document.documentElement.style.zoom = s === 1 || isIOSWeb() ? "" : String(s);
+  // iOS Safari mishandles CSS `zoom` (it reflows fixed/safe-area layout and makes
+  // the page overflow), so there we scale the page the native way — the viewport's
+  // initial-scale — which matches the Android WebView's zoom without the overflow.
+  if (isIOSWeb()) {
+    document.documentElement.style.zoom = "";
+    const mv = document.querySelector('meta[name="viewport"]');
+    if (mv) mv.setAttribute("content", `width=device-width, initial-scale=${s}, viewport-fit=cover`);
+  } else {
+    document.documentElement.style.zoom = s === 1 ? "" : String(s);
+  }
   try {
     localStorage.setItem("dockin-text-scale", String(s));
   } catch {
